@@ -14,19 +14,22 @@ UE-ITPS 的长期目标是成为面向 Unreal Engine 项目的功能级工程知
 
 ### Validated
 
-（暂无——原版 Lyra 5.6.1 基线尚未在当前环境中完成复现。）
+- [x] UE 5.6.1 源码 Engine 已定位并由 `Build.version`、Target 与运行日志交叉验证。— 2026-07-14
+- [x] `LyraEditor Win64 Development` 已完成 455 个动作的项目构建，并通过重复 UBT 验证。— 2026-07-14
+- [x] L0 本机基线已通过：Editor、PIE、默认 Experience、前端 Experience、CommonUI 根布局和正常退出。— 2026-07-14
+- [x] Lyra 顶层启动主链已归档到 Experience、Game Feature、PawnData、PlayerState ASC、InitState、Input/GAS 与 UI。— 2026-07-14
+- [x] UE 5.6.1 实时 Asset Registry 已验证关键 UserFacingExperience、Experience、ActionSet、PawnData 与地图直接依赖。— 2026-07-14
 
 ### Active
 
-- [ ] 将 Unreal Engine 版本固定为 5.6.1，并记录安装来源、构建标识、目标平台与工具链。
 - [ ] 获取并冻结与 UE 5.6.1 对应的原版 Lyra 样例，记录项目来源、文件指纹、插件清单和本地基线状态。
-- [ ] 在不修改 Lyra 业务逻辑的前提下，完成原版项目的可重复生成、编译、启动与官方 Experience 运行。
-- [ ] 归档 Lyra 顶层模块、插件、Game Feature、核心子系统及其职责边界。
-- [ ] 追踪项目启动到可操作 Pawn 的主链路，包括 Experience 选择与加载、Game Feature 激活、Pawn Data、Pawn Extension、Hero、GAS、Enhanced Input 和 UI 初始化。
+- [ ] 运行 `ShooterGym + ControlPoints` L1 切片，验证 ShooterCore Active、Pawn GameplayReady、ASC、Input→Ability 与 Shooter HUD。
+- [ ] 运行并归档 Gauntlet BootTest，补齐自动化基线。
+- [ ] 追踪 L1 从 Experience 激活到可操作 Pawn 的实际运行主链，而不仅是源码与资产静态证据。
 - [ ] 为关键架构结论绑定可核验的源码、配置、资产或运行日志位置，明确区分事实、推断和待验证假设。
-- [ ] 记录核心数据与控制流，包括 Experience 配置、Pawn 初始化、Ability Set 授予、输入标签到 Ability 激活以及 UI 注入的关键连接。
+- [ ] 补齐 Ability Set 授予、输入标签到 Ability 激活以及 UI 注入的运行证据。
 - [ ] 区分“原版 Lyra 可运行所必需的机制”“官方示例玩法内容”“当前最小运行分析中的可选系统”，但本阶段不通过删除组件来证明。
-- [ ] 形成 Lyra-derived 最小运行项目的边界假设、依赖清单、未知项和验证顺序，为下一里程碑提供输入。
+- [ ] 在 L1 通过后收敛 Lyra-derived 最小运行项目的保留边界和删减实验顺序。
 
 ### Out of Scope
 
@@ -86,13 +89,14 @@ UE-ITPS 的长期目标是成为面向 Unreal Engine 项目的功能级工程知
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Engine 基线固定为 UE 5.6.1 | 降低环境漂移，匹配当前实际目标版本 | — Pending |
-| 原版 Lyra 5.6.1 作为首个可复现基准 | 先理解官方样例的真实运行链路，再判断哪些部分可删减 | — Pending |
-| 架构归档先于具体玩法与信任系统实现 | 避免在错误或过窄的 Lyra 认知上设计长期抽象 | — Pending |
-| 当前不创建 Lyra-derived 最小项目 | 最小化应建立在原版运行证据和依赖分析之上 | — Pending |
-| 关键架构结论必须绑定工程证据 | 将可确定事实与推断分开，为未来权威模型建立正确习惯 | — Pending |
-| 体力冲刺研究归档而不删除 | 保留历史思考，同时阻止旧范围继续驱动当前路线图 | — Pending |
-| Lyra 是参考架构而非长期唯一标准 | 为未来支持非 Lyra、非 GAS 和项目自定义架构保留空间 | — Pending |
+| Engine 基线固定为 UE 5.6.1 | 降低环境漂移，匹配当前实际目标版本 | ✓ 本机验证通过 |
+| 原版 Lyra 5.6.1 作为首个可复现基准 | 先理解官方样例的真实运行链路，再判断哪些部分可删减 | △ L0 通过，L1/来源指纹待完成 |
+| 架构归档先于具体玩法与信任系统实现 | 避免在错误或过窄的 Lyra 认知上设计长期抽象 | ✓ 保持当前顺序 |
+| 当前不创建 Lyra-derived 最小项目 | 最小化应建立在原版运行证据和依赖分析之上 | ✓ 等待 L1 |
+| L1 首选 ShooterGym + ControlPoints | 保留完整 Lyra 主链，同时避免 ShooterMaps 和数百至数千地图软依赖 | ✓ 已由 Asset Registry 选定 |
+| 关键架构结论必须绑定工程证据 | 将可确定事实与推断分开，为未来权威模型建立正确习惯 | ✓ 已用于本次归档 |
+| 体力冲刺研究归档而不删除 | 保留历史思考，同时阻止旧范围继续驱动当前路线图 | ✓ 已归档 |
+| Lyra 是参考架构而非长期唯一标准 | 为未来支持非 Lyra、非 GAS 和项目自定义架构保留空间 | ✓ 保持架构中立 |
 
 ## Evolution
 
@@ -114,4 +118,4 @@ UE-ITPS 的长期目标是成为面向 Unreal Engine 项目的功能级工程知
 4. 使用真实运行结果、工程证据和验证指标更新 Context。
 
 ---
-*Last updated: 2026-07-14 after refocusing on the Lyra 5.6.1 architecture baseline*
+*Last updated: 2026-07-14 after validating the UE 5.6.1 Lyra L0 baseline and selecting the L1 slice*

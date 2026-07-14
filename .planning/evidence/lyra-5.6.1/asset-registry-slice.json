@@ -1,0 +1,720 @@
+{
+  "engine_version": "5.6.1-0+UE5",
+  "project_dir": "E:/UE_ITPS/LyraStarterGame/",
+  "targets": {
+    "default_editor_map": {
+      "package": "/Game/System/DefaultEditorMap/L_DefaultEditorOverview",
+      "exists": true,
+      "assets": [
+        {
+          "asset_name": "L_DefaultEditorOverview",
+          "class": "/Script/Engine.World",
+          "object_path": "/Game/System/DefaultEditorMap/L_DefaultEditorOverview.L_DefaultEditorOverview"
+        }
+      ],
+      "direct_dependency_counts": {
+        "hard_package": 12,
+        "soft_package": 0,
+        "hard_manage": 0,
+        "soft_manage": 0
+      },
+      "direct_dependencies": {
+        "hard_package": [
+          "/Engine/BasicShapes/BasicShapeMaterial",
+          "/Engine/BasicShapes/Cube",
+          "/Engine/EngineMaterials/WorldGridMaterial",
+          "/Engine/EngineSky/BP_Sky_Sphere",
+          "/Engine/EngineSky/M_Sky_Panning_Clouds2",
+          "/Game/System/DefaultEditorMap/B_ExperienceList3D",
+          "/Game/System/DefaultEditorMap/L_DefaultEditorOverview_BuiltData",
+          "/LyraExampleContent/Materials/MI_MS_Blue_1",
+          "/LyraExampleContent/Materials/MI_MS_Orange_1",
+          "/Script/Foliage",
+          "/Script/LyraGame",
+          "/Script/NavigationSystem"
+        ],
+        "soft_package": [],
+        "hard_manage": [],
+        "soft_manage": []
+      }
+    },
+    "front_end_map": {
+      "package": "/Game/System/FrontEnd/Maps/L_LyraFrontEnd",
+      "exists": true,
+      "assets": [
+        {
+          "asset_name": "L_LyraFrontEnd",
+          "class": "/Script/Engine.World",
+          "object_path": "/Game/System/FrontEnd/Maps/L_LyraFrontEnd.L_LyraFrontEnd"
+        }
+      ],
+      "direct_dependency_counts": {
+        "hard_package": 7,
+        "soft_package": 2,
+        "hard_manage": 0,
+        "soft_manage": 0
+      },
+      "direct_dependencies": {
+        "hard_package": [
+          "/Engine/BasicShapes/Plane",
+          "/Engine/EngineMaterials/WorldGridMaterial",
+          "/Game/Environments/B_LoadRandomLobbyBackground",
+          "/Game/System/FrontEnd/Maps/L_LyraFrontEnd_BuiltData",
+          "/Game/System/FrontEnd/T_UI_BackdropPlaceholder_Mat",
+          "/Script/Foliage",
+          "/Script/LyraGame"
+        ],
+        "soft_package": [
+          "/Game/System/FrontEnd/B_LyraFrontEnd_Experience",
+          "/Script/NavigationSystem"
+        ],
+        "hard_manage": [],
+        "soft_manage": []
+      }
+    },
+    "shooter_gym_map": {
+      "package": "/ShooterCore/Maps/L_ShooterGym",
+      "exists": true,
+      "assets": [
+        {
+          "asset_name": "L_ShooterGym",
+          "class": "/Script/Engine.World",
+          "object_path": "/ShooterCore/Maps/L_ShooterGym.L_ShooterGym"
+        }
+      ],
+      "direct_dependency_counts": {
+        "hard_package": 27,
+        "soft_package": 1,
+        "hard_manage": 0,
+        "soft_manage": 0
+      },
+      "direct_dependencies": {
+        "hard_package": [
+          "/Engine/BasicShapes/BasicShapeMaterial",
+          "/Engine/BasicShapes/Cube",
+          "/Engine/EngineDebugMaterials/VertexColorViewMode_BlueOnly",
+          "/Engine/EngineDebugMaterials/VertexColorViewMode_RedOnly",
+          "/Engine/EngineMaterials/WorldGridMaterial",
+          "/Engine/EngineSky/BP_Sky_Sphere",
+          "/Engine/EngineSky/M_Sky_Panning_Clouds2",
+          "/Game/Environments/Gameplay/BP_GameplayEffectPad",
+          "/Game/Environments/Gameplay/GE_GameplayEffectPad_Heal",
+          "/Game/Weapons/Healthpack/Mesh/SM_healthpackFull",
+          "/Game/Weapons/Rifle/Mesh/SM_Rifle",
+          "/Game/Weapons/Shotgun/Mesh/SM_Shotgun",
+          "/Game/Weapons/Spawnpad/Material/MI_InternalShapeGlow_Circle",
+          "/LyraExampleContent/Materials/MI_MS_Blue_1",
+          "/LyraExampleContent/Materials/MI_MS_Orange_1",
+          "/Script/Foliage",
+          "/Script/LyraGame",
+          "/Script/NavigationSystem",
+          "/Script/Niagara",
+          "/Script/ShooterCoreRuntime",
+          "/ShooterCore/Blueprint/B_AimAssistTargetTest",
+          "/ShooterCore/Blueprint/B_ControlPointVolume",
+          "/ShooterCore/Blueprint/B_WeaponSpawner",
+          "/ShooterCore/Effects/Material/MI_WeaponSpawnerTimerIndicator",
+          "/ShooterCore/Items/HealthPickup/WeaponPickupData_Heal_Big",
+          "/ShooterCore/Weapons/Rifle/WeaponPickupData_Rifle",
+          "/ShooterCore/Weapons/Shotgun/WeaponPickupData_Shotgun"
+        ],
+        "soft_package": [
+          "/ShooterCore/Experiences/B_ShooterGame_Elimination"
+        ],
+        "hard_manage": [],
+        "soft_manage": []
+      }
+    },
+    "expanse_map": {
+      "package": "/ShooterMaps/Maps/L_Expanse",
+      "exists": true,
+      "assets": [
+        {
+          "asset_name": "L_Expanse",
+          "class": "/Script/Engine.World",
+          "object_path": "/ShooterMaps/Maps/L_Expanse.L_Expanse"
+        }
+      ],
+      "direct_dependency_counts": {
+        "hard_package": 5,
+        "soft_package": 3015,
+        "hard_manage": 0,
+        "soft_manage": 0
+      },
+      "direct_dependencies": {},
+      "direct_dependencies_omitted": "count-only map comparison"
+    },
+    "convolution_map": {
+      "package": "/ShooterMaps/Maps/L_Convolution_Blockout",
+      "exists": true,
+      "assets": [
+        {
+          "asset_name": "L_Convolution_Blockout",
+          "class": "/Script/Engine.World",
+          "object_path": "/ShooterMaps/Maps/L_Convolution_Blockout.L_Convolution_Blockout"
+        }
+      ],
+      "direct_dependency_counts": {
+        "hard_package": 8,
+        "soft_package": 596,
+        "hard_manage": 0,
+        "soft_manage": 0
+      },
+      "direct_dependencies": {},
+      "direct_dependencies_omitted": "count-only map comparison"
+    },
+    "default_experience": {
+      "package": "/Game/System/Experiences/B_LyraDefaultExperience",
+      "exists": true,
+      "assets": [
+        {
+          "asset_name": "B_LyraDefaultExperience",
+          "class": "/Script/Engine.Blueprint",
+          "object_path": "/Game/System/Experiences/B_LyraDefaultExperience.B_LyraDefaultExperience",
+          "defaults": {
+            "generated_class": "/Game/System/Experiences/B_LyraDefaultExperience.B_LyraDefaultExperience_C",
+            "game_features_to_enable": [],
+            "default_pawn_data": "/Game/Characters/Heroes/SimplePawnData/SimplePawnData.SimplePawnData",
+            "actions": [
+              "/Game/System/Experiences/B_LyraDefaultExperience.Default__B_LyraDefaultExperience_C:GameFeatureAction_AddWidgets_0"
+            ],
+            "action_sets": []
+          }
+        }
+      ],
+      "direct_dependency_counts": {
+        "hard_package": 3,
+        "soft_package": 1,
+        "hard_manage": 0,
+        "soft_manage": 0
+      },
+      "direct_dependencies": {
+        "hard_package": [
+          "/Game/Characters/Heroes/SimplePawnData/SimplePawnData",
+          "/Script/GameplayTags",
+          "/Script/LyraGame"
+        ],
+        "soft_package": [
+          "/Game/UI/Hud/W_DefaultHUDLayout"
+        ],
+        "hard_manage": [],
+        "soft_manage": []
+      }
+    },
+    "front_end_experience": {
+      "package": "/Game/System/FrontEnd/B_LyraFrontEnd_Experience",
+      "exists": true,
+      "assets": [
+        {
+          "asset_name": "B_LyraFrontEnd_Experience",
+          "class": "/Script/Engine.Blueprint",
+          "object_path": "/Game/System/FrontEnd/B_LyraFrontEnd_Experience.B_LyraFrontEnd_Experience",
+          "defaults": {
+            "generated_class": "/Game/System/FrontEnd/B_LyraFrontEnd_Experience.B_LyraFrontEnd_Experience_C",
+            "game_features_to_enable": [],
+            "default_pawn_data": null,
+            "actions": [
+              "/Game/System/FrontEnd/B_LyraFrontEnd_Experience.Default__B_LyraFrontEnd_Experience_C:GameFeatureAction_SplitscreenConfig_0",
+              "/Game/System/FrontEnd/B_LyraFrontEnd_Experience.Default__B_LyraFrontEnd_Experience_C:GameFeatureAction_AddComponents_1",
+              "/Game/System/FrontEnd/B_LyraFrontEnd_Experience.Default__B_LyraFrontEnd_Experience_C:ApplyFrontendPerfSettingsAction_0",
+              "/Game/System/FrontEnd/B_LyraFrontEnd_Experience.Default__B_LyraFrontEnd_Experience_C:GameFeatureAction_AddWidgets_0"
+            ],
+            "action_sets": []
+          }
+        }
+      ],
+      "direct_dependency_counts": {
+        "hard_package": 3,
+        "soft_package": 3,
+        "hard_manage": 0,
+        "soft_manage": 0
+      },
+      "direct_dependencies": {
+        "hard_package": [
+          "/Script/GameFeatures",
+          "/Script/GameplayTags",
+          "/Script/LyraGame"
+        ],
+        "soft_package": [
+          "/Game/Audio/Blueprints/B_MusicManagerComponent_FE",
+          "/Game/UI/B_LyraFrontendStateComponent",
+          "/Game/UI/PerfStats/W_PerfStatContainer_FrontEnd"
+        ],
+        "hard_manage": [],
+        "soft_manage": []
+      }
+    },
+    "empty_pawn_data": {
+      "package": "/Game/Characters/Heroes/EmptyPawnData/DefaultPawnData_EmptyPawn",
+      "exists": true,
+      "assets": [
+        {
+          "asset_name": "DefaultPawnData_EmptyPawn",
+          "class": "/Script/LyraGame.LyraPawnData",
+          "object_path": "/Game/Characters/Heroes/EmptyPawnData/DefaultPawnData_EmptyPawn.DefaultPawnData_EmptyPawn",
+          "defaults": {
+            "pawn_class": null,
+            "ability_sets": [],
+            "tag_relationship_mapping": null,
+            "input_config": null,
+            "default_camera_mode": null
+          }
+        }
+      ],
+      "direct_dependency_counts": {
+        "hard_package": 1,
+        "soft_package": 0,
+        "hard_manage": 0,
+        "soft_manage": 0
+      },
+      "direct_dependencies": {
+        "hard_package": [
+          "/Script/LyraGame"
+        ],
+        "soft_package": [],
+        "hard_manage": [],
+        "soft_manage": []
+      }
+    },
+    "simple_pawn_data": {
+      "package": "/Game/Characters/Heroes/SimplePawnData/SimplePawnData",
+      "exists": true,
+      "assets": [
+        {
+          "asset_name": "SimplePawnData",
+          "class": "/Script/LyraGame.LyraPawnData",
+          "object_path": "/Game/Characters/Heroes/SimplePawnData/SimplePawnData.SimplePawnData",
+          "defaults": {
+            "pawn_class": "/Game/Characters/Heroes/B_SimpleHeroPawn.B_SimpleHeroPawn_C",
+            "ability_sets": [],
+            "tag_relationship_mapping": null,
+            "input_config": "/Game/Input/InputData_SimplePawn.InputData_SimplePawn",
+            "default_camera_mode": "/Game/Characters/Cameras/CM_ThirdPerson.CM_ThirdPerson_C"
+          }
+        }
+      ],
+      "direct_dependency_counts": {
+        "hard_package": 4,
+        "soft_package": 0,
+        "hard_manage": 0,
+        "soft_manage": 0
+      },
+      "direct_dependencies": {
+        "hard_package": [
+          "/Game/Characters/Cameras/CM_ThirdPerson",
+          "/Game/Characters/Heroes/B_SimpleHeroPawn",
+          "/Game/Input/InputData_SimplePawn",
+          "/Script/LyraGame"
+        ],
+        "soft_package": [],
+        "hard_manage": [],
+        "soft_manage": []
+      }
+    },
+    "shooter_pawn_data": {
+      "package": "/ShooterCore/Game/HeroData_ShooterGame",
+      "exists": true,
+      "assets": [
+        {
+          "asset_name": "HeroData_ShooterGame",
+          "class": "/Script/LyraGame.LyraPawnData",
+          "object_path": "/ShooterCore/Game/HeroData_ShooterGame.HeroData_ShooterGame",
+          "defaults": {
+            "pawn_class": "/ShooterCore/Game/B_Hero_ShooterMannequin.B_Hero_ShooterMannequin_C",
+            "ability_sets": [
+              "/ShooterCore/Game/AbilitySet_ShooterHero.AbilitySet_ShooterHero"
+            ],
+            "tag_relationship_mapping": "/ShooterCore/Game/TagRelationships_ShooterHero.TagRelationships_ShooterHero",
+            "input_config": "/Game/Input/InputData_Hero.InputData_Hero",
+            "default_camera_mode": "/Game/Characters/Cameras/CM_ThirdPerson.CM_ThirdPerson_C"
+          }
+        }
+      ],
+      "direct_dependency_counts": {
+        "hard_package": 6,
+        "soft_package": 0,
+        "hard_manage": 0,
+        "soft_manage": 0
+      },
+      "direct_dependencies": {
+        "hard_package": [
+          "/Game/Characters/Cameras/CM_ThirdPerson",
+          "/Game/Input/InputData_Hero",
+          "/Script/LyraGame",
+          "/ShooterCore/Game/AbilitySet_ShooterHero",
+          "/ShooterCore/Game/B_Hero_ShooterMannequin",
+          "/ShooterCore/Game/TagRelationships_ShooterHero"
+        ],
+        "soft_package": [],
+        "hard_manage": [],
+        "soft_manage": []
+      }
+    },
+    "elimination_experience": {
+      "package": "/ShooterCore/Experiences/B_ShooterGame_Elimination",
+      "exists": true,
+      "assets": [
+        {
+          "asset_name": "B_ShooterGame_Elimination",
+          "class": "/Script/Engine.Blueprint",
+          "object_path": "/ShooterCore/Experiences/B_ShooterGame_Elimination.B_ShooterGame_Elimination",
+          "defaults": {
+            "generated_class": "/ShooterCore/Experiences/B_ShooterGame_Elimination.B_ShooterGame_Elimination_C",
+            "game_features_to_enable": [
+              "ShooterCore"
+            ],
+            "default_pawn_data": "/ShooterCore/Game/HeroData_ShooterGame.HeroData_ShooterGame",
+            "actions": [
+              "/ShooterCore/Experiences/B_ShooterGame_Elimination.Default__B_ShooterGame_Elimination_C:GameFeatureAction_AddAbilities_0",
+              "/ShooterCore/Experiences/B_ShooterGame_Elimination.Default__B_ShooterGame_Elimination_C:GameFeatureAction_AddComponents_0",
+              "/ShooterCore/Experiences/B_ShooterGame_Elimination.Default__B_ShooterGame_Elimination_C:GameFeatureAction_AddWidgets_1"
+            ],
+            "action_sets": [
+              "/ShooterCore/Experiences/LAS_ShooterGame_SharedInput.LAS_ShooterGame_SharedInput",
+              "/ShooterCore/Experiences/LAS_ShooterGame_StandardComponents.LAS_ShooterGame_StandardComponents",
+              "/ShooterCore/Experiences/LAS_ShooterGame_StandardHUD.LAS_ShooterGame_StandardHUD",
+              "/ShooterCore/Accolades/EAS_BasicShooterAcolades.EAS_BasicShooterAcolades"
+            ]
+          }
+        }
+      ],
+      "direct_dependency_counts": {
+        "hard_package": 8,
+        "soft_package": 9,
+        "hard_manage": 0,
+        "soft_manage": 0
+      },
+      "direct_dependencies": {
+        "hard_package": [
+          "/Script/GameFeatures",
+          "/Script/GameplayTags",
+          "/Script/LyraGame",
+          "/ShooterCore/Accolades/EAS_BasicShooterAcolades",
+          "/ShooterCore/Experiences/LAS_ShooterGame_SharedInput",
+          "/ShooterCore/Experiences/LAS_ShooterGame_StandardComponents",
+          "/ShooterCore/Experiences/LAS_ShooterGame_StandardHUD",
+          "/ShooterCore/Game/HeroData_ShooterGame"
+        ],
+        "soft_package": [
+          "/Game/Characters/Cosmetics/B_PickRandomCharacter",
+          "/Script/Engine",
+          "/ShooterCore/Bot/B_ShooterBotSpawner",
+          "/ShooterCore/Elimination/AbilitySet_Elimination",
+          "/ShooterCore/Elimination/B_MusicManagerComponent_Elimination",
+          "/ShooterCore/Elimination/B_TeamDeathMatchScoring",
+          "/ShooterCore/Elimination/UI/W_ScoreWidget_Elimination",
+          "/ShooterCore/Game/B_TeamSetup_TwoTeams",
+          "/ShooterCore/Game/B_TeamSpawningRules"
+        ],
+        "hard_manage": [],
+        "soft_manage": []
+      }
+    },
+    "control_points_experience": {
+      "package": "/ShooterCore/Experiences/B_LyraShooterGame_ControlPoints",
+      "exists": true,
+      "assets": [
+        {
+          "asset_name": "B_LyraShooterGame_ControlPoints",
+          "class": "/Script/Engine.Blueprint",
+          "object_path": "/ShooterCore/Experiences/B_LyraShooterGame_ControlPoints.B_LyraShooterGame_ControlPoints",
+          "defaults": {
+            "generated_class": "/ShooterCore/Experiences/B_LyraShooterGame_ControlPoints.B_LyraShooterGame_ControlPoints_C",
+            "game_features_to_enable": [
+              "ShooterCore"
+            ],
+            "default_pawn_data": "/ShooterCore/Game/HeroData_ShooterGame.HeroData_ShooterGame",
+            "actions": [
+              "/ShooterCore/Experiences/B_LyraShooterGame_ControlPoints.Default__B_LyraShooterGame_ControlPoints_C:GameFeatureAction_AddWidgets_0",
+              "/ShooterCore/Experiences/B_LyraShooterGame_ControlPoints.Default__B_LyraShooterGame_ControlPoints_C:GameFeatureAction_AddAbilities_0",
+              "/ShooterCore/Experiences/B_LyraShooterGame_ControlPoints.Default__B_LyraShooterGame_ControlPoints_C:GameFeatureAction_AddComponents_0"
+            ],
+            "action_sets": [
+              "/ShooterCore/Experiences/LAS_ShooterGame_SharedInput.LAS_ShooterGame_SharedInput",
+              "/ShooterCore/Experiences/LAS_ShooterGame_StandardComponents.LAS_ShooterGame_StandardComponents",
+              "/ShooterCore/Experiences/LAS_ShooterGame_StandardHUD.LAS_ShooterGame_StandardHUD",
+              "/ShooterCore/Accolades/EAS_BasicShooterAcolades.EAS_BasicShooterAcolades"
+            ]
+          }
+        }
+      ],
+      "direct_dependency_counts": {
+        "hard_package": 8,
+        "soft_package": 10,
+        "hard_manage": 0,
+        "soft_manage": 0
+      },
+      "direct_dependencies": {
+        "hard_package": [
+          "/Script/GameFeatures",
+          "/Script/GameplayTags",
+          "/Script/LyraGame",
+          "/ShooterCore/Accolades/EAS_BasicShooterAcolades",
+          "/ShooterCore/Experiences/LAS_ShooterGame_SharedInput",
+          "/ShooterCore/Experiences/LAS_ShooterGame_StandardComponents",
+          "/ShooterCore/Experiences/LAS_ShooterGame_StandardHUD",
+          "/ShooterCore/Game/HeroData_ShooterGame"
+        ],
+        "soft_package": [
+          "/Game/Characters/Cosmetics/B_PickRandomCharacter",
+          "/Script/Engine",
+          "/ShooterCore/ControlPoint/AI/B_ShooterBotSpawner_ControlPoint",
+          "/ShooterCore/ControlPoint/AbilitySet_ControlPoint",
+          "/ShooterCore/ControlPoint/B_ControlPointScoring",
+          "/ShooterCore/ControlPoint/B_MusicManagerComponent_ControlPoint",
+          "/ShooterCore/ControlPoint/UI/W_CPScoreWidget",
+          "/ShooterCore/ControlPoint/UI/W_ControlPointStatusWidget",
+          "/ShooterCore/Game/B_TeamSetup_TwoTeams",
+          "/ShooterCore/Game/B_TeamSpawningRules"
+        ],
+        "hard_manage": [],
+        "soft_manage": []
+      }
+    },
+    "shared_input_action_set": {
+      "package": "/ShooterCore/Experiences/LAS_ShooterGame_SharedInput",
+      "exists": true,
+      "assets": [
+        {
+          "asset_name": "LAS_ShooterGame_SharedInput",
+          "class": "/Script/LyraGame.LyraExperienceActionSet",
+          "object_path": "/ShooterCore/Experiences/LAS_ShooterGame_SharedInput.LAS_ShooterGame_SharedInput",
+          "defaults": {
+            "game_features_to_enable": [
+              "ShooterCore"
+            ],
+            "actions": [
+              "/ShooterCore/Experiences/LAS_ShooterGame_SharedInput.LAS_ShooterGame_SharedInput:GameFeatureAction_AddInputBinding_0",
+              "/ShooterCore/Experiences/LAS_ShooterGame_SharedInput.LAS_ShooterGame_SharedInput:GameFeatureAction_AddInputContextMapping_0"
+            ]
+          }
+        }
+      ],
+      "direct_dependency_counts": {
+        "hard_package": 1,
+        "soft_package": 6,
+        "hard_manage": 0,
+        "soft_manage": 0
+      },
+      "direct_dependencies": {
+        "hard_package": [
+          "/Script/LyraGame"
+        ],
+        "soft_package": [
+          "/Script/CoreUObject",
+          "/Script/Engine",
+          "/Script/GameFeatures",
+          "/Script/LyraGame",
+          "/ShooterCore/Input/Actions/InputData_ShooterGame_AddOns",
+          "/ShooterCore/Input/Mappings/IMC_ShooterGame"
+        ],
+        "hard_manage": [],
+        "soft_manage": []
+      }
+    },
+    "standard_components_action_set": {
+      "package": "/ShooterCore/Experiences/LAS_ShooterGame_StandardComponents",
+      "exists": true,
+      "assets": [
+        {
+          "asset_name": "LAS_ShooterGame_StandardComponents",
+          "class": "/Script/LyraGame.LyraExperienceActionSet",
+          "object_path": "/ShooterCore/Experiences/LAS_ShooterGame_StandardComponents.LAS_ShooterGame_StandardComponents",
+          "defaults": {
+            "game_features_to_enable": [
+              "ShooterCore"
+            ],
+            "actions": [
+              "/ShooterCore/Experiences/LAS_ShooterGame_StandardComponents.LAS_ShooterGame_StandardComponents:GameFeatureAction_AddComponents_0"
+            ]
+          }
+        }
+      ],
+      "direct_dependency_counts": {
+        "hard_package": 2,
+        "soft_package": 6,
+        "hard_manage": 0,
+        "soft_manage": 0
+      },
+      "direct_dependencies": {
+        "hard_package": [
+          "/Script/GameFeatures",
+          "/Script/LyraGame"
+        ],
+        "soft_package": [
+          "/Game/Effects/Blueprints/B_NiagaraNumberPopComponent",
+          "/Game/UI/Indicators/NameplateManagerComponent",
+          "/Game/UI/Indicators/NameplateSource",
+          "/Script/Engine",
+          "/ShooterCore/Game/B_Hero_ShooterMannequin",
+          "/ShooterCore/Game/B_QuickBarComponent"
+        ],
+        "hard_manage": [],
+        "soft_manage": []
+      }
+    },
+    "standard_hud_action_set": {
+      "package": "/ShooterCore/Experiences/LAS_ShooterGame_StandardHUD",
+      "exists": true,
+      "assets": [
+        {
+          "asset_name": "LAS_ShooterGame_StandardHUD",
+          "class": "/Script/LyraGame.LyraExperienceActionSet",
+          "object_path": "/ShooterCore/Experiences/LAS_ShooterGame_StandardHUD.LAS_ShooterGame_StandardHUD",
+          "defaults": {
+            "game_features_to_enable": [
+              "ShooterCore"
+            ],
+            "actions": [
+              "/ShooterCore/Experiences/LAS_ShooterGame_StandardHUD.LAS_ShooterGame_StandardHUD:GameFeatureAction_AddWidgets_0"
+            ]
+          }
+        }
+      ],
+      "direct_dependency_counts": {
+        "hard_package": 2,
+        "soft_package": 12,
+        "hard_manage": 0,
+        "soft_manage": 0
+      },
+      "direct_dependencies": {
+        "hard_package": [
+          "/Script/GameplayTags",
+          "/Script/LyraGame"
+        ],
+        "soft_package": [
+          "/Game/UI/Hud/W_OnScreenJoystick_Left",
+          "/Game/UI/Hud/W_OnScreenJoystick_Right",
+          "/Game/UI/Hud/W_TouchRegion_Right",
+          "/Game/UI/PerfStats/W_PerfStatContainer_GraphOnly",
+          "/Game/UI/PerfStats/W_PerfStatContainer_TextOnly",
+          "/ShooterCore/Input/W_TouchRegion_Left",
+          "/ShooterCore/UserInterface/HUD/W_QuickBar",
+          "/ShooterCore/UserInterface/HUD/W_WeaponReticleHost",
+          "/ShooterCore/UserInterface/Notifications/Accolades/W_AccoladeHostWidget",
+          "/ShooterCore/UserInterface/Notifications/EliminationFeed/W_EliminationFeed",
+          "/ShooterCore/UserInterface/W_FireButton",
+          "/ShooterCore/UserInterface/W_ShooterHUDLayout"
+        ],
+        "hard_manage": [],
+        "soft_manage": []
+      }
+    }
+  },
+  "user_facing_experiences": [
+    {
+      "package": "/Game/System/Playlists/DA_ExamplePlaylist",
+      "asset_name": "DA_ExamplePlaylist",
+      "defaults": {
+        "map_id": {
+          "type": "Map",
+          "name": "/Game/System/DefaultEditorMap/L_DefaultEditorOverview"
+        },
+        "experience_id": {
+          "type": "LyraExperienceDefinition",
+          "name": "B_LyraDefaultExperience"
+        },
+        "extra_args": {},
+        "is_default_experience": false,
+        "show_in_front_end": false,
+        "record_replay": false,
+        "max_player_count": 4
+      }
+    },
+    {
+      "package": "/Game/System/Playlists/DA_Frontend",
+      "asset_name": "DA_Frontend",
+      "defaults": {
+        "map_id": {
+          "type": "Map",
+          "name": "/Game/System/FrontEnd/Maps/L_LyraFrontEnd"
+        },
+        "experience_id": {
+          "type": "LyraExperienceDefinition",
+          "name": "B_LyraFrontEnd_Experience"
+        },
+        "extra_args": {},
+        "is_default_experience": false,
+        "show_in_front_end": false,
+        "record_replay": false,
+        "max_player_count": 1
+      }
+    },
+    {
+      "package": "/ShooterCore/System/Playlists/DA_ShooterGame_ShooterGym",
+      "asset_name": "DA_ShooterGame_ShooterGym",
+      "defaults": {
+        "map_id": {
+          "type": "Map",
+          "name": "/ShooterCore/Maps/L_ShooterGym"
+        },
+        "experience_id": {
+          "type": "LyraExperienceDefinition",
+          "name": "B_LyraShooterGame_ControlPoints"
+        },
+        "extra_args": {},
+        "is_default_experience": false,
+        "show_in_front_end": false,
+        "record_replay": false,
+        "max_player_count": 8
+      }
+    },
+    {
+      "package": "/ShooterCore/System/Playlists/DA_ShooterGame_ShooterPerf",
+      "asset_name": "DA_ShooterGame_ShooterPerf",
+      "defaults": {
+        "map_id": {
+          "type": "Map",
+          "name": "/ShooterCore/Maps/L_ShooterPerf"
+        },
+        "experience_id": {
+          "type": "LyraExperienceDefinition",
+          "name": "B_ShooterGame_Perf"
+        },
+        "extra_args": {},
+        "is_default_experience": false,
+        "show_in_front_end": true,
+        "record_replay": false,
+        "max_player_count": 8
+      }
+    },
+    {
+      "package": "/ShooterMaps/System/Playlists/DA_Convolution_ControlPoint",
+      "asset_name": "DA_Convolution_ControlPoint",
+      "defaults": {
+        "map_id": {
+          "type": "Map",
+          "name": "/ShooterMaps/Maps/L_Convolution_Blockout"
+        },
+        "experience_id": {
+          "type": "LyraExperienceDefinition",
+          "name": "B_LyraShooterGame_ControlPoints"
+        },
+        "extra_args": {},
+        "is_default_experience": true,
+        "show_in_front_end": true,
+        "record_replay": false,
+        "max_player_count": 16
+      }
+    },
+    {
+      "package": "/ShooterMaps/System/Playlists/DA_Expanse_TDM",
+      "asset_name": "DA_Expanse_TDM",
+      "defaults": {
+        "map_id": {
+          "type": "Map",
+          "name": "/ShooterMaps/Maps/L_Expanse"
+        },
+        "experience_id": {
+          "type": "LyraExperienceDefinition",
+          "name": "B_ShooterGame_Elimination"
+        },
+        "extra_args": {},
+        "is_default_experience": true,
+        "show_in_front_end": true,
+        "record_replay": false,
+        "max_player_count": 16
+      }
+    }
+  ]
+}
