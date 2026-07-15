@@ -66,7 +66,7 @@ DA_ShooterGame_ShooterGym
 - 不依赖 `ShooterMaps` 插件。
 - `L_ShooterGym` 的 Asset Registry 直接依赖为 27 个硬依赖、1 个软依赖。
 - 对比：`L_Convolution_Blockout` 有 596 个直接软依赖；`L_Expanse` 有 3015 个直接软依赖。
-- 它虽然不显示在前端列表，但仍是原版 Lyra 的 UserFacingExperience，可通过确定参数直接启动。
+- 它虽然不显示在前端列表，但仍是当前 Lyra 基线自带的 UserFacingExperience，可通过确定参数直接启动。
 
 前端产品路径仍保留用于后续对照：
 
@@ -152,21 +152,22 @@ DA_Expanse_TDM
 - PlayerState ASC、AbilitySet、Gameplay Tags 与 Enhanced Input。
 - CommonUI、UIExtension 与 Game Feature Widget 注入。
 - ShooterGym Map 及 Registry 证明的直接依赖。
-- 原版测试与 BootTest，直到派生项目拥有替代验证。
+- 当前基线测试与 BootTest，直到派生项目拥有替代验证。
 
 `ShooterMaps`、TopDownArena、ShooterExplorer、在线平台 Target 和非启动主链工具可进入后续删减候选，但必须在派生副本中一次移除一项并重复 L0/L1。
 
 ## 下一步顺序
 
-1. 冻结当前原版 Lyra 的来源或文件指纹。
-2. 运行 `ShooterGym + ControlPoints` L1 并收集上述十项证据。
-3. 运行或明确配置 Gauntlet BootTest。
-4. 只有原版 L0/L1 都稳定后，才创建 Lyra-derived 最小项目副本。
-5. 在副本中按单变量实验缩减插件和资产。
+1. 已完成：冻结当前 Lyra 的 Engine 修订、来源边界和 9,656 个权威文件指纹。
+2. 继续归档启动生命周期、资产配置、功能管线、测试入口和已知风险。
+3. 资料模型稳定后，再运行 `ShooterGym + ControlPoints` L1 并收集上述十项证据。
+4. 运行或明确配置 Gauntlet BootTest。
+5. 只有当前基线的 L0/L1 都稳定后，才创建 Lyra-derived 最小项目副本。
+6. 在副本中按单变量实验缩减插件和资产。
 
 ## 未关闭风险
 
 - 两条 Editor 启动期 `LogAutomationTest: Error: Condition failed` 尚未定位。
 - Asset Registry 结果是直接依赖，不是完整传递闭包。
-- 当前 Lyra 目录仍未作为冻结基线纳入 Git。
+- Lyra 目录本身仍未纳入 Git；当前通过已跟踪的 SHA-256 清单检测变化，不能直接获得资产级 Git 历史。
 - L1 尚无 Pawn、ASC、Input 和 HUD 的运行证据。

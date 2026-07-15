@@ -1,0 +1,69 @@
+{
+    "schema_version":  1,
+    "generated_at_utc":  "2026-07-15T06:18:48.4302935Z",
+    "project":  "LyraStarterGame",
+    "algorithm":  "SHA-256",
+    "manifest_format":  "lowercase_sha256, two spaces, forward-slash relative path, LF",
+    "excluded_directory_names":  [
+                                     ".idea",
+                                     ".vs",
+                                     "Binaries",
+                                     "DerivedDataCache",
+                                     "Intermediate",
+                                     "Saved"
+                                 ],
+    "excluded_relative_paths":  [
+                                    ".vsconfig",
+                                    "Build/Scripts/Lyra.Automation.csproj.props",
+                                    "LyraStarterGame.sln"
+                                ],
+    "excluded_relative_prefixes":  [
+                                       "Build/Scripts/obj/"
+                                   ],
+    "file_count":  9656,
+    "total_bytes":  2509522992,
+    "manifest":  "authoritative-files.sha256",
+    "manifest_sha256":  "4abc401a69a8dc48be0189d84dd090a2d8397a501bf243081bf64e495192e825",
+    "groups":  [
+                   {
+                       "name":  "Build",
+                       "file_count":  37,
+                       "total_bytes":  8342750
+                   },
+                   {
+                       "name":  "Config",
+                       "file_count":  45,
+                       "total_bytes":  153267
+                   },
+                   {
+                       "name":  "Content",
+                       "file_count":  2965,
+                       "total_bytes":  1905658945
+                   },
+                   {
+                       "name":  "LyraStarterGame.uproject",
+                       "file_count":  1,
+                       "total_bytes":  5969
+                   },
+                   {
+                       "name":  "Platforms",
+                       "file_count":  5,
+                       "total_bytes":  251
+                   },
+                   {
+                       "name":  "Plugins",
+                       "file_count":  6116,
+                       "total_bytes":  593626668
+                   },
+                   {
+                       "name":  "README.md",
+                       "file_count":  1,
+                       "total_bytes":  842
+                   },
+                   {
+                       "name":  "Source",
+                       "file_count":  486,
+                       "total_bytes":  1734300
+                   }
+               ]
+}
