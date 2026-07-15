@@ -1,1 +1,70 @@
-.planning/evidence/lyra-5.6.1/authoritative-files.sha256 text eol=lf
+# Normalize repository text files. Explicit exceptions below keep Windows
+# command scripts compatible with native Windows tooling.
+* text=auto eol=lf
+
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Source, configuration, descriptors, and documentation
+*.c text eol=lf
+*.cc text eol=lf
+*.cpp text eol=lf
+*.cxx text eol=lf
+*.h text eol=lf
+*.hpp text eol=lf
+*.inl text eol=lf
+*.cs text eol=lf
+*.ini text eol=lf
+*.py text eol=lf
+*.ps1 text eol=lf
+*.uproject text eol=lf
+*.uplugin text eol=lf
+*.json text eol=lf
+*.jsonl text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+*.xml text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.csv text eol=lf
+*.sha256 text eol=lf
+
+# Unreal assets are binary and must never be line-ending normalized or merged
+# as text. Git LFS can be added later when the repository storage policy is set.
+*.uasset binary
+*.umap binary
+*.ubulk binary
+*.uexp binary
+*.uptnl binary
+
+# Common binary assets used by Unreal projects
+*.bmp binary
+*.dds binary
+*.exr binary
+*.gif binary
+*.hdr binary
+*.ico binary
+*.jpeg binary
+*.jpg binary
+*.png binary
+*.tga binary
+*.tif binary
+*.tiff binary
+*.wav binary
+*.mp3 binary
+*.ogg binary
+*.mp4 binary
+*.mov binary
+*.fbx binary
+*.glb binary
+*.gltf binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.dll binary
+*.exe binary
+*.lib binary
+*.pdb binary
+*.zip binary
