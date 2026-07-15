@@ -347,6 +347,29 @@ AbilitySet 在 Authority 授予 Ability 时，把配置的 InputTag 写入 Abili
 | 卸载顺序 | 非 FILO，源码标记 TODO | 依赖反向清理未被保证 |
 | PlayerState `OnRep_PawnData` | 空实现 | 客户端依靠 ASC/PawnData 复制与其他事件推进 |
 
+## P7：Frontend → Session → Travel → 新 Experience
+
+前端 UI 选择的是 `ULyraUserFacingExperienceDefinition`，不是单一 Map。该 Data Asset 把 `MapID` 和 `ExperienceID` 写入 HostRequest；其中 Experience 被编码为 URL 的 `?Experience=`。
+
+```text
+Frontend Experience Loaded
+→ Frontend Control Flow / W_LyraFrontEnd
+→ 选择 UserFacingExperience
+→ CreateHostingRequest
+→ HostSession / QuickPlay / JoinSession
+→ ServerTravel / ClientTravel
+→ OldWorld EndPlay
+→ NewWorld + 同一 GameInstance
+→ SetGameMode(URL)
+→ SpawnPlayActor
+→ New GameMode 下一 Tick 从 URL 选择 Experience
+→ 新 Experience 加载
+```
+
+Session success 回调早于 Travel 完成，因此这条管线至少需要分别验证 Session、Travel、World 和 Experience 四个阶段。Hard Travel 下 GameInstance、Subsystem、LocalPlayer 与 UI Policy 跨 World 保留，PlayerController、PlayerState、Pawn 和 ASC 则重建。
+
+详细证据、Host/Join 分叉、Hard/Seamless 对象表和返回前端链见 `.planning/codebase/TRAVEL.md`。
+
 ## 当前证据矩阵
 
 ### 已由配置、源码或 Registry 证明
@@ -358,6 +381,9 @@ AbilitySet 在 Authority 授予 Ability 时，把配置的 InputTag 写入 Abili
 - PlayerState 回调先于 GameMode 回调的当前 UE 5.6 委托顺序。
 - PawnData、AbilitySet、PawnExtension、Hero、ASC Owner/Avatar 与输入处理的静态连接。
 - 加载屏与 Experience LoadState 的连接。
+- UserFacingExperience 的 MapID/ExperienceID 到 HostRequest/URL 的静态映射。
+- OSSv1 Host/Join success 回调到 ServerTravel/ClientTravel 的调用顺序。
+- Hard Travel 中 GameInstance/LocalPlayer 保留以及 World/Player 对象重建的 Engine 调用顺序。
 
 ### 2026-07-14 历史运行中曾观察
 
@@ -380,6 +406,8 @@ AbilitySet 在 Authority 授予 Ability 时，把配置的 InputTag 写入 Abili
 - 一个真实 InputTag 激活一个 Ability。
 - Shooter HUD 注入。
 - Game Feature 激活失败、Experience 部分加载、异步停用等失败路径。
+- Frontend Host 的实际 Hard/Seamless 模式与完整旅行时序。
+- RootLayout 复用时前端 Widget 栈是否正确清理。
 
 ## 对 UE-ITPS 数据模型的直接启示
 
@@ -402,8 +430,7 @@ AbilitySet 在 Authority 授予 Ability 时，把配置的 InputTag 写入 Abili
 
 ## 下一轮研究问题
 
-1. 在不进入 Shooter L1 前，补齐 Map Travel、LocalPlayer/UI Policy 和 Frontend State 的生命周期。
-2. 设计不会被 UE 日志轮转破坏的证据捕获规则：先指定输出路径或运行后立即复制、记录 SHA-256，再开始下一次 UE 进程。
-3. 为 L1 增加最小临时日志或 Trace 点，覆盖 Experience Loaded、回调先后、PawnData、ASC Owner/Avatar、InitState、InputTag 和 HUD 注入。
-4. 分别建立 Standalone、Listen Server、Dedicated Server、Client 的时序差异表，避免用单机 PIE 推断网络权威。
-5. 研究 Experience/Game Feature 失败与卸载路径是否需要在未来参考实现中加固，而不是直接把 Lyra 样例行为定义为标准答案。
+1. 按 `.planning/codebase/RUNTIME-EVIDENCE.md` 重跑并留存 L0，恢复原始运行证据。
+2. 为 L1 设计最小临时日志或 Trace 点，覆盖 Travel、Experience Loaded、回调先后、PawnData、ASC Owner/Avatar、InitState、InputTag 和 HUD 注入。
+3. 分别建立 Standalone、Listen Server、Dedicated Server、Client 的时序差异表，避免用单机 PIE 推断网络权威。
+4. 研究 Experience/Game Feature 失败与卸载路径是否需要在未来参考实现中加固，而不是直接把 Lyra 样例行为定义为标准答案。

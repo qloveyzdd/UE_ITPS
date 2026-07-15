@@ -149,6 +149,8 @@ Lyra 官方历史快照 e0004083
 
 该文件已于 2026-07-15 在连续运行 UE Python Commandlet 时被 `Saved/Logs` 自动轮转清理，且此前没有复制到 `.planning/evidence`。以下序列是文件仍存在时完成并提交的检查记录，但当前仓库不能再独立复核原始行。因此 L0 应从“证据完整的 Verified”降级为“历史已观察、证据留存不完整”；重跑 L0 并保存原始日志及 SHA-256 后才能恢复为权威运行证据。
 
+当前已建立 `.planning/codebase/RUNTIME-EVIDENCE.md` 和 `.planning/tools/archive_lyra_run.ps1`。后续 UE 运行必须在启动下一 UE/Commandlet 进程前，把已关闭进程的日志复制到不可覆盖的 Run 目录并生成 SHA-256 manifest；捕获完成仍只标记 `captured_unassessed`，不能自动晋升 Verified。
+
 已确认序列：
 
 1. Editor 报告 `Engine Version: 5.6.1-0+UE5`。
@@ -187,4 +189,4 @@ Lyra 官方历史快照 e0004083
 
 现在可以把该组合标记为“**源码、配置、资产指纹可复现，L0 曾在本机观察通过但原始运行证据待重新留存的 UE 5.6.1 Lyra 基线**”。它不等于 5.6.1 标签镜像，也不等于最小可玩链路已经通过。
 
-当前优先继续归档启动生命周期、模块职责、资产配置和验证边界；在资料模型稳定前，不执行 L1、不修改 Gameplay、不删除插件或资产。
+当前优先按已建立的捕获规范重跑 L0，并继续归档网络模式与失败边界；在资料模型稳定前，不执行 L1、不修改 Gameplay、不删除插件或资产。

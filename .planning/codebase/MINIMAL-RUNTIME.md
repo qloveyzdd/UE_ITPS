@@ -160,11 +160,13 @@ DA_Expanse_TDM
 
 1. 已完成：冻结当前 Lyra 的 Engine 修订、来源边界和 9,656 个权威文件指纹。
 2. 继续归档启动生命周期、资产配置、功能管线、测试入口和已知风险。
-3. 在下一次运行前先建立日志复制、摘要和 SHA-256 留存规则，并重跑一次 L0 恢复原始运行证据。
+3. 使用已建立的日志捕获工具重跑一次 L0，恢复原始运行证据。
 4. 资料模型稳定后，再运行 `ShooterGym + ControlPoints` L1 并收集上述十项证据。
 5. 运行或明确配置 Gauntlet BootTest。
 6. 只有当前基线的 L0/L1 都稳定后，才创建 Lyra-derived 最小项目副本。
 7. 在副本中按单变量实验缩减插件和资产。
+
+第 3 项使用的捕获规则与工具见 `.planning/codebase/RUNTIME-EVIDENCE.md` 和 `.planning/tools/archive_lyra_run.ps1`；本轮没有启动 UE，尚未生成新的 L0 Run。
 
 ## 未关闭风险
 
