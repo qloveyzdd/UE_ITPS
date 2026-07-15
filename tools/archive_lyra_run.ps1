@@ -21,7 +21,7 @@ param(
     [string]$Map = "",
     [string]$Experience = "",
     [int]$ExitCode,
-    [string]$EvidenceRoot = (Join-Path $PSScriptRoot "..\evidence\lyra-5.6.1\runs")
+    [string]$EvidenceRoot = (Join-Path $PSScriptRoot "..\.planning\evidence\lyra-5.6.1\runs")
 )
 
 $ErrorActionPreference = "Stop"

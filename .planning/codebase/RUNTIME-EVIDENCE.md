@@ -49,7 +49,7 @@ status: capture-protocol-and-tool-ready; no-new-run-captured
 ## 使用工具
 
 ```powershell
-& E:\UE_ITPS\.planning\tools\archive_lyra_run.ps1 `
+& E:\UE_ITPS\tools\archive_lyra_run.ps1 `
   -SourceLog E:\UE_ITPS\LyraStarterGame\Saved\Logs\LyraStarterGame.log `
   -RunId 20260715T153000Z-L0-editor-pie `
   -Level L0 `

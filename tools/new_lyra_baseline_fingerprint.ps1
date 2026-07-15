@@ -1,6 +1,6 @@
 param(
-    [string]$ProjectRoot = (Join-Path $PSScriptRoot "..\..\LyraStarterGame"),
-    [string]$EvidenceRoot = (Join-Path $PSScriptRoot "..\evidence\lyra-5.6.1")
+    [string]$ProjectRoot = (Join-Path $PSScriptRoot "..\LyraStarterGame"),
+    [string]$EvidenceRoot = (Join-Path $PSScriptRoot "..\.planning\evidence\lyra-5.6.1")
 )
 
 $ErrorActionPreference = "Stop"

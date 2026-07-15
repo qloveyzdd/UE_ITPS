@@ -166,7 +166,7 @@ DA_Expanse_TDM
 6. 只有当前基线的 L0/L1 都稳定后，才创建 Lyra-derived 最小项目副本。
 7. 在副本中按单变量实验缩减插件和资产。
 
-第 3 项使用的捕获规则与工具见 `.planning/codebase/RUNTIME-EVIDENCE.md` 和 `.planning/tools/archive_lyra_run.ps1`；本轮没有启动 UE，尚未生成新的 L0 Run。
+第 3 项使用的捕获规则与工具见 `.planning/codebase/RUNTIME-EVIDENCE.md` 和 `tools/archive_lyra_run.ps1`；本轮没有启动 UE，尚未生成新的 L0 Run。
 
 ## 未关闭风险
 

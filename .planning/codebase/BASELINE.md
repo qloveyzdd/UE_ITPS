@@ -119,7 +119,7 @@ Lyra 官方历史快照 e0004083
 
 - 清单：`.planning/evidence/lyra-5.6.1/authoritative-files.sha256`
 - 汇总：`.planning/evidence/lyra-5.6.1/baseline-fingerprint.json`
-- 生成工具：`.planning/tools/new_lyra_baseline_fingerprint.ps1`
+- 生成工具：`tools/new_lyra_baseline_fingerprint.ps1`
 - 文件数：9,656
 - 总大小：2,509,522,992 bytes
 - 清单自身 SHA-256：`4abc401a69a8dc48be0189d84dd090a2d8397a501bf243081bf64e495192e825`
@@ -136,7 +136,7 @@ Lyra 官方历史快照 e0004083
 清单排除 `.idea`、`.vs`、`Binaries`、`DerivedDataCache`、`Intermediate`、`Saved`、`Build/Scripts/obj`，以及生成的 `.sln`、`.vsconfig`、`Lyra.Automation.csproj.props`。重新计算命令：
 
 ```powershell
-& E:\UE_ITPS\.planning\tools\new_lyra_baseline_fingerprint.ps1
+& E:\UE_ITPS\tools\new_lyra_baseline_fingerprint.ps1
 ```
 
 以后任何 Engine、源码、配置或资产研究都应引用源码修订和该指纹；如果指纹变化，已有运行证据不能无条件继承。
@@ -149,7 +149,7 @@ Lyra 官方历史快照 e0004083
 
 该文件已于 2026-07-15 在连续运行 UE Python Commandlet 时被 `Saved/Logs` 自动轮转清理，且此前没有复制到 `.planning/evidence`。以下序列是文件仍存在时完成并提交的检查记录，但当前仓库不能再独立复核原始行。因此 L0 应从“证据完整的 Verified”降级为“历史已观察、证据留存不完整”；重跑 L0 并保存原始日志及 SHA-256 后才能恢复为权威运行证据。
 
-当前已建立 `.planning/codebase/RUNTIME-EVIDENCE.md` 和 `.planning/tools/archive_lyra_run.ps1`。后续 UE 运行必须在启动下一 UE/Commandlet 进程前，把已关闭进程的日志复制到不可覆盖的 Run 目录并生成 SHA-256 manifest；捕获完成仍只标记 `captured_unassessed`，不能自动晋升 Verified。
+当前已建立 `.planning/codebase/RUNTIME-EVIDENCE.md` 和 `tools/archive_lyra_run.ps1`。后续 UE 运行必须在启动下一 UE/Commandlet 进程前，把已关闭进程的日志复制到不可覆盖的 Run 目录并生成 SHA-256 manifest；捕获完成仍只标记 `captured_unassessed`，不能自动晋升 Verified。
 
 已确认序列：
 
@@ -164,7 +164,7 @@ Lyra 官方历史快照 e0004083
 
 实时 Asset Registry 的查询脚本和精简结果分别位于：
 
-- `.planning/tools/query_lyra_asset_registry.py`
+- `tools/query_lyra_asset_registry.py`
 - `.planning/evidence/lyra-5.6.1/asset-registry-slice.json`
 
 ## 验收状态

@@ -1,0 +1,1806 @@
+{
+  "schema_version": "ue-itps.uproject-structure.v1",
+  "generated_at": "2026-07-15T12:54:12+00:00",
+  "scan_context": {
+    "operation": "scan",
+    "platform": "Win64",
+    "target_type": "Editor",
+    "configuration": "Development",
+    "requiredness_mode": "declared-and-located-only"
+  },
+  "discovery": {
+    "search_root": "E:/UE_ITPS/LyraStarterGame/LyraStarterGame.uproject",
+    "candidate_count": 1,
+    "candidates": [
+      "E:/UE_ITPS/LyraStarterGame/LyraStarterGame.uproject"
+    ]
+  },
+  "project": {
+    "name": "LyraStarterGame",
+    "root": "E:/UE_ITPS/LyraStarterGame",
+    "descriptor": "E:/UE_ITPS/LyraStarterGame/LyraStarterGame.uproject",
+    "descriptor_sha256": "a42824b8d829dc00b290ada29ba94cb5f5cbdfe517cdace2b84714cf5cde27ff",
+    "file_version": 3,
+    "engine_association": "{6D46E408-487A-23A8-6BF7-4F8E40277C23}",
+    "category": "Samples",
+    "description": "",
+    "top_level_fields": [
+      "Category",
+      "Description",
+      "EngineAssociation",
+      "EpicSampleNameHash",
+      "FileVersion",
+      "Modules",
+      "Plugins"
+    ],
+    "additional_root_directories": [],
+    "additional_plugin_directories": [],
+    "descriptor_options": {
+      "EpicSampleNameHash": "451731683"
+    },
+    "unmodeled_top_level_fields": {}
+  },
+  "engine": {
+    "association": "{6D46E408-487A-23A8-6BF7-4F8E40277C23}",
+    "association_raw": "{6D46E408-487A-23A8-6BF7-4F8E40277C23}",
+    "status": "resolved",
+    "resolution_source": "windows-registry:Software\\Epic Games\\Unreal Engine\\Builds:{6D46E408-487A-23A8-6BF7-4F8E40277C23}",
+    "resolution_method": "windows-registry:Software\\Epic Games\\Unreal Engine\\Builds:{6D46E408-487A-23A8-6BF7-4F8E40277C23}",
+    "resolution_candidates": [
+      {
+        "root": "D:/UnrealEngine_5.6",
+        "source": "windows-registry:Software\\Epic Games\\Unreal Engine\\Builds:{6D46E408-487A-23A8-6BF7-4F8E40277C23}"
+      }
+    ],
+    "root": "D:/UnrealEngine_5.6",
+    "build_version_file": "D:/UnrealEngine_5.6/Engine/Build/Build.version",
+    "build_version_sha256": "0b835329767015bfd93fc7222c02c1c5c83c830b33caf35ecd824d7b848af333",
+    "version": "5.6.1",
+    "build": {
+      "MajorVersion": 5,
+      "MinorVersion": 6,
+      "PatchVersion": 1,
+      "Changelist": 0,
+      "CompatibleChangelist": 43139311,
+      "IsLicenseeVersion": 0,
+      "IsPromotedBuild": 0,
+      "BranchName": "UE5"
+    }
+  },
+  "modules": {
+    "count": 2,
+    "items": [
+      {
+        "name": "LyraGame",
+        "type": "Runtime",
+        "loading_phase": "Default",
+        "additional_dependencies": [
+          "DeveloperSettings",
+          "Engine"
+        ],
+        "descriptor_pointer": "/Modules/0",
+        "raw_declaration": {
+          "Name": "LyraGame",
+          "Type": "Runtime",
+          "LoadingPhase": "Default",
+          "AdditionalDependencies": [
+            "DeveloperSettings",
+            "Engine"
+          ]
+        },
+        "conventional_location": {
+          "directory": "E:/UE_ITPS/LyraStarterGame/Source/LyraGame",
+          "build_rules": "E:/UE_ITPS/LyraStarterGame/Source/LyraGame/LyraGame.Build.cs"
+        },
+        "actual": {
+          "build_rule_candidates": [
+            "E:/UE_ITPS/LyraStarterGame/Source/LyraGame/LyraGame.Build.cs"
+          ],
+          "build_rule_evidence": [
+            {
+              "path": "E:/UE_ITPS/LyraStarterGame/Source/LyraGame/LyraGame.Build.cs",
+              "sha256": "7ca8c09fc1ff65e744c08d025715850a236b40827ef3d5b6dda45b5ef70500ca"
+            }
+          ],
+          "source_file_count": 447,
+          "module_entrypoint_candidates": [
+            "E:/UE_ITPS/LyraStarterGame/Source/LyraGame/LyraGameModule.cpp"
+          ]
+        },
+        "status": "complete"
+      },
+      {
+        "name": "LyraEditor",
+        "type": "Editor",
+        "loading_phase": "Default",
+        "additional_dependencies": [],
+        "descriptor_pointer": "/Modules/1",
+        "raw_declaration": {
+          "Name": "LyraEditor",
+          "Type": "Editor",
+          "LoadingPhase": "Default"
+        },
+        "conventional_location": {
+          "directory": "E:/UE_ITPS/LyraStarterGame/Source/LyraEditor",
+          "build_rules": "E:/UE_ITPS/LyraStarterGame/Source/LyraEditor/LyraEditor.Build.cs"
+        },
+        "actual": {
+          "build_rule_candidates": [
+            "E:/UE_ITPS/LyraStarterGame/Source/LyraEditor/LyraEditor.Build.cs"
+          ],
+          "build_rule_evidence": [
+            {
+              "path": "E:/UE_ITPS/LyraStarterGame/Source/LyraEditor/LyraEditor.Build.cs",
+              "sha256": "d4fbc5c74a3b2f198b2360912fd9b4c725bc6a7dec699b0784b742b72b37e0dc"
+            }
+          ],
+          "source_file_count": 25,
+          "module_entrypoint_candidates": [
+            "E:/UE_ITPS/LyraStarterGame/Source/LyraEditor/LyraEditor.cpp"
+          ]
+        },
+        "status": "complete"
+      }
+    ]
+  },
+  "targets": {
+    "count": 10,
+    "items": [
+      {
+        "name": "LyraClient",
+        "path": "E:/UE_ITPS/LyraStarterGame/Source/LyraClient.Target.cs",
+        "sha256": "c03c1292e97656715d59b39489b3e2a2f068fa30395cda98020af4a02c1f234e"
+      },
+      {
+        "name": "LyraEditor",
+        "path": "E:/UE_ITPS/LyraStarterGame/Source/LyraEditor.Target.cs",
+        "sha256": "ea5883e6701ef8c8e4ac41f562fc851bd80349e826e750c0419ffe4e731e5206"
+      },
+      {
+        "name": "LyraGame",
+        "path": "E:/UE_ITPS/LyraStarterGame/Source/LyraGame.Target.cs",
+        "sha256": "2ad574553cd0290f875a572ae6eb48b4e33c1468767837ccc33b6d15bc821ef1"
+      },
+      {
+        "name": "LyraGameEOS",
+        "path": "E:/UE_ITPS/LyraStarterGame/Source/LyraGameEOS.Target.cs",
+        "sha256": "02b60faced294e29fcc2b487efea21f7c79ba7210a742033bc3579b7ef0e3b6a"
+      },
+      {
+        "name": "LyraGameSteam",
+        "path": "E:/UE_ITPS/LyraStarterGame/Source/LyraGameSteam.Target.cs",
+        "sha256": "67cc373dd543e32dd3547b3a31fbc2b7491299859db65f411ba2a45c1d6ffad3"
+      },
+      {
+        "name": "LyraGameSteamEOS",
+        "path": "E:/UE_ITPS/LyraStarterGame/Source/LyraGameSteamEOS.Target.cs",
+        "sha256": "a3e3288d0b54c08bc21e25d02f6c084183b0b609d904a9ee8d13957e67b485db"
+      },
+      {
+        "name": "LyraServer",
+        "path": "E:/UE_ITPS/LyraStarterGame/Source/LyraServer.Target.cs",
+        "sha256": "c2ceb2e9ab2e91efc119be39f019e3919d27b6e33b3aed0cdfadb20bd1b58115"
+      },
+      {
+        "name": "LyraServerEOS",
+        "path": "E:/UE_ITPS/LyraStarterGame/Source/LyraServerEOS.Target.cs",
+        "sha256": "7098c368de549da4ee8433ae46965f5c020bdcb59f649e2109f16584ca1abf10"
+      },
+      {
+        "name": "LyraServerSteam",
+        "path": "E:/UE_ITPS/LyraStarterGame/Source/LyraServerSteam.Target.cs",
+        "sha256": "acf25fb199a5e152c855069b9f64c320cbffc06704f7bfa4a9f650242d6481b5"
+      },
+      {
+        "name": "LyraServerSteamEOS",
+        "path": "E:/UE_ITPS/LyraStarterGame/Source/LyraServerSteamEOS.Target.cs",
+        "sha256": "92ae2cf2d01ef42f1e0c52863618dec8f14689801b45eba64257a468e18da4a0"
+      }
+    ]
+  },
+  "native_project_evidence": {
+    "rule_id": "ue5.6-project-has-code-root-target",
+    "has_native_targets": true,
+    "root_target_count": 10,
+    "root_targets": [
+      "E:/UE_ITPS/LyraStarterGame/Source/LyraClient.Target.cs",
+      "E:/UE_ITPS/LyraStarterGame/Source/LyraEditor.Target.cs",
+      "E:/UE_ITPS/LyraStarterGame/Source/LyraGame.Target.cs",
+      "E:/UE_ITPS/LyraStarterGame/Source/LyraGameEOS.Target.cs",
+      "E:/UE_ITPS/LyraStarterGame/Source/LyraGameSteam.Target.cs",
+      "E:/UE_ITPS/LyraStarterGame/Source/LyraGameSteamEOS.Target.cs",
+      "E:/UE_ITPS/LyraStarterGame/Source/LyraServer.Target.cs",
+      "E:/UE_ITPS/LyraStarterGame/Source/LyraServerEOS.Target.cs",
+      "E:/UE_ITPS/LyraStarterGame/Source/LyraServerSteam.Target.cs",
+      "E:/UE_ITPS/LyraStarterGame/Source/LyraServerSteamEOS.Target.cs"
+    ],
+    "classification": "native-project",
+    "limits": "Temporary/hybrid target reasons require UBT-level analysis and are not inferred here.",
+    "declared_module_count": 2
+  },
+  "plugins": {
+    "count": 81,
+    "enabled_count": 69,
+    "disabled_count": 12,
+    "resolved_count": 69,
+    "enabled_applicable_count": 68,
+    "enabled_applicable_resolved_count": 66,
+    "project_descriptor_count": 15,
+    "engine_descriptor_count": 54,
+    "items": [
+      {
+        "name": "ActorPalette",
+        "descriptor_pointer": "/Plugins/0",
+        "raw_declaration": {
+          "Name": "ActorPalette",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Experimental/ActorPalette/ActorPalette.uplugin",
+        "descriptor_sha256": "afb22a32ee60dc96dc98767027965446d2648cdb835ef50c1930f713536b637d",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "AESGCMHandlerComponent",
+        "descriptor_pointer": "/Plugins/1",
+        "raw_declaration": {
+          "Name": "AESGCMHandlerComponent",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Runtime/PacketHandlers/AESGCMHandlerComponent/AESGCMHandlerComponent.uplugin",
+        "descriptor_sha256": "16d4b1530e42eb27baababa9e98f96824fae5080664c3b0524e4a06a0c6c5598",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "DTLSHandlerComponent",
+        "descriptor_pointer": "/Plugins/2",
+        "raw_declaration": {
+          "Name": "DTLSHandlerComponent",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Runtime/PacketHandlers/DTLSHandlerComponent/DTLSHandlerComponent.uplugin",
+        "descriptor_sha256": "fb28c89934f676e3c209d48cd866225cd4e37266474d1f688cd6e4d5e0befe8b",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "GameplayAbilities",
+        "descriptor_pointer": "/Plugins/3",
+        "raw_declaration": {
+          "Name": "GameplayAbilities",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Runtime/GameplayAbilities/GameplayAbilities.uplugin",
+        "descriptor_sha256": "a852949f3643434e3f7c4248145203bc1abd718463fb698cd08cd14425bbf55a",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "Gauntlet",
+        "descriptor_pointer": "/Plugins/4",
+        "raw_declaration": {
+          "Name": "Gauntlet",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Experimental/Gauntlet/Gauntlet.uplugin",
+        "descriptor_sha256": "df500471bc319c2067bf2c6921558b2b9d7fefe8119dd56556a8a78f0a7b00c9",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "D3DExternalGPUStatistics",
+        "descriptor_pointer": "/Plugins/5",
+        "raw_declaration": {
+          "Name": "D3DExternalGPUStatistics",
+          "Enabled": true,
+          "Optional": true,
+          "SupportedTargetPlatforms": [
+            "Win64"
+          ]
+        },
+        "enabled": true,
+        "optional": true,
+        "applicable_for_context": true,
+        "status": "not-found",
+        "origin": null,
+        "descriptor": null,
+        "descriptor_sha256": null,
+        "alternate_descriptors": [],
+        "filters": {
+          "SupportedTargetPlatforms": [
+            "Win64"
+          ]
+        }
+      },
+      {
+        "name": "CommonLoadingScreen",
+        "descriptor_pointer": "/Plugins/6",
+        "raw_declaration": {
+          "Name": "CommonLoadingScreen",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "project",
+        "descriptor": "E:/UE_ITPS/LyraStarterGame/Plugins/CommonLoadingScreen/CommonLoadingScreen.uplugin",
+        "descriptor_sha256": "80579ec1a4defd4deb229b8e37441b97a0eeb56a9adf3bb1781f47e1916d0548",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "CommonConversation",
+        "descriptor_pointer": "/Plugins/7",
+        "raw_declaration": {
+          "Name": "CommonConversation",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Experimental/CommonConversation/CommonConversation.uplugin",
+        "descriptor_sha256": "208e4295018329330c67c65b96def30a2e9e4e9eeaecd80aebbd1e0f42815143",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "GameFeatures",
+        "descriptor_pointer": "/Plugins/8",
+        "raw_declaration": {
+          "Name": "GameFeatures",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Runtime/GameFeatures/GameFeatures.uplugin",
+        "descriptor_sha256": "c89740be2d0f864e494ff8f6d4975fae8e26c81c0b9ea2cce642992d12aa0a9b",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "ModularGameplay",
+        "descriptor_pointer": "/Plugins/9",
+        "raw_declaration": {
+          "Name": "ModularGameplay",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Runtime/ModularGameplay/ModularGameplay.uplugin",
+        "descriptor_sha256": "af12bfa22641425c6027b202efa57788586cb16692efd08b9691573046c41ef0",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "ModularGameplayActors",
+        "descriptor_pointer": "/Plugins/10",
+        "raw_declaration": {
+          "Name": "ModularGameplayActors",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "project",
+        "descriptor": "E:/UE_ITPS/LyraStarterGame/Plugins/ModularGameplayActors/ModularGameplayActors.uplugin",
+        "descriptor_sha256": "097e78b2c0628f360fb0a3cbd7b5a4c5b5ad8f2570495a941c063072182efad6",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "EnhancedInput",
+        "descriptor_pointer": "/Plugins/11",
+        "raw_declaration": {
+          "Name": "EnhancedInput",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/EnhancedInput/EnhancedInput.uplugin",
+        "descriptor_sha256": "6bcbbfefeb6309db8fa805cd758250780d8cbaf2ca0092760c5fd9be921901ff",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "WinDualShock",
+        "descriptor_pointer": "/Plugins/12",
+        "raw_declaration": {
+          "Name": "WinDualShock",
+          "Enabled": true,
+          "SupportedTargetPlatforms": [
+            "Win64"
+          ]
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Runtime/Windows/WinDualShock/WinDualShock.uplugin",
+        "descriptor_sha256": "53371b32bb1a1695dc688c6873e4b9c2b03491eb57273eb04f7930a498fe5a41",
+        "alternate_descriptors": [],
+        "filters": {
+          "SupportedTargetPlatforms": [
+            "Win64"
+          ]
+        }
+      },
+      {
+        "name": "Volumetrics",
+        "descriptor_pointer": "/Plugins/13",
+        "raw_declaration": {
+          "Name": "Volumetrics",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Experimental/Volumetrics/Volumetrics.uplugin",
+        "descriptor_sha256": "368e573c6000bb225e58440489a9b8d638b1f198b9842d845dab56d71c685329",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "DataRegistry",
+        "descriptor_pointer": "/Plugins/14",
+        "raw_declaration": {
+          "Name": "DataRegistry",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Runtime/DataRegistry/DataRegistry.uplugin",
+        "descriptor_sha256": "38c368adc0445994cf163fb030e63b46511724bc5732f16f95ef607669fa9840",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "ReplicationGraph",
+        "descriptor_pointer": "/Plugins/15",
+        "raw_declaration": {
+          "Name": "ReplicationGraph",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Runtime/ReplicationGraph/ReplicationGraph.uplugin",
+        "descriptor_sha256": "9ccc6b2c0514e6a4d9e996abfa74bb68c0a7c37f2dd878e8bd8fbea55947b48f",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "SignificanceManager",
+        "descriptor_pointer": "/Plugins/16",
+        "raw_declaration": {
+          "Name": "SignificanceManager",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Runtime/SignificanceManager/SignificanceManager.uplugin",
+        "descriptor_sha256": "a6fc7ef1051eea4075a872d0caff2fc9a30a8f6241a60df9aaf78d1eb1130a87",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "Niagara",
+        "descriptor_pointer": "/Plugins/17",
+        "raw_declaration": {
+          "Name": "Niagara",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/FX/Niagara/Niagara.uplugin",
+        "descriptor_sha256": "f1ae7a20bee089dafc40dd34e00ef54c73ddfe824451ea4fd35941221ffc25c8",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "Water",
+        "descriptor_pointer": "/Plugins/18",
+        "raw_declaration": {
+          "Name": "Water",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Experimental/Water/Water.uplugin",
+        "descriptor_sha256": "83c357a92d54ff2e5ec2d28fc134ab4f1bcdaf463b3dd51d45f2c551480d3493",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "CommonUI",
+        "descriptor_pointer": "/Plugins/19",
+        "raw_declaration": {
+          "Name": "CommonUI",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Runtime/CommonUI/CommonUI.uplugin",
+        "descriptor_sha256": "1d96dc6fae7821050fedcf9f612bef9a25e2dae06b8a712f31bc5320f8f66a64",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "ControlFlows",
+        "descriptor_pointer": "/Plugins/20",
+        "raw_declaration": {
+          "Name": "ControlFlows",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Experimental/ControlFlows/ControlFlows.uplugin",
+        "descriptor_sha256": "470bff5f858700b8d39d5b8350cb3e31aba1167857feccbaf722f3d78c88af5c",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "GameSettings",
+        "descriptor_pointer": "/Plugins/21",
+        "raw_declaration": {
+          "Name": "GameSettings",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "project",
+        "descriptor": "E:/UE_ITPS/LyraStarterGame/Plugins/GameSettings/GameSettings.uplugin",
+        "descriptor_sha256": "db7901525863e9ce12ba3e7929c8840dc2c802615a60b74ca733b1de2ad7e1b0",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "CommonUser",
+        "descriptor_pointer": "/Plugins/22",
+        "raw_declaration": {
+          "Name": "CommonUser",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "project",
+        "descriptor": "E:/UE_ITPS/LyraStarterGame/Plugins/CommonUser/CommonUser.uplugin",
+        "descriptor_sha256": "5019183bd8f5e1ffd7b0a1453c3726c3b5e4bace85813360a6b10837a3253602",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "CommonGame",
+        "descriptor_pointer": "/Plugins/23",
+        "raw_declaration": {
+          "Name": "CommonGame",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "project",
+        "descriptor": "E:/UE_ITPS/LyraStarterGame/Plugins/CommonGame/CommonGame.uplugin",
+        "descriptor_sha256": "85ddc331cd502d3a185346ae0197579c312c06cf4d1594f327751fd6b2e96a86",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "GameSubtitles",
+        "descriptor_pointer": "/Plugins/24",
+        "raw_declaration": {
+          "Name": "GameSubtitles",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "project",
+        "descriptor": "E:/UE_ITPS/LyraStarterGame/Plugins/GameSubtitles/GameSubtitles.uplugin",
+        "descriptor_sha256": "6e2c108d4eed8ea91f8955b0eba32ad4d6d08832239976583c6358f9c3f5cd73",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "PocketWorlds",
+        "descriptor_pointer": "/Plugins/25",
+        "raw_declaration": {
+          "Name": "PocketWorlds",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "project",
+        "descriptor": "E:/UE_ITPS/LyraStarterGame/Plugins/PocketWorlds/PocketWorlds.uplugin",
+        "descriptor_sha256": "498775217ce850beb6111918b27ff4f71e1ea17bf698b4cc1fb79de893b59dd3",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "UIExtension",
+        "descriptor_pointer": "/Plugins/26",
+        "raw_declaration": {
+          "Name": "UIExtension",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "project",
+        "descriptor": "E:/UE_ITPS/LyraStarterGame/Plugins/UIExtension/UIExtension.uplugin",
+        "descriptor_sha256": "a65b6a122d915c1a61f8d0a859b7967bca5d1b936391cc5390e771a1737e7246",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "AsyncMixin",
+        "descriptor_pointer": "/Plugins/27",
+        "raw_declaration": {
+          "Name": "AsyncMixin",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "project",
+        "descriptor": "E:/UE_ITPS/LyraStarterGame/Plugins/AsyncMixin/AsyncMixin.uplugin",
+        "descriptor_sha256": "3de1b1669c4b0aa9e97dabbd7a27c7f8f85e1ba4e62ac6b339ec9842392de297",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "Metasound",
+        "descriptor_pointer": "/Plugins/28",
+        "raw_declaration": {
+          "Name": "Metasound",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Runtime/Metasound/Metasound.uplugin",
+        "descriptor_sha256": "df83e5a096ea5837e5d3dbd77dfc6a7f0ea4c22c3db70fb8fc83f6e2099111fe",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "MagicLeap",
+        "descriptor_pointer": "/Plugins/29",
+        "raw_declaration": {
+          "Name": "MagicLeap",
+          "Enabled": false
+        },
+        "enabled": false,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "not-found",
+        "origin": null,
+        "descriptor": null,
+        "descriptor_sha256": null,
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "MagicLeapMedia",
+        "descriptor_pointer": "/Plugins/30",
+        "raw_declaration": {
+          "Name": "MagicLeapMedia",
+          "Enabled": false
+        },
+        "enabled": false,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "not-found",
+        "origin": null,
+        "descriptor": null,
+        "descriptor_sha256": null,
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "MagicLeapPassableWorld",
+        "descriptor_pointer": "/Plugins/31",
+        "raw_declaration": {
+          "Name": "MagicLeapPassableWorld",
+          "Enabled": false
+        },
+        "enabled": false,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "not-found",
+        "origin": null,
+        "descriptor": null,
+        "descriptor_sha256": null,
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "OpenXREyeTracker",
+        "descriptor_pointer": "/Plugins/32",
+        "raw_declaration": {
+          "Name": "OpenXREyeTracker",
+          "Enabled": false
+        },
+        "enabled": false,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Runtime/OpenXREyeTracker/OpenXREyeTracker.uplugin",
+        "descriptor_sha256": "e89e065d4c5526419f0c5274079754d8fca11b72f28433a95eacb1bb0198d248",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "OpenXRHandTracking",
+        "descriptor_pointer": "/Plugins/33",
+        "raw_declaration": {
+          "Name": "OpenXRHandTracking",
+          "Enabled": false
+        },
+        "enabled": false,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Runtime/OpenXRHandTracking/OpenXRHandTracking.uplugin",
+        "descriptor_sha256": "7e8f710d15b1ff40372d5ac6bcb8eb5f7289037b2fa0e5272cd4bdf1425d3da0",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "OpenXRHMD",
+        "descriptor_pointer": "/Plugins/34",
+        "raw_declaration": {
+          "Name": "OpenXRHMD",
+          "Enabled": false
+        },
+        "enabled": false,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "not-found",
+        "origin": null,
+        "descriptor": null,
+        "descriptor_sha256": null,
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "SteamVR",
+        "descriptor_pointer": "/Plugins/35",
+        "raw_declaration": {
+          "Name": "SteamVR",
+          "Enabled": false
+        },
+        "enabled": false,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "not-found",
+        "origin": null,
+        "descriptor": null,
+        "descriptor_sha256": null,
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "GearVR",
+        "descriptor_pointer": "/Plugins/36",
+        "raw_declaration": {
+          "Name": "GearVR",
+          "Enabled": false
+        },
+        "enabled": false,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "not-found",
+        "origin": null,
+        "descriptor": null,
+        "descriptor_sha256": null,
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "LuminPlatformFeatures",
+        "descriptor_pointer": "/Plugins/37",
+        "raw_declaration": {
+          "Name": "LuminPlatformFeatures",
+          "Enabled": false,
+          "SupportedTargetPlatforms": [
+            "Lumin"
+          ]
+        },
+        "enabled": false,
+        "optional": false,
+        "applicable_for_context": false,
+        "status": "not-found",
+        "origin": null,
+        "descriptor": null,
+        "descriptor_sha256": null,
+        "alternate_descriptors": [],
+        "filters": {
+          "SupportedTargetPlatforms": [
+            "Lumin"
+          ]
+        }
+      },
+      {
+        "name": "MLSDK",
+        "descriptor_pointer": "/Plugins/38",
+        "raw_declaration": {
+          "Name": "MLSDK",
+          "Enabled": false
+        },
+        "enabled": false,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "not-found",
+        "origin": null,
+        "descriptor": null,
+        "descriptor_sha256": null,
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "OnlineFramework",
+        "descriptor_pointer": "/Plugins/39",
+        "raw_declaration": {
+          "Name": "OnlineFramework",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Online/OnlineFramework/OnlineFramework.uplugin",
+        "descriptor_sha256": "08e6d3b8f6df99e955422d711d72a6fa5982303f17f5de6658b48a011a66e713",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "PlayFabParty",
+        "descriptor_pointer": "/Plugins/40",
+        "raw_declaration": {
+          "Name": "PlayFabParty",
+          "Enabled": true,
+          "PlatformAllowList": [
+            "XB1",
+            "XSX",
+            "WinGDK"
+          ],
+          "SupportedTargetPlatforms": [
+            "XB1",
+            "XSX",
+            "WinGDK"
+          ]
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": false,
+        "status": "not-found",
+        "origin": null,
+        "descriptor": null,
+        "descriptor_sha256": null,
+        "alternate_descriptors": [],
+        "filters": {
+          "PlatformAllowList": [
+            "XB1",
+            "XSX",
+            "WinGDK"
+          ],
+          "SupportedTargetPlatforms": [
+            "XB1",
+            "XSX",
+            "WinGDK"
+          ]
+        }
+      },
+      {
+        "name": "EOSReservedHooks",
+        "descriptor_pointer": "/Plugins/41",
+        "raw_declaration": {
+          "Name": "EOSReservedHooks",
+          "Enabled": true,
+          "Optional": true
+        },
+        "enabled": true,
+        "optional": true,
+        "applicable_for_context": true,
+        "status": "not-found",
+        "origin": null,
+        "descriptor": null,
+        "descriptor_sha256": null,
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "OnlineSubsystemEOS",
+        "descriptor_pointer": "/Plugins/42",
+        "raw_declaration": {
+          "Name": "OnlineSubsystemEOS",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Online/OnlineSubsystemEOS/OnlineSubsystemEOS.uplugin",
+        "descriptor_sha256": "160d62c369faad5a584d1b953c60c989ea953733e6b600434489037262744244",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "OnlineServicesEOS",
+        "descriptor_pointer": "/Plugins/43",
+        "raw_declaration": {
+          "Name": "OnlineServicesEOS",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Online/OnlineServicesEOS/OnlineServicesEOS.uplugin",
+        "descriptor_sha256": "a83e1a0e4e5efcfd280c8c8d38d22b16c2c29bc6d008c109fb09655139efb618",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "OnlineServicesNull",
+        "descriptor_pointer": "/Plugins/44",
+        "raw_declaration": {
+          "Name": "OnlineServicesNull",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Online/OnlineServicesNull/OnlineServicesNull.uplugin",
+        "descriptor_sha256": "b67377d6585fdf1d41aaefbc9b83aa708a1181ae76f71c70260ff89c2d841fa5",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "OnlineServicesOSSAdapter",
+        "descriptor_pointer": "/Plugins/45",
+        "raw_declaration": {
+          "Name": "OnlineServicesOSSAdapter",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Online/OnlineServicesOSSAdapter/OnlineServicesOSSAdapter.uplugin",
+        "descriptor_sha256": "0b4da20a5d090e8c0ebdbe443d47cda2b6b70b15a755953a182fb6f7f237c8b0",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "OnlineSubsystemSteam",
+        "descriptor_pointer": "/Plugins/46",
+        "raw_declaration": {
+          "Name": "OnlineSubsystemSteam",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Online/OnlineSubsystemSteam/OnlineSubsystemSteam.uplugin",
+        "descriptor_sha256": "aba5972cf1ebcc4f19d9a9ac2da145ff06def06879c330c39c08f5e895974a65",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "SocketSubsystemSteamIP",
+        "descriptor_pointer": "/Plugins/47",
+        "raw_declaration": {
+          "Name": "SocketSubsystemSteamIP",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Online/SocketSubsystemSteamIP/SocketSubsystemSteamIP.uplugin",
+        "descriptor_sha256": "140aabdf11313fc9cd657dca7322eed2c16ad12c3822c7e287da267c93ea4391",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "GameplayMessageRouter",
+        "descriptor_pointer": "/Plugins/48",
+        "raw_declaration": {
+          "Name": "GameplayMessageRouter",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "project",
+        "descriptor": "E:/UE_ITPS/LyraStarterGame/Plugins/GameplayMessageRouter/GameplayMessageRouter.uplugin",
+        "descriptor_sha256": "315cfd48807f6864f69ae95bdf1ede8405847d5d3f3d13a1a6e557430480916b",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "SteamSockets",
+        "descriptor_pointer": "/Plugins/49",
+        "raw_declaration": {
+          "Name": "SteamSockets",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Runtime/Steam/SteamSockets/SteamSockets.uplugin",
+        "descriptor_sha256": "8d4820ee97d59202cf6a157e2ba60f267e6da1b6e37415d5340ac259fe6c6913",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "AssetReferenceRestrictions",
+        "descriptor_pointer": "/Plugins/50",
+        "raw_declaration": {
+          "Name": "AssetReferenceRestrictions",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Editor/AssetReferenceRestrictions/AssetReferenceRestrictions.uplugin",
+        "descriptor_sha256": "f2e69f7300cd1f9c066703f89f9ca733be5699bd527fcfd4bd751470af16fea3",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "ModelingToolsEditorMode",
+        "descriptor_pointer": "/Plugins/51",
+        "raw_declaration": {
+          "Name": "ModelingToolsEditorMode",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Editor/ModelingToolsEditorMode/ModelingToolsEditorMode.uplugin",
+        "descriptor_sha256": "a09d756a40247bd9e6fb73cb9d4ca92ba11960215fcd5c77f2bb8e2bf114a0d0",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "GeometryScripting",
+        "descriptor_pointer": "/Plugins/52",
+        "raw_declaration": {
+          "Name": "GeometryScripting",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Runtime/GeometryScripting/GeometryScripting.uplugin",
+        "descriptor_sha256": "b4f110a7231bbec02ee58c94cb4c269b75bb1d54ee9089fa2b49b8dad883628c",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "AnimationLocomotionLibrary",
+        "descriptor_pointer": "/Plugins/53",
+        "raw_declaration": {
+          "Name": "AnimationLocomotionLibrary",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Animation/AnimationLocomotionLibrary/AnimationLocomotionLibrary.uplugin",
+        "descriptor_sha256": "d1dfb5af23e588f6875828c2b272fd5259a638e5e5eaa751c1493e0b43b8c466",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "AudioModulation",
+        "descriptor_pointer": "/Plugins/54",
+        "raw_declaration": {
+          "Name": "AudioModulation",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Runtime/AudioModulation/AudioModulation.uplugin",
+        "descriptor_sha256": "c396565afb3e110b2437dd7f65d767f081b238820864194ec17e4e024a6a507a",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "AudioGameplayVolume",
+        "descriptor_pointer": "/Plugins/55",
+        "raw_declaration": {
+          "Name": "AudioGameplayVolume",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/AudioGameplayVolume/AudioGameplayVolume.uplugin",
+        "descriptor_sha256": "22e694c14800783318b13272b5df335d60cb7076aed54845b4390e6d73c7fb9e",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "AudioGameplay",
+        "descriptor_pointer": "/Plugins/56",
+        "raw_declaration": {
+          "Name": "AudioGameplay",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/AudioGameplay/AudioGameplay.uplugin",
+        "descriptor_sha256": "2216ffa9f99111fd2c781100861163e10851b16a0934777d18ddaaee960247a1",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "SoundUtilities",
+        "descriptor_pointer": "/Plugins/57",
+        "raw_declaration": {
+          "Name": "SoundUtilities",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Runtime/SoundUtilities/SoundUtilities.uplugin",
+        "descriptor_sha256": "c934799a8957f0ba9afb66187de8d2c4d2cc554a0e02856957df0400130cee20",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "AnimationWarping",
+        "descriptor_pointer": "/Plugins/58",
+        "raw_declaration": {
+          "Name": "AnimationWarping",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Animation/AnimationWarping/AnimationWarping.uplugin",
+        "descriptor_sha256": "6f6106e890879c13edc17637f64ff3ff1e90ac89e29e62b720613a44bf1b78a2",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "MovieRenderPipeline",
+        "descriptor_pointer": "/Plugins/59",
+        "raw_declaration": {
+          "Name": "MovieRenderPipeline",
+          "Enabled": true,
+          "TargetAllowList": [
+            "Editor"
+          ]
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/MovieScene/MovieRenderPipeline/MovieRenderPipeline.uplugin",
+        "descriptor_sha256": "e0a1ee56b5687a667e4ab47e1458c5f50be3ee3b0fb398cce5ecc41defc3746c",
+        "alternate_descriptors": [],
+        "filters": {
+          "TargetAllowList": [
+            "Editor"
+          ]
+        }
+      },
+      {
+        "name": "MoviePipelineMaskRenderPass",
+        "descriptor_pointer": "/Plugins/60",
+        "raw_declaration": {
+          "Name": "MoviePipelineMaskRenderPass",
+          "Enabled": true,
+          "TargetAllowList": [
+            "Editor"
+          ]
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/MovieScene/MoviePipelineMaskRenderPass/MoviePipelineMaskRenderPass.uplugin",
+        "descriptor_sha256": "704ae8bd0c7945f06322338cbd6816bb8e3e83564d1a49a8c94301ae3d53599f",
+        "alternate_descriptors": [],
+        "filters": {
+          "TargetAllowList": [
+            "Editor"
+          ]
+        }
+      },
+      {
+        "name": "AssetSearch",
+        "descriptor_pointer": "/Plugins/61",
+        "raw_declaration": {
+          "Name": "AssetSearch",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Editor/AssetSearch/AssetSearch.uplugin",
+        "descriptor_sha256": "1b2ac356e5a97f753d4fb802ef8a7eb3415db714a1f00e7ee7adf7dfbfe09b81",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "GameplayInsights",
+        "descriptor_pointer": "/Plugins/62",
+        "raw_declaration": {
+          "Name": "GameplayInsights",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Animation/GameplayInsights/GameplayInsights.uplugin",
+        "descriptor_sha256": "7d54dbe6b74a980989a7d8e3b995d24127d7f1e18a644471122df0757c7e1f0b",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "ResonanceAudio",
+        "descriptor_pointer": "/Plugins/63",
+        "raw_declaration": {
+          "Name": "ResonanceAudio",
+          "Enabled": false
+        },
+        "enabled": false,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Runtime/ResonanceAudio/ResonanceAudio.uplugin",
+        "descriptor_sha256": "acad0d757e5940a91f55c747e731b4732ea924e0c2d822495990fe6476aa64a9",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "RuntimePhysXCooking",
+        "descriptor_pointer": "/Plugins/64",
+        "raw_declaration": {
+          "Name": "RuntimePhysXCooking",
+          "Enabled": false
+        },
+        "enabled": false,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "not-found",
+        "origin": null,
+        "descriptor": null,
+        "descriptor_sha256": null,
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "Spatialization",
+        "descriptor_pointer": "/Plugins/65",
+        "raw_declaration": {
+          "Name": "Spatialization",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Runtime/Spatialization/Spatialization.uplugin",
+        "descriptor_sha256": "ab59794e558081604318fb5a6f8f3b06f1ba9f5570a0b6ab648ec35d9acb7fc8",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "ShooterCore",
+        "descriptor_pointer": "/Plugins/66",
+        "raw_declaration": {
+          "Name": "ShooterCore",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "project",
+        "descriptor": "E:/UE_ITPS/LyraStarterGame/Plugins/GameFeatures/ShooterCore/ShooterCore.uplugin",
+        "descriptor_sha256": "5b7bbaebeeb4a93dafd0842418bcb0c99608dc88928dd53d0db7cd2fcc1881d2",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "ShooterMaps",
+        "descriptor_pointer": "/Plugins/67",
+        "raw_declaration": {
+          "Name": "ShooterMaps",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "project",
+        "descriptor": "E:/UE_ITPS/LyraStarterGame/Plugins/GameFeatures/ShooterMaps/ShooterMaps.uplugin",
+        "descriptor_sha256": "ca6ace241f882605746d2d1352c2791b4820549478545f99beb03a99c0b1749c",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "TopDownArena",
+        "descriptor_pointer": "/Plugins/68",
+        "raw_declaration": {
+          "Name": "TopDownArena",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "project",
+        "descriptor": "E:/UE_ITPS/LyraStarterGame/Plugins/GameFeatures/TopDownArena/TopDownArena.uplugin",
+        "descriptor_sha256": "7eb969b4114f2da6c1d8fead61aed5c5d97c29b2175ee77dc5d3c81f707ceb08",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "FunctionalTestingEditor",
+        "descriptor_pointer": "/Plugins/69",
+        "raw_declaration": {
+          "Name": "FunctionalTestingEditor",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Tests/FunctionalTestingEditor/FunctionalTestingEditor.uplugin",
+        "descriptor_sha256": "b09c69cb367aa67057c80d705aebf556771a4dbccd204ff171d8938c1f98a2fd",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "ShooterExplorer",
+        "descriptor_pointer": "/Plugins/70",
+        "raw_declaration": {
+          "Name": "ShooterExplorer",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "project",
+        "descriptor": "E:/UE_ITPS/LyraStarterGame/Plugins/GameFeatures/ShooterExplorer/ShooterExplorer.uplugin",
+        "descriptor_sha256": "9cce155bf04b91417286a829676a0b55e6b82c58cf6142b4b20a0c1fcc84ab52",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "ShooterTests",
+        "descriptor_pointer": "/Plugins/71",
+        "raw_declaration": {
+          "Name": "ShooterTests",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "project",
+        "descriptor": "E:/UE_ITPS/LyraStarterGame/Plugins/GameFeatures/ShooterTests/ShooterTests.uplugin",
+        "descriptor_sha256": "5444ebfa63284864acb873a630c4fd4476cda3c07574f4d6987e1420390aaf89",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "GameplayInteractions",
+        "descriptor_pointer": "/Plugins/72",
+        "raw_declaration": {
+          "Name": "GameplayInteractions",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Runtime/GameplayInteractions/GameplayInteractions.uplugin",
+        "descriptor_sha256": "f85936da9c7a5ca15cb8839230872230d143a1480b2e57225fce5e1556b320f2",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "SmartObjects",
+        "descriptor_pointer": "/Plugins/73",
+        "raw_declaration": {
+          "Name": "SmartObjects",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Runtime/SmartObjects/SmartObjects.uplugin",
+        "descriptor_sha256": "b1e3c15653aa878fcb67c50cad2d33f1fb3d54bbbefc2246097cddb61b3cb221",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "ContextualAnimation",
+        "descriptor_pointer": "/Plugins/74",
+        "raw_declaration": {
+          "Name": "ContextualAnimation",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Experimental/Animation/ContextualAnimation/ContextualAnimation.uplugin",
+        "descriptor_sha256": "45b56a275baa9d425bca23514ec9115ade49cf0fba566f32934cc770dd8c2fb2",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "GameplayBehaviorSmartObjects",
+        "descriptor_pointer": "/Plugins/75",
+        "raw_declaration": {
+          "Name": "GameplayBehaviorSmartObjects",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Runtime/GameplayBehaviorSmartObjects/GameplayBehaviorSmartObjects.uplugin",
+        "descriptor_sha256": "8e87937c4c1295cfcda7a04658c7d0c2290d4fcd7860bc9b366e5c14fd6ffdf6",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "GameplayStateTree",
+        "descriptor_pointer": "/Plugins/76",
+        "raw_declaration": {
+          "Name": "GameplayStateTree",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Runtime/GameplayStateTree/GameplayStateTree.uplugin",
+        "descriptor_sha256": "0a703b9ea5aaf717bb2d4a584956810e2fc0018d3644fe11a1c69af713809ca6",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "GameplayBehaviors",
+        "descriptor_pointer": "/Plugins/77",
+        "raw_declaration": {
+          "Name": "GameplayBehaviors",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Experimental/GameplayBehaviors/GameplayBehaviors.uplugin",
+        "descriptor_sha256": "80db02a0e2434ae86b324b115b5e19eb63e3aa678d7b1e472a1638fb6dbae9de",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "RuntimeTests",
+        "descriptor_pointer": "/Plugins/78",
+        "raw_declaration": {
+          "Name": "RuntimeTests",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Tests/RuntimeTests/RuntimeTests.uplugin",
+        "descriptor_sha256": "051bf2a6a7116de9f95d3aa7c1e6a543376f0d23aa04411ddf729ae0475c696c",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "AutomatedPerfTesting",
+        "descriptor_pointer": "/Plugins/79",
+        "raw_declaration": {
+          "Name": "AutomatedPerfTesting",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Performance/AutomatedPerfTesting/AutomatedPerfTesting.uplugin",
+        "descriptor_sha256": "14f74da398a8d473d903000a144d66877e74709bb24e159d11fe27617afffe6f",
+        "alternate_descriptors": [],
+        "filters": {}
+      },
+      {
+        "name": "Reflex",
+        "descriptor_pointer": "/Plugins/80",
+        "raw_declaration": {
+          "Name": "Reflex",
+          "Enabled": true
+        },
+        "enabled": true,
+        "optional": false,
+        "applicable_for_context": true,
+        "status": "resolved",
+        "origin": "engine",
+        "descriptor": "D:/UnrealEngine_5.6/Engine/Plugins/Runtime/Nvidia/Reflex/Reflex.uplugin",
+        "descriptor_sha256": "e6c7edbf7afeac86cdf6ed2934893206ed8dfd384450fb73d1ab3c86fa033cca",
+        "alternate_descriptors": [],
+        "filters": {}
+      }
+    ]
+  },
+  "structure": {
+    "descriptor_root": [
+      {
+        "path": "E:/UE_ITPS/LyraStarterGame/LyraStarterGame.uproject",
+        "relative_path": "LyraStarterGame.uproject",
+        "category": "descriptor-mandated",
+        "exists": true,
+        "reason": "项目身份，以及顶层 Module/Plugin 声明"
+      }
+    ],
+    "source_inputs": [
+      {
+        "path": "E:/UE_ITPS/LyraStarterGame/Source",
+        "relative_path": "Source",
+        "category": "conditional",
+        "exists": true,
+        "reason": "项目拥有 C++ Target 或 Module 时需要"
+      },
+      {
+        "path": "E:/UE_ITPS/LyraStarterGame/Config",
+        "relative_path": "Config",
+        "category": "conditional",
+        "exists": true,
+        "reason": "项目配置层级与运行默认值"
+      },
+      {
+        "path": "E:/UE_ITPS/LyraStarterGame/Content",
+        "relative_path": "Content",
+        "category": "conditional",
+        "exists": true,
+        "reason": "项目自有资产与地图"
+      },
+      {
+        "path": "E:/UE_ITPS/LyraStarterGame/Plugins",
+        "relative_path": "Plugins",
+        "category": "conditional",
+        "exists": true,
+        "reason": "项目本地插件的描述符、代码、配置与资产"
+      },
+      {
+        "path": "E:/UE_ITPS/LyraStarterGame/Build",
+        "relative_path": "Build",
+        "category": "conditional",
+        "exists": true,
+        "reason": "BuildGraph、自动化、打包、平台与测试输入"
+      },
+      {
+        "path": "E:/UE_ITPS/LyraStarterGame/Platforms",
+        "relative_path": "Platforms",
+        "category": "conditional",
+        "exists": true,
+        "reason": "项目级平台扩展与覆盖"
+      }
+    ],
+    "generated_or_local_state": [
+      {
+        "path": "E:/UE_ITPS/LyraStarterGame/Binaries",
+        "relative_path": "Binaries",
+        "category": "generated/conditional",
+        "exists": true,
+        "reason": "源码项目中通常可重建；纯预编译分发中可能是条件输入"
+      },
+      {
+        "path": "E:/UE_ITPS/LyraStarterGame/Intermediate",
+        "relative_path": "Intermediate",
+        "category": "generated",
+        "exists": true,
+        "reason": "UBT/UHT 与构建中间状态"
+      },
+      {
+        "path": "E:/UE_ITPS/LyraStarterGame/DerivedDataCache",
+        "relative_path": "DerivedDataCache",
+        "category": "cache",
+        "exists": true,
+        "reason": "资产派生缓存"
+      },
+      {
+        "path": "E:/UE_ITPS/LyraStarterGame/Saved",
+        "relative_path": "Saved",
+        "category": "runtime-state",
+        "exists": true,
+        "reason": "日志、自动保存、Cook 数据与本地运行输出"
+      },
+      {
+        "path": "E:/UE_ITPS/LyraStarterGame/LyraStarterGame.sln",
+        "relative_path": "LyraStarterGame.sln",
+        "category": "generated",
+        "exists": true,
+        "reason": "由项目规则生成的 IDE 工作区"
+      },
+      {
+        "path": "E:/UE_ITPS/LyraStarterGame/.vs",
+        "relative_path": ".vs",
+        "category": "local-state",
+        "exists": true,
+        "reason": "Visual Studio 本地状态"
+      },
+      {
+        "path": "E:/UE_ITPS/LyraStarterGame/.idea",
+        "relative_path": ".idea",
+        "category": "local-state",
+        "exists": true,
+        "reason": "JetBrains 本地状态"
+      }
+    ]
+  },
+  "validation": {
+    "status": "ok",
+    "problems": [
+      {
+        "severity": "warning",
+        "code": "plugin-not-found",
+        "message": "Plugin D3DExternalGPUStatistics is enabled for Win64/Editor but was not resolved"
+      },
+      {
+        "severity": "warning",
+        "code": "plugin-not-found",
+        "message": "Plugin EOSReservedHooks is enabled for Win64/Editor but was not resolved"
+      }
+    ]
+  },
+  "component_schemas": {
+    "descriptor": "ue-itps.project-descriptor.v1",
+    "engine": "ue-itps.engine-resolution.v1",
+    "modules": "ue-itps.project-modules.v1",
+    "targets": "ue-itps.project-targets.v1",
+    "plugins": "ue-itps.project-plugin-references.v1",
+    "paths": "ue-itps.project-paths.v1"
+  },
+  "limits": [
+    "`.uproject` 不声明 Target.cs；Target 来自对 Source 的扫描发现。",
+    "`.uproject` 不给出 Build.cs 模块依赖图，也不展开 `.uplugin` 的传递依赖。",
+    "目录存在不能证明它在运行时被使用、资产可达，或属于最小项目必需项。",
+    "Module 下的 Public/Private 是 UE 约定，不是 `.uproject` 强制路径。",
+    "当前只解析 `.uproject` 的显式 Plugin 引用；传递依赖闭包属于下一层扫描。",
+    "项目外 Additional* 目录默认只报告 skipped_external，不越界遍历。",
+    "Binaries 对源码 Lyra 是生成物；对纯预编译项目可能是条件输入。"
+  ]
+}
