@@ -16,17 +16,19 @@ UE-ITPS 的长期目标是成为面向 Unreal Engine 项目的功能级工程知
 
 - [x] UE 5.6.1 源码 Engine 已定位并由 `Build.version`、Target 与运行日志交叉验证。— 2026-07-14
 - [x] `LyraEditor Win64 Development` 已完成 455 个动作的项目构建，并通过重复 UBT 验证。— 2026-07-14
-- [x] L0 本机基线已通过：Editor、PIE、默认 Experience、前端 Experience、CommonUI 根布局和正常退出。— 2026-07-14
+- [x] L0 本机曾观察通过：Editor、PIE、默认 Experience、前端 Experience、CommonUI 根布局和正常退出；原始日志于 2026-07-15 被轮转，需重跑留存后恢复为可审计证据。— 2026-07-14
 - [x] Lyra 顶层启动主链已归档到 Experience、Game Feature、PawnData、PlayerState ASC、InitState、Input/GAS 与 UI。— 2026-07-14
 - [x] UE 5.6.1 实时 Asset Registry 已验证关键 UserFacingExperience、Experience、ActionSet、PawnData 与地图直接依赖。— 2026-07-14
 - [x] Engine 运行版本、Git 修订、VS/MSVC/Windows SDK/.NET 工具链已冻结。— 2026-07-15
 - [x] Lyra 工程壳已追溯到 Epic UnrealEngine 历史提交，5 处标签差异已解释。— 2026-07-15
 - [x] 9,656 个权威文件已生成逐文件 SHA-256 清单，Target、Module、Plugin 与目录职责已归档。— 2026-07-15
+- [x] PIE 启动、Experience、玩家等待、回调顺序、Pawn/ASC 所有权与 InitState 静态主链已归档。— 2026-07-15
 
 ### Active
 
 - [ ] 明确后续长期基线采用当前 Marketplace/Epic 历史快照，还是在隔离副本中对齐 `5.6.1-release` 的 5 处工程壳差异；当前不修改已验证样例。
 - [ ] 继续归档启动、World/Experience/Game Feature/Pawn 生命周期及所有权边界。
+- [ ] 建立 UE 运行日志的受控复制与 SHA-256 留存规则，并重跑 L0 补回可审计原始证据。
 - [ ] 运行 `ShooterGym + ControlPoints` L1 切片，验证 ShooterCore Active、Pawn GameplayReady、ASC、Input→Ability 与 Shooter HUD。
 - [ ] 运行并归档 Gauntlet BootTest，补齐自动化基线。
 - [ ] 追踪 L1 从 Experience 激活到可操作 Pawn 的实际运行主链，而不仅是源码与资产静态证据。
@@ -94,7 +96,7 @@ UE-ITPS 的长期目标是成为面向 Unreal Engine 项目的功能级工程知
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
 | Engine 基线固定为 UE 5.6.1 | 降低环境漂移，匹配当前实际目标版本 | ✓ 本机验证通过 |
-| Epic 可追溯 Lyra 快照作为首个可复现基准 | 先理解官方样例的真实运行链路，再判断哪些部分可删减 | △ L0 与本地指纹通过；非标签镜像，L1 待验证 |
+| Epic 可追溯 Lyra 快照作为首个可复现基准 | 先理解官方样例的真实运行链路，再判断哪些部分可删减 | △ 本地指纹通过；L0 曾观察但原始日志待补，非标签镜像，L1 待验证 |
 | 架构归档先于具体玩法与信任系统实现 | 避免在错误或过窄的 Lyra 认知上设计长期抽象 | ✓ 保持当前顺序 |
 | 当前不创建 Lyra-derived 最小项目 | 最小化应建立在基线运行证据和依赖分析之上 | ✓ 等待 L1 |
 | L1 首选 ShooterGym + ControlPoints | 保留完整 Lyra 主链，同时避免 ShooterMaps 和数百至数千地图软依赖 | ✓ 已由 Asset Registry 选定 |
@@ -122,4 +124,4 @@ UE-ITPS 的长期目标是成为面向 Unreal Engine 项目的功能级工程知
 4. 使用真实运行结果、工程证据和验证指标更新 Context。
 
 ---
-*Last updated: 2026-07-15 after freezing Engine/Lyra provenance, the local file fingerprint, and the engineering inventory*
+*Last updated: 2026-07-15 after mapping the startup/Experience/Pawn lifecycle and correcting the L0 evidence-retention status*

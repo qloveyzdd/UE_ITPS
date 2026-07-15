@@ -10,8 +10,9 @@
 - [工程栈与依赖全景](.planning/codebase/STACK.md)
 - [目录结构与职责边界](.planning/codebase/STRUCTURE.md)
 - [Lyra 顶层架构与启动主链](.planning/codebase/ARCHITECTURE.md)
+- [启动、Experience 与玩家初始化管线](.planning/codebase/PIPELINES.md)
 - [最小运行边界](.planning/codebase/MINIMAL-RUNTIME.md)
 
-当前已完成 UE 5.6.1 本机编译与 L0 运行验证，冻结 9,656 个权威文件的 SHA-256 清单，并归档 Engine/Lyra 来源、Target、Module、Plugin、目录职责及核心 Asset Registry 关系。
+当前已完成 UE 5.6.1 本机编译，冻结 9,656 个权威文件的 SHA-256 清单，并归档 Engine/Lyra 来源、Target、Module、Plugin、目录职责、核心 Asset Registry 关系，以及 PIE 启动到 Experience、PlayerState、Pawn、ASC、InitState 和输入的静态主链。
 
-当前本地 Lyra 工程壳可追溯到 Epic UnrealEngine 历史提交，但不是 `5.6.1-release` 标签的逐字节副本；完整差异与证据边界见基线文档。下一批继续研究启动与生命周期，不急于执行 L1，也不修改或删减 Lyra。
+当前本地 Lyra 工程壳可追溯到 Epic UnrealEngine 历史提交，但不是 `5.6.1-release` 标签的逐字节副本。L0 曾在本机观察通过，但原始运行日志已被 UE 日志轮转清理，必须重跑并受控留存后才能恢复为可审计权威证据；完整边界见基线文档。当前仍不执行 L1，也不修改或删减 Lyra。

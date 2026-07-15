@@ -2,6 +2,72 @@
   "engine_version": "5.6.1-0+UE5",
   "project_dir": "E:/UE_ITPS/LyraStarterGame/",
   "targets": {
+    "game_instance": {
+      "package": "/Game/B_LyraGameInstance",
+      "exists": true,
+      "assets": [
+        {
+          "asset_name": "B_LyraGameInstance",
+          "class": "/Script/Engine.Blueprint",
+          "object_path": "/Game/B_LyraGameInstance.B_LyraGameInstance",
+          "registry_tags": {
+            "GeneratedClass": "/Script/Engine.BlueprintGeneratedClass'/Game/B_LyraGameInstance.B_LyraGameInstance_C'",
+            "ParentClass": "/Script/CoreUObject.Class'/Script/LyraGame.LyraGameInstance'",
+            "NativeParentClass": "/Script/CoreUObject.Class'/Script/LyraGame.LyraGameInstance'"
+          },
+          "defaults": {
+            "generated_class": "/Game/B_LyraGameInstance.B_LyraGameInstance_C"
+          }
+        }
+      ],
+      "direct_dependency_counts": {
+        "hard_package": 1,
+        "soft_package": 0,
+        "hard_manage": 0,
+        "soft_manage": 0
+      },
+      "direct_dependencies": {
+        "hard_package": [
+          "/Script/LyraGame"
+        ],
+        "soft_package": [],
+        "hard_manage": [],
+        "soft_manage": []
+      }
+    },
+    "default_game_mode": {
+      "package": "/Game/B_LyraGameMode",
+      "exists": true,
+      "assets": [
+        {
+          "asset_name": "B_LyraGameMode",
+          "class": "/Script/Engine.Blueprint",
+          "object_path": "/Game/B_LyraGameMode.B_LyraGameMode",
+          "registry_tags": {
+            "GeneratedClass": "/Script/Engine.BlueprintGeneratedClass'/Game/B_LyraGameMode.B_LyraGameMode_C'",
+            "ParentClass": "/Script/CoreUObject.Class'/Script/LyraGame.LyraGameMode'",
+            "NativeParentClass": "/Script/CoreUObject.Class'/Script/LyraGame.LyraGameMode'"
+          },
+          "defaults": {
+            "generated_class": "/Game/B_LyraGameMode.B_LyraGameMode_C"
+          }
+        }
+      ],
+      "direct_dependency_counts": {
+        "hard_package": 1,
+        "soft_package": 0,
+        "hard_manage": 0,
+        "soft_manage": 0
+      },
+      "direct_dependencies": {
+        "hard_package": [
+          "/Script/LyraGame"
+        ],
+        "soft_package": [],
+        "hard_manage": [],
+        "soft_manage": []
+      }
+    },
     "default_editor_map": {
       "package": "/Game/System/DefaultEditorMap/L_DefaultEditorOverview",
       "exists": true,
@@ -171,6 +237,11 @@
           "asset_name": "B_LyraDefaultExperience",
           "class": "/Script/Engine.Blueprint",
           "object_path": "/Game/System/Experiences/B_LyraDefaultExperience.B_LyraDefaultExperience",
+          "registry_tags": {
+            "GeneratedClass": "/Script/Engine.BlueprintGeneratedClass'/Game/System/Experiences/B_LyraDefaultExperience.B_LyraDefaultExperience_C'",
+            "ParentClass": "/Script/CoreUObject.Class'/Script/LyraGame.LyraExperienceDefinition'",
+            "NativeParentClass": "/Script/CoreUObject.Class'/Script/LyraGame.LyraExperienceDefinition'"
+          },
           "defaults": {
             "generated_class": "/Game/System/Experiences/B_LyraDefaultExperience.B_LyraDefaultExperience_C",
             "game_features_to_enable": [],
@@ -209,6 +280,11 @@
           "asset_name": "B_LyraFrontEnd_Experience",
           "class": "/Script/Engine.Blueprint",
           "object_path": "/Game/System/FrontEnd/B_LyraFrontEnd_Experience.B_LyraFrontEnd_Experience",
+          "registry_tags": {
+            "GeneratedClass": "/Script/Engine.BlueprintGeneratedClass'/Game/System/FrontEnd/B_LyraFrontEnd_Experience.B_LyraFrontEnd_Experience_C'",
+            "ParentClass": "/Script/CoreUObject.Class'/Script/LyraGame.LyraExperienceDefinition'",
+            "NativeParentClass": "/Script/CoreUObject.Class'/Script/LyraGame.LyraExperienceDefinition'"
+          },
           "defaults": {
             "generated_class": "/Game/System/FrontEnd/B_LyraFrontEnd_Experience.B_LyraFrontEnd_Experience_C",
             "game_features_to_enable": [],
@@ -358,6 +434,11 @@
           "asset_name": "B_ShooterGame_Elimination",
           "class": "/Script/Engine.Blueprint",
           "object_path": "/ShooterCore/Experiences/B_ShooterGame_Elimination.B_ShooterGame_Elimination",
+          "registry_tags": {
+            "GeneratedClass": "/Script/Engine.BlueprintGeneratedClass'/ShooterCore/Experiences/B_ShooterGame_Elimination.B_ShooterGame_Elimination_C'",
+            "ParentClass": "/Script/CoreUObject.Class'/Script/LyraGame.LyraExperienceDefinition'",
+            "NativeParentClass": "/Script/CoreUObject.Class'/Script/LyraGame.LyraExperienceDefinition'"
+          },
           "defaults": {
             "generated_class": "/ShooterCore/Experiences/B_ShooterGame_Elimination.B_ShooterGame_Elimination_C",
             "game_features_to_enable": [
@@ -418,6 +499,11 @@
           "asset_name": "B_LyraShooterGame_ControlPoints",
           "class": "/Script/Engine.Blueprint",
           "object_path": "/ShooterCore/Experiences/B_LyraShooterGame_ControlPoints.B_LyraShooterGame_ControlPoints",
+          "registry_tags": {
+            "GeneratedClass": "/Script/Engine.BlueprintGeneratedClass'/ShooterCore/Experiences/B_LyraShooterGame_ControlPoints.B_LyraShooterGame_ControlPoints_C'",
+            "ParentClass": "/Script/CoreUObject.Class'/Script/LyraGame.LyraExperienceDefinition'",
+            "NativeParentClass": "/Script/CoreUObject.Class'/Script/LyraGame.LyraExperienceDefinition'"
+          },
           "defaults": {
             "generated_class": "/ShooterCore/Experiences/B_LyraShooterGame_ControlPoints.B_LyraShooterGame_ControlPoints_C",
             "game_features_to_enable": [

@@ -15,6 +15,8 @@ OUTPUT_PATH = os.path.join(
 )
 
 TARGETS = {
+    "game_instance": "/Game/B_LyraGameInstance",
+    "default_game_mode": "/Game/B_LyraGameMode",
     "default_editor_map": "/Game/System/DefaultEditorMap/L_DefaultEditorOverview",
     "front_end_map": "/Game/System/FrontEnd/Maps/L_LyraFrontEnd",
     "shooter_gym_map": "/ShooterCore/Maps/L_ShooterGym",
@@ -132,6 +134,13 @@ def query_target(registry, key, package_name):
             ),
             "object_path": f"{package_name}.{asset_name}",
         }
+        if str(class_path.asset_name) == "Blueprint":
+            registry_tags = {}
+            for tag_name in ("GeneratedClass", "ParentClass", "NativeParentClass"):
+                value = unreal.AssetRegistryHelpers.get_tag_value(asset, tag_name)
+                if value:
+                    registry_tags[tag_name] = value
+            row["registry_tags"] = registry_tags
         defaults = read_defaults(package_name, asset_name)
         if defaults:
             row["defaults"] = defaults

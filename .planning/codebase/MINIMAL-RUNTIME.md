@@ -1,7 +1,7 @@
 ---
-mapped_at: 2026-07-14
+mapped_at: 2026-07-15
 scope: LyraStarterGame
-status: l0-verified-l1-slice-selected-not-yet-verified
+status: l0-historically-observed-raw-log-missing-l1-not-run
 ---
 
 # Lyra 最小运行边界
@@ -39,16 +39,16 @@ status: l0-verified-l1-slice-selected-not-yet-verified
 | Engine 5.6.1 | 通过 | `Build.version` 与运行日志 |
 | LyraEditor 完整构建 | 通过 | UBT 455 个动作，`Result: Succeeded` |
 | UBT 重复验证 | 通过 | Target up to date，退出成功 |
-| Editor/PIE | 通过 | `L_DefaultEditorOverview` PIE 启动 |
-| 默认 Experience | 通过 | `B_LyraDefaultExperience` 完成加载 |
-| 前端 Experience | 通过 | `B_LyraFrontEnd_Experience` 完成加载 |
-| CommonUI 根布局 | 通过 | `W_OverallUILayout` 加入 viewport |
-| 正常退出 | 通过 | `Editor shut down`、`LogExit: Exiting` |
+| Editor/PIE | 历史观察 | `L_DefaultEditorOverview` PIE 启动；原始日志已轮转 |
+| 默认 Experience | 历史观察 | `B_LyraDefaultExperience` Start/OnLoadComplete；原始日志已轮转 |
+| 前端 Experience | 历史观察 | `B_LyraFrontEnd_Experience` Start/OnLoadComplete；原始日志已轮转 |
+| CommonUI 根布局 | 历史观察 | `W_OverallUILayout` 加入 viewport；原始日志已轮转 |
+| 正常退出 | 历史观察 | `Editor shut down`、`LogExit: Exiting`；原始日志已轮转 |
 | Shooter Experience | 未验证 | 本次运行未进入 Shooter 玩法 |
 | Pawn/GAS/Input/HUD 完整链 | 未验证 | 当前日志无足够运行证据 |
 | BootTest | 未运行 | 只有测试源码存在 |
 
-因此当前结论是：**L0 本机通过，L1 尚未通过。**
+因此当前结论是：**L0 曾在本机观察通过，但原始日志留存不完整；L1 尚未运行。** 在 UE-ITPS 的未来权威口径下，L0 当前只能算 `Observed/Suspect`，不能算可独立审计的 `Verified`。
 
 ## 首个 L1 切片选择
 
@@ -137,7 +137,7 @@ DA_Expanse_TDM
 7. 一次真实 InputTag → Ability 激活。
 8. `W_ShooterHUDLayout` 或等价 Shooter HUD 注入。
 9. 无 Fatal、Ensure、模块或 Primary Asset 错误。
-10. 正常退出以及完整日志文件。
+10. 正常退出、完整日志文件、日志 SHA-256 与不会被后续 UE 进程轮转的受控副本。
 
 如果现有日志级别不足，应先增加临时日志类别或使用调试命令观察，不能仅凭“画面能动”宣布管线权威。
 
@@ -160,14 +160,16 @@ DA_Expanse_TDM
 
 1. 已完成：冻结当前 Lyra 的 Engine 修订、来源边界和 9,656 个权威文件指纹。
 2. 继续归档启动生命周期、资产配置、功能管线、测试入口和已知风险。
-3. 资料模型稳定后，再运行 `ShooterGym + ControlPoints` L1 并收集上述十项证据。
-4. 运行或明确配置 Gauntlet BootTest。
-5. 只有当前基线的 L0/L1 都稳定后，才创建 Lyra-derived 最小项目副本。
-6. 在副本中按单变量实验缩减插件和资产。
+3. 在下一次运行前先建立日志复制、摘要和 SHA-256 留存规则，并重跑一次 L0 恢复原始运行证据。
+4. 资料模型稳定后，再运行 `ShooterGym + ControlPoints` L1 并收集上述十项证据。
+5. 运行或明确配置 Gauntlet BootTest。
+6. 只有当前基线的 L0/L1 都稳定后，才创建 Lyra-derived 最小项目副本。
+7. 在副本中按单变量实验缩减插件和资产。
 
 ## 未关闭风险
 
 - 两条 Editor 启动期 `LogAutomationTest: Error: Condition failed` 尚未定位。
 - Asset Registry 结果是直接依赖，不是完整传递闭包。
 - Lyra 目录本身仍未纳入 Git；当前通过已跟踪的 SHA-256 清单检测变化，不能直接获得资产级 Git 历史。
+- 2026-07-14 L0 原始日志已被 `Saved/Logs` 自动轮转；已提交结论仍可作为历史观察，但不能作为当前可审计运行证据。
 - L1 尚无 Pawn、ASC、Input 和 HUD 的运行证据。

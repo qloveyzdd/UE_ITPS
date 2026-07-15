@@ -1,7 +1,7 @@
 ---
 mapped_at: 2026-07-15
 scope: LyraStarterGame
-status: ue-5.6.1-runtime-l0-and-project-fingerprint-verified
+status: ue-5.6.1-project-fingerprint-verified-l0-observed-raw-log-missing
 ---
 
 # Lyra 5.6.1 可复现基线
@@ -12,7 +12,7 @@ status: ue-5.6.1-runtime-l0-and-project-fingerprint-verified
 
 > **使用报告版本为 UE 5.6.1 的本地源码 Engine，运行一份可追溯到 Epic UnrealEngine 仓库历史、并已冻结完整文件指纹的 Lyra 样例快照。**
 
-该组合已经完成 `LyraEditor Win64 Development` 编译、Editor 启动、PIE、默认 Experience、前端 Experience、实时 Asset Registry 查询和正常退出验证，因此可作为后续架构研究的本机 L0 基线。
+该组合已经完成 `LyraEditor Win64 Development` 编译和实时 Asset Registry 查询；Editor、PIE、默认/前端 Experience 与正常退出曾在 2026-07-14 本机运行中观察到。由于该次原始日志后来被轮转清理，当前可把它作为后续架构研究的历史 L0 观察基线，但不能作为证据完整的运行权威。
 
 但它不是“`5.6.1-release` 标签的逐字节镜像”：本地 Engine 位于 `5.6` 分支的后续提交，本地 Lyra 工程壳对应标签之前的一个官方历史快照；Marketplace 内容又不在 Engine Git 中。完整文件指纹已经解决“以后是否还是同一份本地样例”的问题，但不能替代 Epic 发布包清单证明。
 
@@ -143,17 +143,19 @@ Lyra 官方历史快照 e0004083
 
 ## L0 运行证据
 
-原始运行日志：
+当时用于核验的原始运行日志路径：
 
 `LyraStarterGame/Saved/Logs/LyraStarterGame-backup-2026.07.14-10.50.15.log`
+
+该文件已于 2026-07-15 在连续运行 UE Python Commandlet 时被 `Saved/Logs` 自动轮转清理，且此前没有复制到 `.planning/evidence`。以下序列是文件仍存在时完成并提交的检查记录，但当前仓库不能再独立复核原始行。因此 L0 应从“证据完整的 Verified”降级为“历史已观察、证据留存不完整”；重跑 L0 并保存原始日志及 SHA-256 后才能恢复为权威运行证据。
 
 已确认序列：
 
 1. Editor 报告 `Engine Version: 5.6.1-0+UE5`。
 2. PIE 从 `/Game/System/DefaultEditorMap/L_DefaultEditorOverview` 启动。
-3. `B_LyraDefaultExperience` 完成加载。
+3. `B_LyraDefaultExperience` 进入 StartExperienceLoad 与 OnExperienceLoadComplete。
 4. CommonGame 为本地玩家添加 `W_OverallUILayout` 根布局。
-5. 随后加载前端地图和 `B_LyraFrontEnd_Experience`。
+5. 随后加载前端地图，`B_LyraFrontEnd_Experience` 进入 StartExperienceLoad 与 OnExperienceLoadComplete。
 6. Editor 正常执行 `Editor shut down` 与 `LogExit: Exiting`，没有 Fatal 或 Ensure。
 
 日志中仍有两条无调用栈的 `LogAutomationTest: Error: Condition failed`。它们没有阻止本次 L0，但根因尚未定位，不能视为已解决。
@@ -173,7 +175,7 @@ Lyra 官方历史快照 e0004083
 | 当前 Lyra 权威文件逐文件指纹冻结 | 通过 |
 | `LyraEditor Win64 Development` 完整编译 | 通过 |
 | 重复 UBT 构建 | 通过 |
-| Editor、PIE、默认/前端 Experience 和正常退出 | 通过 |
+| Editor、PIE、默认/前端 Experience 和正常退出 | 历史观察通过；原始日志已轮转，需重跑留存 |
 | 实时 Asset Registry 定向查询 | 通过 |
 | 与 `5.6.1-release` Lyra 子树逐字节相同 | 不通过；存在 5 处已解释差异 |
 | Marketplace Content 官方发布清单校验 | 无上游 Manifest，无法完成 |
@@ -183,6 +185,6 @@ Lyra 官方历史快照 e0004083
 
 ## 当前边界
 
-现在可以把该组合标记为“**本机可复现的 UE 5.6.1 Lyra L0 基线**”。它不等于 5.6.1 标签镜像，也不等于最小可玩链路已经通过。
+现在可以把该组合标记为“**源码、配置、资产指纹可复现，L0 曾在本机观察通过但原始运行证据待重新留存的 UE 5.6.1 Lyra 基线**”。它不等于 5.6.1 标签镜像，也不等于最小可玩链路已经通过。
 
 当前优先继续归档启动生命周期、模块职责、资产配置和验证边界；在资料模型稳定前，不执行 L1、不修改 Gameplay、不删除插件或资产。
