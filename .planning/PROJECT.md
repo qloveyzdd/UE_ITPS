@@ -25,11 +25,12 @@ UE-ITPS 的长期目标是成为面向 Unreal Engine 项目的功能级工程知
 - [x] PIE 启动、Experience、玩家等待、回调顺序、Pawn/ASC 所有权与 InitState 静态主链已归档。— 2026-07-15
 - [x] Frontend、UserFacingExperience、Host/Join Session、Hard Travel、World 重建与返回前端静态主链已归档。— 2026-07-15
 - [x] L0/L1 原始日志的不可覆盖复制、SHA-256 manifest 规则与最小捕获工具已建立。— 2026-07-15
+- [x] Standalone、Listen Server、Dedicated Server、Client 的静态分叉，以及 Hard/Seamless 对象存续、Loading Screen 与失败恢复边界已归档。— 2026-07-15
 
 ### Active
 
 - [ ] 明确后续长期基线采用当前 Marketplace/Epic 历史快照，还是在隔离副本中对齐 `5.6.1-release` 的 5 处工程壳差异；当前不修改已验证样例。
-- [ ] 继续归档 Client、Listen Server、Dedicated Server 与 Seamless Travel 的时序差异及失败边界。
+- [ ] 分别运行并捕获 Standalone、Listen Server、Dedicated Server、Client 与 Seamless Travel，验证静态时序、对象身份和失败恢复。
 - [ ] 使用已建立的捕获工具重跑 L0，补回可审计原始证据并定位历史 `LogAutomationTest` 异常。
 - [ ] 运行 `ShooterGym + ControlPoints` L1 切片，验证 ShooterCore Active、Pawn GameplayReady、ASC、Input→Ability 与 Shooter HUD。
 - [ ] 运行并归档 Gauntlet BootTest，补齐自动化基线。
@@ -105,6 +106,8 @@ UE-ITPS 的长期目标是成为面向 Unreal Engine 项目的功能级工程知
 | 关键架构结论必须绑定工程证据 | 将可确定事实与推断分开，为未来权威模型建立正确习惯 | ✓ 已用于本次归档 |
 | 体力冲刺研究归档而不删除 | 保留历史思考，同时阻止旧范围继续驱动当前路线图 | ✓ 已归档 |
 | Session 成功与 Travel/World/Experience Ready 分开验证 | Session 回调发生在实际旅行之前，不能提前继承权威 | ✓ 已写入 Travel 管线 |
+| Target、NetMode、Session Mode、Travel Mode 分开建模 | 同一 Game Target 可运行多种 NetMode；Session 与 Travel 还会改变 URL、资源侧和对象存续 | ✓ 已完成静态模式矩阵 |
+| Seamless 不等于 PlayerState/ASC 原样保留 | UE 默认创建新 PC/PS 并只调用 CopyProperties；Lyra 自定义字段与 ASC 需要重建或显式迁移 | ✓ 已写入网络旅行边界 |
 | 原始日志先捕获、后评估 | 防止 UE 日志轮转和“有日志即通过”的错误晋升 | ✓ 协议与工具已就绪，待重跑 L0 |
 | Lyra 是参考架构而非长期唯一标准 | 为未来支持非 Lyra、非 GAS 和项目自定义架构保留空间 | ✓ 保持架构中立 |
 
@@ -128,4 +131,4 @@ UE-ITPS 的长期目标是成为面向 Unreal Engine 项目的功能级工程知
 4. 使用真实运行结果、工程证据和验证指标更新 Context。
 
 ---
-*Last updated: 2026-07-15 after mapping Frontend/session/travel and establishing immutable runtime-log capture*
+*Last updated: 2026-07-15 after mapping network modes, seamless object survival, loading and failure recovery*

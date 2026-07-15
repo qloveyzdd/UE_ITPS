@@ -1,7 +1,7 @@
 ---
 mapped_at: 2026-07-15
 scope: LyraStarterGame
-status: startup-ownership-and-lifecycle-statically-mapped
+status: startup-ownership-network-modes-and-travel-statically-mapped
 ---
 
 # Lyra 顶层架构与启动主链
@@ -257,7 +257,11 @@ Host/Join 的 Session 成功回调都早于实际 Travel 完成：Host 在通知
 
 Hard Travel 保留 GameInstance、GameInstanceSubsystem 和 LocalPlayer，但销毁并重建 World、GameMode、GameState、PlayerController、PlayerState、Pawn 与 Experience。UI Policy 按 LocalPlayer 保留 RootLayout 记录，并在新 PlayerController 建立时重新加入 viewport；栈内具体 Widget 的清理仍取决于 Blueprint/运行行为。
 
-完整链路、Hard/Seamless 分叉与返回前端语义见 `.planning/codebase/TRAVEL.md`。
+Target、NetMode、Session 和 Travel 是四个独立上下文。`LyraGame` 可运行 Standalone、Listen Server 或 Client；`LyraServer` 是 Dedicated Server；`LyraClient` 不承担 Host。Offline Host 不添加 `?listen`，LAN/Online Host 添加 `?listen`；Client Join 则在 Session 成功后才进入 `PendingNetGame` 连接与目标 Map 加载。
+
+Seamless Travel 保留的是连接与过渡所需 Actor，不是完整玩法对象身份。UE 5.6.1 默认目标 GameMode 会创建新的 PlayerController 和 PlayerState，并通过 `CopyProperties` 迁移有限字段；Lyra 没有覆盖该流程，PlayerState ASC、PawnData、Team/Squad 与 Pawn 必须按目标 Experience 重建或另行复制，不能假定原样存续。
+
+完整 Frontend 链路见 `.planning/codebase/TRAVEL.md`；四种运行模式、Seamless 对象存续、Loading Screen 和失败恢复见 `.planning/codebase/NETWORK-MODES.md`。
 
 ## 12. 运行时所有权摘要
 
@@ -269,8 +273,8 @@ Hard Travel 保留 GameInstance、GameInstanceSubsystem 和 LocalPlayer，但销
 | GameMode | World，权威端 | 不复制；选择 Experience、控制登录与 Pawn 生成 |
 | GameState | World | 复制；承载 ExperienceManager 和全局 ASC |
 | ExperienceManager | GameState Component | `CurrentExperience` 复制；各端自行加载资源与 Action |
-| PlayerController | 服务器与所属客户端 | 连接和输入处理；其他客户端通常不可见 |
-| PlayerState | PlayerController 创建，跨 Pawn 生命周期 | 复制；持有玩家 ASC、AttributeSet、PawnData 与 AbilitySet |
+| PlayerController | 服务器与所属客户端 | 连接和输入处理；Hard Travel 重建；Seamless 时服务端目标 World 默认创建新对象，本地 Client PC 可过渡保留 |
+| PlayerState | PlayerController 创建，跨 Pawn 生命周期但不保证跨 Travel 身份 | 复制；持有玩家 ASC、AttributeSet、PawnData 与 AbilitySet；Seamless 目标对象只接收 `CopyProperties` |
 | Pawn | GameMode 生成，Controller Possess | 复制；是玩家 ASC 的临时 Avatar |
 | PawnExtension | Pawn Component | 复制 PawnData；借用 PlayerState ASC 并维护 Owner/Avatar 绑定 |
 | Hero Component | Pawn Feature | 本地端绑定输入；各角色按条件参与 InitState |
@@ -284,6 +288,8 @@ Hard Travel 保留 GameInstance、GameInstanceSubsystem 和 LocalPlayer，但销
 - `OnRep_PawnData` 在 PlayerState 中为空；客户端 AbilitySet 依赖 ASC 复制，而不是客户端重新执行 `GiveToAbilitySystem`。
 - Session create/join 成功回调发生在 Travel 完成之前；前端源码也明确留下“需确认旅行完成”的 TODO。
 - Frontend State 的 EndPlay 没有显式取消 Control Flow 或清空 Main Screen；RootLayout 又跨 Hard Travel 复用，具体清理边界必须运行验证。
+- Network/Travel Failure 通常通过 `?closed` 回到默认前端图，但 CommonSession 不会在 Join 成功后的旅行失败时再次广播 Join 失败；“回到稳定图”不等于“用户收到准确错误说明”。
+- GameInstance 的 NetworkError/TravelError 是 Blueprint Event；当前没有结构化资产证据证明 `B_LyraGameInstance` 的错误 UI 行为。
 
 这些不是当前要修复的 Bug 清单，而是未来“管线权威”必须覆盖的失败路径；只验证成功主链不足以把整个 Experience 生命周期标成权威。
 
@@ -294,10 +300,12 @@ Hard Travel 保留 GameInstance、GameInstanceSubsystem 和 LocalPlayer，但销
 - Shooter HUD 是否在该切片中完成注入。
 - Game Feature 从 Registered 到 Active 的完整运行日志证据。
 - 哪些插件可在不破坏可玩 Experience 的情况下删除。
-- 客户端、Listen Server、Dedicated Server 三种网络模式下的完整回调与 InitState 时序差异。
+- Standalone、Listen Server、Dedicated Server、Client 四种模式下的完整运行回调、对象身份与 InitState 时序。
 - Game Feature 激活失败时，当前加载屏、玩家门槛和错误恢复的实际运行结果。
 - 普通 Frontend Host 的实际 Hard/Seamless 模式，以及 `B_LyraGameMode_C.bUseSeamlessTravel` 默认值。
 - Session success、Travel、目标 World 和目标 Experience Ready 的真实时间线。
 - Hard Travel 后 RootLayout 内前端 Widget 栈的清理行为。
+- Seamless 后 PawnData、AbilitySet、Team/Squad、Attribute 与 Gameplay Effect 的真实迁移或重建结果。
+- `B_LyraGameInstance` 是否实现 NetworkError/TravelError 及其用户可见错误 UI。
 
 Asset Registry 已解决指定资产的直接依赖和反射属性问题，但它不等于完整传递依赖图。剩余问题需要在 UE 5.6.1 中通过单一 L1 运行、详细日志和受控删减实验验证。

@@ -107,7 +107,7 @@ status: capture-protocol-and-tool-ready; no-new-run-captured
 L1 的 Run 除 L0 上下文外，至少还要记录：
 
 - 选中的 UserFacingExperience、MapID、ExperienceID 和解析后 URL options；
-- Host/Join、Offline/LAN/Online、Hard/Seamless；
+- Target、Runtime NetMode、World Role、Host/Join、Offline/LAN/Online、Hard/Seamless；
 - Session 完成、Travel 发起、OldWorld EndPlay、NewWorld BeginPlay；
 - 目标 Experience `ExecutingActions → Loaded`；
 - Game Feature `Active`；
@@ -116,6 +116,15 @@ L1 的 Run 除 L0 上下文外，至少还要记录：
 - Pawn 所有 Feature 到达 GameplayReady；
 - 一个真实 InputTag 激活 Ability；
 - Shooter HUD 注入。
+
+网络或 Seamless Run 还必须记录：
+
+- 各进程独立 Run ID、PID、Target、命令行与监听/连接地址；
+- Server 与每个 Client 的时间基准及可对齐事件；
+- PC、PS、ASC、Pawn、GameState、ExperienceManager 的对象唯一标识；
+- Seamless 前后 `CopyProperties`、PawnData、AbilitySet、Team/Squad、Attribute 与 Effect 的结果；
+- PendingNetGame 创建、连接成功/失败、LoadMap 和 TravelCompleted；
+- 失败时 `?closed`、默认前端图、Session/User 清理、错误 UI 与 Loading Screen 退出。
 
 如果现有日志没有这些锚点，应先设计最小 Trace/临时日志方案，再运行 L1；不能用静态源码推断填补缺失运行证据。
 
