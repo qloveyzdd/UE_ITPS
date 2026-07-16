@@ -1,6 +1,6 @@
 ---
 name: ue-project-inspector
-description: Inspect Unreal Engine projects through the repository's deterministic, read-only UE project tools. Use when Codex needs to find .uproject files; read explicit project, Module, or Plugin declarations; resolve EngineAssociation to the actual Engine/Build/Build.version; inspect project Modules or Targets; locate direct plugin references; classify project directories; or produce a scoped UE project intake snapshot. Do not use for runtime behavior, asset reachability, feature graphs, code generation, builds, tests, or project modification.
+description: Inspect Unreal Engine projects through the repository's deterministic, read-only UE project tools. Use when Codex needs to find .uproject files; read compact descriptor v2 facts including Module count, Plugin declared enabled/disabled/extended state, or descriptor field inventory; resolve EngineAssociation to the actual Engine/Build/Build.version; inspect project Modules or Targets; locate direct Plugin references; classify project directories; or produce a scoped UE project intake snapshot. Do not use for runtime behavior, asset reachability, feature graphs, code generation, builds, tests, or project modification.
 ---
 
 # UE Project Inspector
@@ -18,7 +18,7 @@ If the scripts are missing, report that this repository does not contain the exp
 | User intent | Tool |
 |---|---|
 | Find UE projects | `ue_find_projects.py` |
-| Read only `.uproject` declarations | `ue_read_project_descriptor.py` |
+| Read compact `.uproject` v2 declarations | `ue_read_project_descriptor.py` |
 | Resolve actual Engine identity/version | `ue_resolve_engine.py` |
 | Check declared project Module structure | `ue_inspect_modules.py` |
 | Discover project Targets | `ue_inspect_targets.py` |
@@ -61,6 +61,20 @@ python tools/ue_resolve_plugins.py --project <project> --engine-root <engine-roo
 
 Use `Win64 / Editor / Development` only as the default inspection profile. If the user provides another platform, target type, configuration, or operation, pass it through and state the active profile.
 
+## Interpret descriptor v2
+
+Treat `ue-itps.project-descriptor.v2` as a compact projection of the original `.uproject`:
+
+- `declared_module_count` reports only the number of declared Modules. Use `ue_inspect_modules.py` for names, types, loading phases, Build.cs evidence, or entrypoints.
+- `plugin_declarations.enabled` and `.disabled` contain references whose only fields are `Name` and boolean `Enabled`.
+- `plugin_declarations.extended` contains references with additional fields. `extended` means the full declaration needs inspection; it does not mean every additional field is an enable condition.
+- `descriptor_top_level_fields` records which top-level fields were present in the original descriptor. It is not a list of fields in the tool result.
+- `unmodeled_top_level_fields` preserves fields not recognized by the current tool model. Report them without declaring them invalid.
+
+For a simple enabled/disabled question, stop after `ue_read_project_descriptor.py`. If the user asks for exact values of one extended declaration, read only the original `.uproject` object identified by its `descriptor_pointer`. Resolve Engine and run `ue_resolve_plugins.py` only when the question also needs Plugin location, origin, `.uplugin` evidence, or Profile applicability.
+
+When combining descriptor and Plugin results from separate commands, compare `project.descriptor_sha256` with `project_descriptor.sha256`. Discard the earlier result and reread if they differ.
+
 ## Complete snapshot
 
 Use the compatibility composer only when the user explicitly asks for a complete project-entry report or all available categories:
@@ -74,7 +88,7 @@ Do not pass `--json-out` or `--markdown-out` unless the user asks to archive the
 ## Interpretation boundaries
 
 - `EngineAssociation` is an association key. Use resolved `Build.version` for the actual engine version.
-- `.uproject` declares Modules and direct Plugin references but does not declare `Target.cs` or a complete dependency graph.
+- `.uproject` declares Modules and direct Plugin references, but descriptor v2 intentionally does not repeat their full arrays. It does not declare `Target.cs` or a complete dependency graph.
 - Direct Plugin resolution is not the effective `.uplugin` dependency closure.
 - Directory presence does not prove runtime use or minimum-project necessity.
 - `Binaries`, `Intermediate`, caches, and local state are not source authority by default.

@@ -47,6 +47,10 @@ $ue-project-inspector 识别当前 UE 项目的精确引擎版本并给出证据
 ```
 
 ```text
+$ue-project-inspector 读取当前 .uproject 的紧凑声明，列出 Plugin 的简单启用、简单禁用和扩展声明。
+```
+
+```text
 $ue-project-inspector 检查项目 Module 结构，不扫描插件。
 ```
 

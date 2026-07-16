@@ -1,4 +1,4 @@
 interface:
   display_name: "UE Project Inspector"
-  short_description: "Inspect UE project identity and structure"
-  default_prompt: "Use $ue-project-inspector to identify the current Unreal project and inspect only the requested project facts."
+  short_description: "Inspect UE descriptors, modules, plugins, and Engine identity"
+  default_prompt: "Use $ue-project-inspector to inspect compact descriptor facts and only the requested structural evidence for the current Unreal project."
