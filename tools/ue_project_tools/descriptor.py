@@ -148,6 +148,16 @@ def descriptor_result(project_file: Path) -> tuple[dict[str, Any], dict[str, Any
         descriptor.get("Plugins", [])
     )
     problems.extend(plugin_problems)
+    module_declarations = descriptor.get("Modules", [])
+    declared_modules = (
+        [
+            raw["Name"]
+            for raw in module_declarations
+            if isinstance(raw, dict) and isinstance(raw.get("Name"), str)
+        ]
+        if isinstance(module_declarations, list)
+        else []
+    )
 
     _, additional_roots = resolve_internal_directories(
         project_file.parent, descriptor, "AdditionalRootDirectories"
@@ -156,7 +166,7 @@ def descriptor_result(project_file: Path) -> tuple[dict[str, Any], dict[str, Any
         project_file.parent, descriptor, "AdditionalPluginDirectories"
     )
     result = {
-        "schema_version": "ue-itps.project-descriptor.v2",
+        "schema_version": "ue-itps.project-descriptor.v3",
         "project": {
             "name": project_file.stem,
             "root": normalized(project_file.parent),
@@ -167,11 +177,7 @@ def descriptor_result(project_file: Path) -> tuple[dict[str, Any], dict[str, Any
             "category": descriptor.get("Category"),
             "description": descriptor.get("Description"),
         },
-        "declared_module_count": (
-            len(descriptor["Modules"])
-            if isinstance(descriptor.get("Modules", []), list)
-            else 0
-        ),
+        "declared_modules": declared_modules,
         "plugin_declarations": plugin_declarations,
         "additional_root_directories": additional_roots,
         "additional_plugin_directories": additional_plugins,

@@ -82,7 +82,7 @@ python tools\ue_find_projects.py --search-root E:\UE_ITPS
 python tools\ue_read_project_descriptor.py --project $Project
 ```
 
-输出 `FileVersion`、`EngineAssociation`、Module 数量、Plugin 简单启用/禁用列表、扩展声明索引、Additional 目录和描述符 SHA-256；不重复完整 `Modules`/`Plugins`，也不搜索 Engine、Module 文件或插件目录。
+输出 `FileVersion`、`EngineAssociation`、Module 名称列表、Plugin 简单启用/禁用列表、扩展声明索引、Additional 目录和描述符 SHA-256；不重复完整 `Modules`/`Plugins`，也不搜索 Engine、Module 文件或插件目录。
 
 ### 3. 解析真实 Engine 身份
 
