@@ -89,7 +89,6 @@ def inspect_modules(
                 "loading_phase": raw.get("LoadingPhase", "Default"),
                 "additional_dependencies": raw.get("AdditionalDependencies", []),
                 "descriptor_pointer": f"/Modules/{declaration_index}",
-                "raw_declaration": raw,
                 "conventional_location": {
                     "directory": normalized(conventional_dir),
                     "build_rules": normalized(conventional_rules),
@@ -111,7 +110,7 @@ def inspect_modules(
             }
         )
     return {
-        "schema_version": "ue-itps.project-modules.v1",
+        "schema_version": "ue-itps.project-modules.v2",
         "count": len(modules),
         "items": modules,
         "validation": {

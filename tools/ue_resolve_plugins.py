@@ -25,6 +25,7 @@ def main() -> int:
             project.parent, descriptor, "AdditionalPluginDirectories"
         )
         result = resolve_project_plugins(
+            project,
             project.parent,
             Path(args.engine_root).resolve(),
             descriptor.get("Plugins", []),

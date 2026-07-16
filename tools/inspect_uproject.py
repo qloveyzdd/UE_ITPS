@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Compatibility composer for the small UE project inspection tools.
+"""Composer for the small UE project inspection tools.
 
 Use the focused ue_*.py commands for individual Codex/MCP capabilities. This
-entrypoint only composes their service results and renders the existing v1
+entrypoint only composes their service results and renders the versioned
 snapshot/report format.
 """
 

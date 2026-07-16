@@ -25,6 +25,8 @@ KNOWN_TOP_LEVEL_FIELDS = {
     "EpicSampleNameHash",
 }
 
+PLUGIN_CORE_FIELDS = {"Name", "Enabled"}
+
 
 def resolve_internal_directories(
     project_root: Path, descriptor: dict[str, Any], field: str
@@ -55,6 +57,77 @@ def resolve_internal_directories(
     return roots, findings
 
 
+def classify_plugin_declarations(
+    declarations: Any,
+) -> tuple[dict[str, Any], list[dict[str, str]]]:
+    enabled: list[str] = []
+    disabled: list[str] = []
+    extended: list[dict[str, Any]] = []
+    problems: list[dict[str, str]] = []
+
+    if not isinstance(declarations, list):
+        problems.append(
+            {
+                "severity": "error",
+                "code": "invalid-plugin-references",
+                "message": ".uproject Plugins must be an array",
+            }
+        )
+        declarations = []
+
+    for index, raw in enumerate(declarations):
+        pointer = f"/Plugins/{index}"
+        if (
+            not isinstance(raw, dict)
+            or not isinstance(raw.get("Name"), str)
+            or not raw["Name"]
+            or type(raw.get("Enabled")) is not bool
+        ):
+            problems.append(
+                {
+                    "severity": "error",
+                    "code": "invalid-plugin-reference",
+                    "descriptor_pointer": pointer,
+                    "message": (
+                        f"Plugin reference at {pointer} requires a non-empty "
+                        "string Name and a boolean Enabled"
+                    ),
+                }
+            )
+            continue
+
+        name = raw["Name"]
+        declared_enabled = raw["Enabled"]
+        additional_fields = sorted(set(raw) - PLUGIN_CORE_FIELDS)
+        if additional_fields:
+            extended.append(
+                {
+                    "name": name,
+                    "declared_enabled": declared_enabled,
+                    "descriptor_pointer": pointer,
+                    "additional_fields": additional_fields,
+                }
+            )
+        elif declared_enabled:
+            enabled.append(name)
+        else:
+            disabled.append(name)
+
+    return (
+        {
+            "count": len(declarations),
+            "enabled_count": len(enabled),
+            "disabled_count": len(disabled),
+            "extended_count": len(extended),
+            "invalid_count": len(problems),
+            "enabled": enabled,
+            "disabled": disabled,
+            "extended": extended,
+        },
+        problems,
+    )
+
+
 def descriptor_result(project_file: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     project_file = project_file.resolve()
     descriptor = read_json(project_file)
@@ -71,6 +144,11 @@ def descriptor_result(project_file: Path) -> tuple[dict[str, Any], dict[str, Any
             }
         )
 
+    plugin_declarations, plugin_problems = classify_plugin_declarations(
+        descriptor.get("Plugins", [])
+    )
+    problems.extend(plugin_problems)
+
     _, additional_roots = resolve_internal_directories(
         project_file.parent, descriptor, "AdditionalRootDirectories"
     )
@@ -78,7 +156,7 @@ def descriptor_result(project_file: Path) -> tuple[dict[str, Any], dict[str, Any
         project_file.parent, descriptor, "AdditionalPluginDirectories"
     )
     result = {
-        "schema_version": "ue-itps.project-descriptor.v1",
+        "schema_version": "ue-itps.project-descriptor.v2",
         "project": {
             "name": project_file.stem,
             "root": normalized(project_file.parent),
@@ -89,8 +167,12 @@ def descriptor_result(project_file: Path) -> tuple[dict[str, Any], dict[str, Any
             "category": descriptor.get("Category"),
             "description": descriptor.get("Description"),
         },
-        "module_declarations": descriptor.get("Modules", []),
-        "plugin_references": descriptor.get("Plugins", []),
+        "declared_module_count": (
+            len(descriptor["Modules"])
+            if isinstance(descriptor.get("Modules", []), list)
+            else 0
+        ),
+        "plugin_declarations": plugin_declarations,
         "additional_root_directories": additional_roots,
         "additional_plugin_directories": additional_plugins,
         "descriptor_options": {

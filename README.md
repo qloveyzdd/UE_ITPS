@@ -78,7 +78,7 @@ python tools\ue_find_projects.py --search-root E:\UE_ITPS
 python tools\ue_read_project_descriptor.py --project $Project
 ```
 
-输出 `FileVersion`、`EngineAssociation`、Module 声明、直接 Plugin 引用、Additional 目录和描述符 SHA-256；不搜索 Engine、Module 文件或插件目录。
+输出 `FileVersion`、`EngineAssociation`、Module 数量、Plugin 简单启用/禁用列表、扩展声明索引、Additional 目录和描述符 SHA-256；不重复完整 `Modules`/`Plugins`，也不搜索 Engine、Module 文件或插件目录。
 
 ### 3. 解析真实 Engine 身份
 
@@ -195,7 +195,8 @@ Engine: 5.6.1
 Project Modules: 2
 Root Targets: 10
 Direct Plugin References: 81
-Enabled / Disabled: 69 / 12
+Declared Enabled / Disabled: 69 / 12
+Simple Enabled / Disabled / Extended: 63 / 11 / 7
 Resolved Plugin Descriptors: 69
 Project / Engine Plugin Descriptors: 15 / 54
 Applicable Enabled Resolved: 66 / 68

@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from .common import iter_files, normalized, sha256_file
+from .descriptor import classify_plugin_declarations
 
 
 def descriptor_index(
@@ -41,6 +42,7 @@ def applicable(plugin: dict[str, Any], platform: str, target: str) -> bool:
 
 
 def resolve_project_plugins(
+    project_file: Path,
     project_root: Path,
     engine_root: Path | None,
     declarations: list[Any],
@@ -68,7 +70,7 @@ def resolve_project_plugins(
         )
     index = descriptor_index(roots)
     results: list[dict[str, Any]] = []
-    problems: list[dict[str, str]] = []
+    _, problems = classify_plugin_declarations(declarations)
     origin_rank = {
         "project": 0,
         "project-platform": 1,
@@ -83,7 +85,12 @@ def resolve_project_plugins(
         return origin_rank.get(origin, 99)
 
     for declaration_index, raw in enumerate(declarations):
-        if not isinstance(raw, dict) or not isinstance(raw.get("Name"), str):
+        if (
+            not isinstance(raw, dict)
+            or not isinstance(raw.get("Name"), str)
+            or not raw["Name"]
+            or type(raw.get("Enabled")) is not bool
+        ):
             continue
         name = raw["Name"]
         matches = sorted(
@@ -94,11 +101,11 @@ def resolve_project_plugins(
             ),
         )
         selected = matches[0] if matches else None
-        enabled = raw.get("Enabled") is True
+        declared_enabled = raw["Enabled"]
         optional = raw.get("Optional") is True
         applies = applicable(raw, platform, target)
         status = "resolved" if selected else "not-found"
-        if enabled and applies and not selected:
+        if declared_enabled and applies and not selected:
             severity = "warning" if optional or operation == "scan" else "error"
             problems.append(
                 {
@@ -114,9 +121,11 @@ def resolve_project_plugins(
             {
                 "name": name,
                 "descriptor_pointer": f"/Plugins/{declaration_index}",
-                "raw_declaration": raw,
-                "enabled": enabled,
+                "declared_enabled": declared_enabled,
                 "optional": optional,
+                "additional_fields": sorted(
+                    set(raw) - {"Name", "Enabled"}
+                ),
                 "applicable_for_context": applies,
                 "status": status,
                 "origin": selected["origin"] if selected else None,
@@ -150,7 +159,11 @@ def resolve_project_plugins(
         )
 
     return {
-        "schema_version": "ue-itps.project-plugin-references.v1",
+        "schema_version": "ue-itps.project-plugin-references.v2",
+        "project_descriptor": {
+            "path": normalized(project_file),
+            "sha256": sha256_file(project_file),
+        },
         "profile": {
             "operation": operation,
             "platform": platform,
@@ -158,18 +171,22 @@ def resolve_project_plugins(
             "configuration": configuration,
         },
         "count": len(results),
-        "enabled_count": sum(1 for item in results if item["enabled"]),
-        "disabled_count": sum(1 for item in results if not item["enabled"]),
-        "resolved_count": sum(1 for item in results if item["status"] == "resolved"),
-        "enabled_applicable_count": sum(
-            1
-            for item in results
-            if item["enabled"] and item["applicable_for_context"]
+        "declared_enabled_count": sum(
+            1 for item in results if item["declared_enabled"]
         ),
-        "enabled_applicable_resolved_count": sum(
+        "declared_disabled_count": sum(
+            1 for item in results if not item["declared_enabled"]
+        ),
+        "resolved_count": sum(1 for item in results if item["status"] == "resolved"),
+        "declared_enabled_applicable_count": sum(
             1
             for item in results
-            if item["enabled"]
+            if item["declared_enabled"] and item["applicable_for_context"]
+        ),
+        "declared_enabled_applicable_resolved_count": sum(
+            1
+            for item in results
+            if item["declared_enabled"]
             and item["applicable_for_context"]
             and item["status"] == "resolved"
         ),

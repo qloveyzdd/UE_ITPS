@@ -48,6 +48,7 @@ def build_snapshot(
         Path(engine_info["engine_root"]) if engine_info.get("engine_root") else None
     )
     plugin_info = resolve_project_plugins(
+        project_file,
         project_root,
         resolved_engine_root,
         descriptor.get("Plugins", []),
@@ -115,7 +116,7 @@ def build_snapshot(
     }
 
     return {
-        "schema_version": "ue-itps.uproject-structure.v1",
+        "schema_version": "ue-itps.uproject-structure.v2",
         "generated_at": utc_now(),
         "scan_context": {
             "operation": operation,

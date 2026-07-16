@@ -49,13 +49,14 @@ def markdown_report(manifest: dict[str, Any]) -> str:
             f"{native['root_target_count']} 个；分类 `{native['classification']}`"
         ),
         (
-            f"- 插件引用：{plugins['count']} 个；启用 {plugins['enabled_count']}；"
-            f"禁用 {plugins['disabled_count']}；已定位 {plugins['resolved_count']}"
+            f"- 插件引用：{plugins['count']} 个；声明启用 "
+            f"{plugins['declared_enabled_count']}；声明禁用 "
+            f"{plugins['declared_disabled_count']}；已定位 {plugins['resolved_count']}"
         ),
         (
             f"- 当前 Win64/Editor 上启用且适用："
-            f"{plugins['enabled_applicable_count']} 个；已定位 "
-            f"{plugins['enabled_applicable_resolved_count']} 个"
+            f"{plugins['declared_enabled_applicable_count']} 个；已定位 "
+            f"{plugins['declared_enabled_applicable_resolved_count']} 个"
         ),
         "",
         "### 项目模块",

@@ -1,0 +1,151 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+import sys
+import tempfile
+import unittest
+
+
+TOOLS_ROOT = Path(__file__).resolve().parents[1] / "tools"
+sys.path.insert(0, str(TOOLS_ROOT))
+
+from ue_project_tools.code_inventory import inspect_modules
+from ue_project_tools.descriptor import descriptor_result
+from ue_project_tools.plugins import resolve_project_plugins
+
+
+class ProjectDescriptorContractTests(unittest.TestCase):
+    def write_json(self, path: Path, value: object) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(value), encoding="utf-8")
+
+    def test_descriptor_compacts_modules_and_plugin_declarations(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            project_file = Path(temporary_directory) / "Fixture.uproject"
+            self.write_json(
+                project_file,
+                {
+                    "FileVersion": 3,
+                    "Modules": [
+                        {
+                            "Name": "Fixture",
+                            "Type": "Runtime",
+                            "LoadingPhase": "Default",
+                        }
+                    ],
+                    "Plugins": [
+                        {"Name": "SimpleEnabled", "Enabled": True},
+                        {"Name": "SimpleDisabled", "Enabled": False},
+                        {
+                            "Name": "Extended",
+                            "Enabled": True,
+                            "Optional": True,
+                        },
+                        {"Name": "Invalid"},
+                    ],
+                },
+            )
+
+            _, result = descriptor_result(project_file)
+
+            self.assertEqual(
+                result["schema_version"], "ue-itps.project-descriptor.v2"
+            )
+            self.assertEqual(result["declared_module_count"], 1)
+            self.assertNotIn("module_declarations", result)
+            self.assertNotIn("plugin_references", result)
+            self.assertEqual(
+                result["plugin_declarations"],
+                {
+                    "count": 4,
+                    "enabled_count": 1,
+                    "disabled_count": 1,
+                    "extended_count": 1,
+                    "invalid_count": 1,
+                    "enabled": ["SimpleEnabled"],
+                    "disabled": ["SimpleDisabled"],
+                    "extended": [
+                        {
+                            "name": "Extended",
+                            "declared_enabled": True,
+                            "descriptor_pointer": "/Plugins/2",
+                            "additional_fields": ["Optional"],
+                        }
+                    ],
+                },
+            )
+            self.assertEqual(result["validation"]["status"], "error")
+            self.assertEqual(
+                result["validation"]["problems"][0]["code"],
+                "invalid-plugin-reference",
+            )
+
+    def test_module_inspection_does_not_repeat_raw_declaration(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            project_root = Path(temporary_directory)
+            module_root = project_root / "Source" / "Fixture"
+            module_root.mkdir(parents=True)
+            (module_root / "Fixture.Build.cs").write_text("", encoding="utf-8")
+            (module_root / "Fixture.cpp").write_text(
+                "IMPLEMENT_GAME_MODULE(FDefaultModuleImpl, Fixture);",
+                encoding="utf-8",
+            )
+
+            result = inspect_modules(
+                project_root,
+                [{"Name": "Fixture", "Type": "Runtime"}],
+                [],
+            )
+
+            self.assertEqual(
+                result["schema_version"], "ue-itps.project-modules.v2"
+            )
+            self.assertEqual(result["validation"]["status"], "ok")
+            self.assertNotIn("raw_declaration", result["items"][0])
+
+    def test_plugin_resolution_uses_declared_state_without_raw_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            project_root = Path(temporary_directory)
+            project_file = project_root / "Fixture.uproject"
+            declarations = [
+                {"Name": "FixturePlugin", "Enabled": True},
+                {"Name": "OptionalPlugin", "Enabled": True, "Optional": True},
+            ]
+            self.write_json(
+                project_file,
+                {"FileVersion": 3, "Plugins": declarations},
+            )
+            self.write_json(
+                project_root
+                / "Plugins"
+                / "FixturePlugin"
+                / "FixturePlugin.uplugin",
+                {"FileVersion": 3},
+            )
+
+            result = resolve_project_plugins(
+                project_file,
+                project_root,
+                None,
+                declarations,
+                [],
+                "scan",
+                "Win64",
+                "Editor",
+                "Development",
+            )
+
+            self.assertEqual(
+                result["schema_version"],
+                "ue-itps.project-plugin-references.v2",
+            )
+            self.assertEqual(result["declared_enabled_count"], 2)
+            self.assertEqual(result["declared_disabled_count"], 0)
+            self.assertIsNotNone(result["project_descriptor"]["sha256"])
+            self.assertTrue(result["items"][0]["declared_enabled"])
+            self.assertNotIn("raw_declaration", result["items"][0])
+
+
+if __name__ == "__main__":
+    unittest.main()
