@@ -188,7 +188,7 @@ def descriptor_result(project_file: Path) -> tuple[dict[str, Any], dict[str, Any
             )
             if key in descriptor
         },
-        "top_level_fields": sorted(descriptor.keys()),
+        "descriptor_top_level_fields": sorted(descriptor.keys()),
         "unmodeled_top_level_fields": {
             key: value
             for key, value in descriptor.items()

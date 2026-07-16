@@ -53,6 +53,11 @@ class ProjectDescriptorContractTests(unittest.TestCase):
                 result["schema_version"], "ue-itps.project-descriptor.v2"
             )
             self.assertEqual(result["declared_module_count"], 1)
+            self.assertEqual(
+                result["descriptor_top_level_fields"],
+                ["FileVersion", "Modules", "Plugins"],
+            )
+            self.assertNotIn("top_level_fields", result)
             self.assertNotIn("module_declarations", result)
             self.assertNotIn("plugin_references", result)
             self.assertEqual(

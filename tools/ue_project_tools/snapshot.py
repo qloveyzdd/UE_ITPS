@@ -93,7 +93,9 @@ def build_snapshot(
     }
     project_compat = {
         **descriptor_project,
-        "top_level_fields": descriptor_info["top_level_fields"],
+        "descriptor_top_level_fields": descriptor_info[
+            "descriptor_top_level_fields"
+        ],
         "additional_root_directories": additional_root_findings,
         "additional_plugin_directories": additional_plugin_findings,
         "descriptor_options": descriptor_info["descriptor_options"],
