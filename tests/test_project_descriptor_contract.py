@@ -121,6 +121,17 @@ class ProjectDescriptorContractTests(unittest.TestCase):
             self.assertEqual(candidate["path"], module_root.as_posix() + "/Fixture.Build.cs")
             self.assertTrue(candidate["conventional"])
             self.assertEqual(len(candidate["sha256"]), 64)
+            self.assertEqual(
+                module["actual"]["module_entrypoint_candidates"],
+                [
+                    {
+                        "path": module_root.as_posix() + "/Fixture.cpp",
+                        "macro": "IMPLEMENT_GAME_MODULE",
+                        "module_class": "FDefaultModuleImpl",
+                        "module_name": "Fixture",
+                    }
+                ],
+            )
 
     def test_module_inspection_reports_missing_build_rules(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

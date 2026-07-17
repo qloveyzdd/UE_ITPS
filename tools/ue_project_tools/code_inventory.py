@@ -7,9 +7,13 @@ from typing import Any
 from .common import iter_files, normalized, sha256_file
 
 
-def module_entrypoints(module_dir: Path) -> list[str]:
-    results: list[str] = []
-    pattern = re.compile(r"\bIMPLEMENT_(?:PRIMARY_GAME_)?MODULE\s*\(")
+def module_entrypoints(module_dir: Path) -> list[dict[str, str]]:
+    results: list[dict[str, str]] = []
+    pattern = re.compile(
+        r"\b(?P<macro>IMPLEMENT_(?:(?:PRIMARY_)?GAME_)?MODULE)\s*"
+        r"\(\s*(?P<module_class>[A-Za-z_]\w*)\s*,\s*"
+        r"(?P<module_name>[A-Za-z_]\w*)\b"
+    )
     if not module_dir.is_dir():
         return results
     for path in iter_files(module_dir, ".cpp"):
@@ -17,9 +21,25 @@ def module_entrypoints(module_dir: Path) -> list[str]:
             text = path.read_text(encoding="utf-8-sig", errors="replace")
         except OSError:
             continue
-        if pattern.search(text):
-            results.append(normalized(path))
-    return sorted(results, key=str.casefold)
+        path_text = normalized(path)
+        for match in pattern.finditer(text):
+            results.append(
+                {
+                    "path": path_text,
+                    "macro": match.group("macro"),
+                    "module_class": match.group("module_class"),
+                    "module_name": match.group("module_name"),
+                }
+            )
+    return sorted(
+        results,
+        key=lambda item: (
+            item["path"].casefold(),
+            item["macro"],
+            item["module_class"],
+            item["module_name"],
+        ),
+    )
 
 
 def inspect_modules(
@@ -65,13 +85,27 @@ def inspect_modules(
             {path.parent for path in unique_rules},
             key=lambda path: normalized(path).casefold(),
         )
+        entrypoint_candidates = [
+            entrypoint
+            for module_dir in module_dirs
+            for entrypoint in module_entrypoints(module_dir)
+        ]
         entrypoints = sorted(
             {
-                entrypoint
-                for module_dir in module_dirs
-                for entrypoint in module_entrypoints(module_dir)
-            },
-            key=str.casefold,
+                (
+                    entrypoint["path"],
+                    entrypoint["macro"],
+                    entrypoint["module_class"],
+                    entrypoint["module_name"],
+                ): entrypoint
+                for entrypoint in entrypoint_candidates
+            }.values(),
+            key=lambda item: (
+                item["path"].casefold(),
+                item["macro"],
+                item["module_class"],
+                item["module_name"],
+            ),
         )
         status = (
             "resolved"
