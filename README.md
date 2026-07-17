@@ -211,6 +211,7 @@ python tools\ue_classify_project_paths.py --project $Project
 ## 输出与安全边界
 
 - 七个聚焦的 UE 项目检查 CLI 默认只读，并将 JSON 写到标准输出。
+- 七个 UE 项目检查 CLI 不计算或输出文件内容哈希；基线指纹工具保持独立职责。
 - `--help`、参数说明、输出契约和退出码采用中英文双语；argparse 参数错误仍写入标准错误。
 - 基线指纹、运行日志归档和 Asset Registry 查询属于证据生成工具，会写入 `.planning/evidence/`。
 - 项目检查结果只证明静态声明和文件定位，不证明项目已经编译、启动、联网或通过测试。

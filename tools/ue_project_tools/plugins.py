@@ -8,7 +8,6 @@ from .common import (
     iter_files,
     normalized,
     result_document,
-    sha256_file,
 )
 from .descriptor import classify_plugin_declarations
 
@@ -279,7 +278,7 @@ def resolve_project_plugins(
         )
 
     return result_document(
-        "ue-itps.project-plugin-references.v4",
+        "ue-itps.project-plugin-references.v5",
         {
             "path_roots": {
                 "project": normalized(project_root),
@@ -287,7 +286,6 @@ def resolve_project_plugins(
             },
             "project_descriptor": {
                 "path": project_descriptor_path,
-                "sha256": sha256_file(project_file),
             },
             "additional_plugin_directories": additional_plugin_findings or [],
             "item_defaults": defaults,

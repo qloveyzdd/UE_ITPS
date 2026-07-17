@@ -62,19 +62,19 @@ python tools/ue_resolve_plugins.py --project <project> --operation scan --platfo
 
 Use `Win64 / Editor` only as the default focused Plugin profile. If the user provides another platform, target type, or operation, pass it through and state the active profile. Configuration is not accepted or evaluated by the focused Plugin tool.
 
-## Interpret Plugin v4
+## Interpret Plugin v5
 
-Treat `ue-itps.project-plugin-references.v4` items as sparse records:
+Treat `ue-itps.project-plugin-references.v5` items as sparse records:
 
 - `path_roots.project` and `.engine` are absolute roots recorded once. Plugin `descriptor` paths are relative to the project root for `project*` and `additional-project-*` origins, or to the Engine root for `engine*` origins.
-- `project_descriptor.path` is relative to `path_roots.project`; compare its `sha256` with descriptor results when combining scans.
+- `project_descriptor.path` is relative to `path_roots.project`.
 - A missing state field inherits its value from `item_defaults`; absence is not an unknown value.
 - Normal resolved items keep only name, origin, relative descriptor path, and state fields that differ from defaults. Plugin descriptor contents and hashes are not read.
 - Not-found items, alternate descriptor conflicts, and items associated with validation problems retain every modeled field, including empty values.
 
-## Interpret descriptor v4
+## Interpret descriptor v5
 
-Treat `ue-itps.project-descriptor.v4` as a compact projection of the original `.uproject`:
+Treat `ue-itps.project-descriptor.v5` as a compact projection of the original `.uproject`:
 
 - `declared_modules` reports declared Module names in descriptor order. Use `ue_inspect_modules.py` for types, loading phases, Build.cs evidence, or entrypoints.
 - `plugin_declarations.enabled` and `.disabled` contain references whose only fields are `Name` and boolean `Enabled`.
@@ -83,8 +83,6 @@ Treat `ue-itps.project-descriptor.v4` as a compact projection of the original `.
 - `unmodeled_top_level_fields` preserves fields not recognized by the current tool model. Report them without declaring them invalid.
 
 For a simple enabled/disabled question, stop after `ue_read_project_descriptor.py`. If the user asks for exact values of one extended declaration, read only the original `.uproject` object identified by its `descriptor_pointer`. Resolve Engine and run `ue_resolve_plugins.py` only when the question also needs Plugin location, origin, `.uplugin` evidence, or Profile applicability.
-
-When combining descriptor and Plugin results from separate commands, compare `project.descriptor_sha256` with `project_descriptor.sha256`. Discard the earlier result and reread if they differ.
 
 ## Interpretation boundaries
 

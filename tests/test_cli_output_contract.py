@@ -65,15 +65,15 @@ class CliOutputContractTests(unittest.TestCase):
             _, descriptor = descriptor_result(project)
             results = [
                 ("ue-itps.project-discovery.v2", discovery_result(root)),
-                ("ue-itps.project-descriptor.v4", descriptor),
+                ("ue-itps.project-descriptor.v5", descriptor),
                 (
-                    "ue-itps.engine-resolution.v2",
+                    "ue-itps.engine-resolution.v3",
                     resolve_engine(project, "", root / "MissingEngine"),
                 ),
-                ("ue-itps.project-modules.v4", inspect_modules(root, [], [])),
-                ("ue-itps.project-targets.v2", inspect_targets(root)),
+                ("ue-itps.project-modules.v5", inspect_modules(root, [], [])),
+                ("ue-itps.project-targets.v3", inspect_targets(root)),
                 (
-                    "ue-itps.project-plugin-references.v4",
+                    "ue-itps.project-plugin-references.v5",
                     resolve_project_plugins(
                         project,
                         root,
@@ -98,6 +98,7 @@ class CliOutputContractTests(unittest.TestCase):
                 with self.subTest(schema=expected_schema):
                     self.assertEqual(result["schema_version"], expected_schema)
                     self.assert_envelope(result)
+            self.assertNotIn("build_version_sha256", results[2][1])
 
     def test_project_paths_report_directory_facts_only(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -202,11 +203,13 @@ class CliOutputContractTests(unittest.TestCase):
             result = inspect_targets(root)
 
         items = {item["name"]: item for item in result["items"]}
-        self.assertEqual(result["schema_version"], "ue-itps.project-targets.v2")
+        self.assertEqual(result["schema_version"], "ue-itps.project-targets.v3")
         self.assertNotIn("count", result)
         self.assertEqual(result["classification"], "native-project")
         self.assertTrue(items["Root"]["is_root_target"])
         self.assertFalse(items["Nested"]["is_root_target"])
+        self.assertNotIn("sha256", items["Root"])
+        self.assertNotIn("sha256", items["Nested"])
         self.assertNotIn("native_project_evidence", result)
         self.assertEqual(result["validation"]["status"], "warning")
         self.assertEqual(
@@ -479,13 +482,13 @@ class CliOutputContractTests(unittest.TestCase):
         self.assertEqual(result["path_roots"]["project"], project_root.as_posix())
         self.assertEqual(result["path_roots"]["engine"], engine_root.as_posix())
         self.assertEqual(result["project_descriptor"]["path"], "Fixture.uproject")
+        self.assertNotIn("sha256", result["project_descriptor"])
         self.assertEqual(result["items"][0]["origin"], "engine")
         self.assertEqual(
             result["items"][0]["descriptor"],
             "Engine/Plugins/Runtime/FixturePlugin/FixturePlugin.uplugin",
         )
         self.assertNotIn("declared_enabled", result["items"][0])
-        self.assertNotIn("descriptor_sha256", result["items"][0])
         self.assertNotIn("configuration", result["profile"])
 
     def test_plugin_cli_reports_engine_resolution_failure_as_json(self) -> None:

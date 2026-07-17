@@ -153,9 +153,10 @@ class ProjectDescriptorContractTests(unittest.TestCase):
             _, result = descriptor_result(project_file)
 
             self.assertEqual(
-                result["schema_version"], "ue-itps.project-descriptor.v4"
+                result["schema_version"], "ue-itps.project-descriptor.v5"
             )
             self.assertEqual(result["declared_modules"], ["Fixture"])
+            self.assertNotIn("descriptor_sha256", result["project"])
             self.assertNotIn("declared_module_count", result)
             self.assertEqual(
                 result["descriptor_top_level_fields"],
@@ -292,7 +293,7 @@ class ProjectDescriptorContractTests(unittest.TestCase):
             )
 
             self.assertEqual(
-                result["schema_version"], "ue-itps.project-modules.v4"
+                result["schema_version"], "ue-itps.project-modules.v5"
             )
             self.assertNotIn("count", result)
             self.assertEqual(result["reconciled_module_count"], 1)
@@ -312,7 +313,7 @@ class ProjectDescriptorContractTests(unittest.TestCase):
             candidate = module["build_rules"]["candidates"][0]
             self.assertEqual(candidate["path"], module_root.as_posix() + "/Fixture.Build.cs")
             self.assertTrue(candidate["conventional"])
-            self.assertEqual(len(candidate["sha256"]), 64)
+            self.assertNotIn("sha256", candidate)
             self.assertEqual(
                 module["actual"]["module_entrypoint_candidates"],
                 [
@@ -396,7 +397,7 @@ class ProjectDescriptorContractTests(unittest.TestCase):
                 candidate["path"],
                 undeclared_root.as_posix() + "/ExtraModule.Build.cs",
             )
-            self.assertEqual(len(candidate["sha256"]), 64)
+            self.assertNotIn("sha256", candidate)
 
     def test_module_inspection_compares_names_when_counts_match(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -487,12 +488,12 @@ class ProjectDescriptorContractTests(unittest.TestCase):
 
             self.assertEqual(
                 result["schema_version"],
-                "ue-itps.project-plugin-references.v4",
+                "ue-itps.project-plugin-references.v5",
             )
             self.assertEqual(result["declared_enabled_count"], 2)
             self.assertEqual(result["declared_disabled_count"], 1)
-            self.assertIsNotNone(result["project_descriptor"]["sha256"])
             self.assertEqual(result["project_descriptor"]["path"], "Fixture.uproject")
+            self.assertNotIn("sha256", result["project_descriptor"])
             self.assertEqual(
                 result["items"][0]["descriptor"],
                 "Plugins/FixturePlugin/FixturePlugin.uplugin",
@@ -500,14 +501,12 @@ class ProjectDescriptorContractTests(unittest.TestCase):
             self.assertTrue(result["item_defaults"]["declared_enabled"])
             self.assertNotIn("declared_enabled", result["items"][0])
             self.assertNotIn("descriptor_pointer", result["items"][0])
-            self.assertNotIn("descriptor_sha256", result["items"][0])
             self.assertNotIn("raw_declaration", result["items"][0])
             self.assertEqual(result["items"][1]["status"], "not-found")
             self.assertTrue(result["items"][1]["declared_enabled"])
             self.assertIsNone(result["items"][1]["descriptor"])
             self.assertEqual(result["items"][1]["alternate_descriptors"], [])
             self.assertEqual(result["items"][1]["filters"], {})
-            self.assertNotIn("descriptor_sha256", result["items"][1])
             self.assertFalse(result["items"][2]["declared_enabled"])
             self.assertNotIn("status", result["items"][2])
 

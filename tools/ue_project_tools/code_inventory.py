@@ -4,7 +4,7 @@ from pathlib import Path
 import re
 from typing import Any
 
-from .common import iter_files, normalized, result_document, sha256_file
+from .common import iter_files, normalized, result_document
 
 
 def module_entrypoints(module_dir: Path) -> list[dict[str, str]]:
@@ -109,7 +109,6 @@ def inspect_modules(
             build_rule_candidates.append(
                 {
                     "path": candidate_path,
-                    "sha256": sha256_file(path),
                     "conventional": candidate_path.casefold() == conventional_rule_key,
                 }
             )
@@ -187,8 +186,7 @@ def inspect_modules(
     ):
         module_name = discovered_module_names[module_key]
         candidates = [
-            {"path": normalized(path), "sha256": sha256_file(path)}
-            for path in rules_by_module[module_key]
+            {"path": normalized(path)} for path in rules_by_module[module_key]
         ]
         problems.append(
             {
@@ -204,7 +202,7 @@ def inspect_modules(
         )
 
     return result_document(
-        "ue-itps.project-modules.v4",
+        "ue-itps.project-modules.v5",
         {
             "reconciled_module_count": len(modules),
             "items": modules,
@@ -231,7 +229,6 @@ def inspect_targets(project_root: Path) -> dict[str, Any]:
             {
                 "name": name,
                 "path": normalized(path),
-                "sha256": sha256_file(path),
                 "is_root_target": path.parent == source_root,
             }
         )
@@ -281,7 +278,7 @@ def inspect_targets(project_root: Path) -> dict[str, Any]:
             }
         )
     return result_document(
-        "ue-itps.project-targets.v2",
+        "ue-itps.project-targets.v3",
         {
             "items": targets,
             "classification": classification,

@@ -64,11 +64,11 @@ Codex / 用户
 | CLI | 单一职责 | 主要输入 | Schema |
 |---|---|---|---|
 | `ue_find_projects.py` | 发现 `.uproject` 并报告歧义 | Search root | `ue-itps.project-discovery.v2` |
-| `ue_read_project_descriptor.py` | 读取描述符显式事实 | `.uproject` | `ue-itps.project-descriptor.v4` |
-| `ue_resolve_engine.py` | 解析 Engine 与 `Build.version` | `.uproject`、可选 Engine override | `ue-itps.engine-resolution.v2` |
-| `ue_inspect_modules.py` | 对账项目 Module 结构 | `.uproject` | `ue-itps.project-modules.v4` |
-| `ue_inspect_targets.py` | 发现 Target 与原生 Target 证据 | `.uproject` | `ue-itps.project-targets.v2` |
-| `ue_resolve_plugins.py` | 定位直接 Plugin 引用 | `.uproject`、可选 Engine override、Profile | `ue-itps.project-plugin-references.v4` |
+| `ue_read_project_descriptor.py` | 读取描述符显式事实 | `.uproject` | `ue-itps.project-descriptor.v5` |
+| `ue_resolve_engine.py` | 解析 Engine 与 `Build.version` | `.uproject`、可选 Engine override | `ue-itps.engine-resolution.v3` |
+| `ue_inspect_modules.py` | 对账项目 Module 结构 | `.uproject` | `ue-itps.project-modules.v5` |
+| `ue_inspect_targets.py` | 发现 Target 与原生 Target 证据 | `.uproject` | `ue-itps.project-targets.v3` |
+| `ue_resolve_plugins.py` | 定位直接 Plugin 引用 | `.uproject`、可选 Engine override、Profile | `ue-itps.project-plugin-references.v5` |
 | `ue_classify_project_paths.py` | 用显式描述符证据校验并分类项目根路径状态 | `.uproject` | `ue-itps.project-paths.v3` |
 
 CLI 只处理参数、调用服务、序列化结果和退出码，不应包含新的 UE 领域判断。七个入口的正常扫描输出统一为 `schema_version → 模块事实 → validation → limits`；`validation` 使用 `ok | warning | error`，`limits` 以 `responsibility` 和 `boundaries` 明示职责边界。`--help`、参数说明、输出契约和退出码均为中英文双语，stdout/stderr 固定使用 UTF-8。

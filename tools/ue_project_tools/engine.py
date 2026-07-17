@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from .common import normalized, read_json, result_document, sha256_file
+from .common import normalized, read_json, result_document
 
 
 def engine_version_at(root: Path) -> str | None:
@@ -159,7 +159,7 @@ def resolve_engine(
             }
         )
     return result_document(
-        "ue-itps.engine-resolution.v2",
+        "ue-itps.engine-resolution.v3",
         {
             "association_raw": association or None,
             "status": status,
@@ -167,7 +167,6 @@ def resolve_engine(
             "resolution_candidates": candidates,
             "engine_root": normalized(root) if root else None,
             "build_version_file": normalized(build_file) if build_file else None,
-            "build_version_sha256": (sha256_file(build_file) if build_file else None),
             "version": version,
             "build": build,
         },

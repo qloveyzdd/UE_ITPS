@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .common import normalized, read_json, result_document, sha256_file
+from .common import normalized, read_json, result_document
 
 
 KNOWN_TOP_LEVEL_FIELDS = {
@@ -326,13 +326,12 @@ def descriptor_result(project_file: Path) -> tuple[dict[str, Any], dict[str, Any
         )
     )
     result = result_document(
-        "ue-itps.project-descriptor.v4",
+        "ue-itps.project-descriptor.v5",
         {
             "project": {
                 "name": project_file.stem,
                 "root": normalized(project_file.parent),
                 "descriptor": normalized(project_file),
-                "descriptor_sha256": sha256_file(project_file),
                 "file_version": file_version,
                 "engine_association": descriptor.get("EngineAssociation"),
                 "category": descriptor.get("Category"),
