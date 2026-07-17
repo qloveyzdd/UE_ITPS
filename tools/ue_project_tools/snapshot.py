@@ -142,7 +142,7 @@ def build_snapshot(
         "targets": target_compat,
         "native_project_evidence": {
             **target_info["native_project_evidence"],
-            "declared_module_count": module_info["count"],
+            "declared_module_count": len(descriptor_info["declared_modules"]),
         },
         "plugins": plugin_compat,
         "structure": {

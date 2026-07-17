@@ -42,7 +42,7 @@ def markdown_report(manifest: dict[str, Any]) -> str:
         "",
         "## `.uproject` 声明对账",
         "",
-        f"- 项目模块：{modules['count']} 个",
+        f"- 成功对账的项目模块：{modules['count']} 个",
         f"- 扫描到 Target：{targets['count']} 个（Target 不由 `.uproject` 声明）",
         (
             f"- 原生项目证据：根 `Source/*.Target.cs` 为 "
@@ -59,7 +59,7 @@ def markdown_report(manifest: dict[str, Any]) -> str:
             f"{plugins['declared_enabled_applicable_resolved_count']} 个"
         ),
         "",
-        "### 项目模块",
+        "### 成功对账的项目模块",
         "",
         "| Module | Type | LoadingPhase | Build.cs | 入口候选 | 状态 |",
         "|---|---|---|---|---:|---|",

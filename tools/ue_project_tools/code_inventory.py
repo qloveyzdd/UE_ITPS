@@ -68,17 +68,21 @@ def inspect_modules(
         rules_by_module.setdefault(module_key, []).append(path)
         discovered_module_names.setdefault(module_key, module_name)
 
-    declared_module_indices: dict[str, int] = {}
-
+    valid_declarations: list[tuple[int, dict[str, Any], str, str]] = []
+    declaration_indices_by_module: dict[str, list[int]] = {}
     for declaration_index, raw in enumerate(declarations):
         if not isinstance(raw, dict) or not isinstance(raw.get("Name"), str):
             continue
         name = raw["Name"]
         module_key = name.casefold()
-        first_declaration_index = declared_module_indices.get(module_key)
-        if first_declaration_index is None:
-            declared_module_indices[module_key] = declaration_index
-        else:
+        valid_declarations.append((declaration_index, raw, name, module_key))
+        declaration_indices_by_module.setdefault(module_key, []).append(
+            declaration_index
+        )
+
+    for declaration_index, _, name, module_key in valid_declarations:
+        declaration_indices = declaration_indices_by_module[module_key]
+        if declaration_index != declaration_indices[0]:
             problems.append(
                 {
                     "severity": "error",
@@ -86,13 +90,17 @@ def inspect_modules(
                     "module_name": name,
                     "descriptor_pointer": f"/Modules/{declaration_index}",
                     "first_descriptor_pointer": (
-                        f"/Modules/{first_declaration_index}"
+                        f"/Modules/{declaration_indices[0]}"
                     ),
                     "message": (
                         f"Module {name} is declared more than once in .uproject"
                     ),
                 }
             )
+
+    for declaration_index, raw, name, module_key in valid_declarations:
+        if len(declaration_indices_by_module[module_key]) != 1:
+            continue
         conventional_dir = source_root / name
         conventional_rules = conventional_dir / f"{name}.Build.cs"
         unique_rules = rules_by_module.get(module_key, [])
@@ -108,6 +116,31 @@ def inspect_modules(
                     == conventional_rule_key,
                 }
             )
+        status = (
+            "resolved"
+            if len(unique_rules) == 1
+            else ("missing" if not unique_rules else "ambiguous")
+        )
+        if status != "resolved":
+            problems.append(
+                {
+                    "severity": "error",
+                    "code": (
+                        "project-module-build-rules-missing"
+                        if status == "missing"
+                        else "project-module-build-rules-ambiguous"
+                    ),
+                    "module_name": name,
+                    "descriptor_pointer": f"/Modules/{declaration_index}",
+                    "candidates": build_rule_candidates,
+                    "message": (
+                        f"Declared module {name} has {len(unique_rules)} "
+                        "Build.cs candidates"
+                    ),
+                }
+            )
+            continue
+
         module_dirs = sorted(
             {path.parent for path in unique_rules},
             key=lambda path: normalized(path).casefold(),
@@ -134,27 +167,6 @@ def inspect_modules(
                 item["module_name"],
             ),
         )
-        status = (
-            "resolved"
-            if len(unique_rules) == 1
-            else ("missing" if not unique_rules else "ambiguous")
-        )
-        if status != "resolved":
-            problems.append(
-                {
-                    "severity": "error",
-                    "code": (
-                        "project-module-build-rules-missing"
-                        if status == "missing"
-                        else "project-module-build-rules-ambiguous"
-                    ),
-                    "descriptor_pointer": f"/Modules/{declaration_index}",
-                    "message": (
-                        f"Declared module {name} has {len(unique_rules)} "
-                        "Build.cs candidates"
-                    ),
-                }
-            )
         modules.append(
             {
                 "name": name,
@@ -173,7 +185,7 @@ def inspect_modules(
         )
 
     for module_key in sorted(
-        set(rules_by_module) - set(declared_module_indices),
+        set(rules_by_module) - set(declaration_indices_by_module),
         key=lambda key: discovered_module_names[key].casefold(),
     ):
         module_name = discovered_module_names[module_key]

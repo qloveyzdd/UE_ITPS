@@ -107,6 +107,8 @@ class ProjectDescriptorContractTests(unittest.TestCase):
             self.assertEqual(
                 result["schema_version"], "ue-itps.project-modules.v2"
             )
+            self.assertEqual(result["count"], 1)
+            self.assertEqual(result["count"], len(result["items"]))
             self.assertEqual(result["validation"]["status"], "ok")
             module = result["items"][0]
             self.assertNotIn("raw_declaration", module)
@@ -139,14 +141,13 @@ class ProjectDescriptorContractTests(unittest.TestCase):
                 Path(temporary_directory), [{"Name": "Fixture"}], []
             )
 
-            module = result["items"][0]
-            self.assertEqual(module["build_rules"]["status"], "missing")
-            self.assertEqual(module["build_rules"]["candidates"], [])
+            self.assertEqual(result["count"], 0)
+            self.assertEqual(result["items"], [])
             self.assertEqual(result["validation"]["status"], "error")
-            self.assertEqual(
-                result["validation"]["problems"][0]["code"],
-                "project-module-build-rules-missing",
-            )
+            problem = result["validation"]["problems"][0]
+            self.assertEqual(problem["code"], "project-module-build-rules-missing")
+            self.assertEqual(problem["module_name"], "Fixture")
+            self.assertEqual(problem["candidates"], [])
 
     def test_module_inspection_reports_ambiguous_build_rules(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -160,20 +161,21 @@ class ProjectDescriptorContractTests(unittest.TestCase):
 
             result = inspect_modules(project_root, [{"Name": "Fixture"}], [])
 
-            module = result["items"][0]
-            self.assertEqual(module["build_rules"]["status"], "ambiguous")
-            self.assertEqual(len(module["build_rules"]["candidates"]), 2)
+            self.assertEqual(result["count"], 0)
+            self.assertEqual(result["items"], [])
+            self.assertEqual(result["validation"]["status"], "error")
+            problem = result["validation"]["problems"][0]
+            self.assertEqual(
+                problem["code"], "project-module-build-rules-ambiguous"
+            )
+            self.assertEqual(problem["module_name"], "Fixture")
+            self.assertEqual(len(problem["candidates"]), 2)
             self.assertEqual(
                 sum(
                     candidate["conventional"]
-                    for candidate in module["build_rules"]["candidates"]
+                    for candidate in problem["candidates"]
                 ),
                 1,
-            )
-            self.assertEqual(result["validation"]["status"], "error")
-            self.assertEqual(
-                result["validation"]["problems"][0]["code"],
-                "project-module-build-rules-ambiguous",
             )
 
     def test_module_inspection_reports_undeclared_build_rules(self) -> None:
@@ -215,11 +217,8 @@ class ProjectDescriptorContractTests(unittest.TestCase):
 
             result = inspect_modules(project_root, [{"Name": "Expected"}], [])
 
-            self.assertEqual(result["count"], 1)
-            self.assertEqual(result["items"][0]["name"], "Expected")
-            self.assertEqual(
-                result["items"][0]["build_rules"]["status"], "missing"
-            )
+            self.assertEqual(result["count"], 0)
+            self.assertEqual(result["items"], [])
             self.assertEqual(result["validation"]["status"], "error")
             self.assertEqual(
                 {
@@ -245,8 +244,8 @@ class ProjectDescriptorContractTests(unittest.TestCase):
                 [],
             )
 
-            self.assertEqual(result["count"], 2)
-            self.assertEqual(len(result["items"]), 2)
+            self.assertEqual(result["count"], 0)
+            self.assertEqual(result["items"], [])
             self.assertEqual(result["validation"]["status"], "error")
             self.assertEqual(
                 result["validation"]["problems"][0]["code"],
