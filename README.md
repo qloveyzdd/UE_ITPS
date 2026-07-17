@@ -60,6 +60,34 @@ $ue-project-inspector 生成完整的项目入口扫描报告。
 
 Skill 默认选择能回答问题的最小工具。只有明确要求完整报告时，才运行组合器。
 
+## 统一 CLI 输出契约
+
+八个 UE 项目检查 CLI 的正常扫描结果使用同一顶层顺序：
+
+```json
+{
+  "schema_version": "ue-itps.<module>.vN",
+  "...模块确认事实...": "...",
+  "validation": {
+    "status": "ok | warning | error",
+    "problem_count": 0,
+    "problems": []
+  },
+  "limits": {
+    "responsibility": "该模块负责什么",
+    "boundaries": ["该模块不负责或不能证明什么"]
+  }
+}
+```
+
+`validation` 只放该模块检测到的问题；已确认事实保留在中间的模块字段中。`limits` 固定为最后一个字段，供用户和大语言模型判断职责与解释边界。标准输出和标准错误固定使用 UTF-8。
+
+所有命令的 `--help` 都提供中英文双语说明，例如：
+
+```powershell
+python tools\ue_resolve_engine.py --help
+```
+
 ## 直接运行 UE 项目检查工具
 
 以下命令从仓库根目录执行。项目路径示例：
@@ -188,6 +216,8 @@ python tools\inspect_uproject.py `
 
 - 七个聚焦的 UE 项目检查 CLI 默认只读，并将 JSON 写到标准输出。
 - 完整组合器只有在显式传入 `--json-out` 或 `--markdown-out` 时写文件。
+- 完整组合器无论是否归档文件，标准输出都返回相同的完整快照契约。
+- `--help`、参数说明、输出契约和退出码采用中英文双语；argparse 参数错误仍写入标准错误。
 - 基线指纹、运行日志归档和 Asset Registry 查询属于证据生成工具，会写入 `.planning/evidence/`。
 - 项目检查结果只证明静态声明和文件定位，不证明项目已经编译、启动、联网或通过测试。
 - 当前工具固定以 UE 5.6.1 Lyra 为首个回归基准，但长期数据模型不应绑定 Lyra 架构。
@@ -204,7 +234,7 @@ Simple Enabled / Disabled / Extended: 63 / 11 / 7
 Resolved Plugin Descriptors: 69
 Project / Engine Plugin Descriptors: 15 / 54
 Applicable Enabled Resolved: 66 / 68
-Validation: ok, warnings: 2
+Validation: warning, warnings: 2
 ```
 
 两条警告来自当前环境未定位的 Optional 插件 `D3DExternalGPUStatistics` 和 `EOSReservedHooks`。

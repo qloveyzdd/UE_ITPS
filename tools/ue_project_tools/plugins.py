@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .common import iter_files, normalized, sha256_file
+from .common import iter_files, normalized, result_document, sha256_file
 from .descriptor import classify_plugin_declarations
 
 
@@ -123,9 +123,7 @@ def resolve_project_plugins(
                 "descriptor_pointer": f"/Plugins/{declaration_index}",
                 "declared_enabled": declared_enabled,
                 "optional": optional,
-                "additional_fields": sorted(
-                    set(raw) - {"Name", "Enabled"}
-                ),
+                "additional_fields": sorted(set(raw) - {"Name", "Enabled"}),
                 "applicable_for_context": applies,
                 "status": status,
                 "origin": selected["origin"] if selected else None,
@@ -153,63 +151,60 @@ def resolve_project_plugins(
         return bool(
             origin
             and (
-                origin.startswith("project")
-                or origin.startswith("additional-project-")
+                origin.startswith("project") or origin.startswith("additional-project-")
             )
         )
 
-    return {
-        "schema_version": "ue-itps.project-plugin-references.v2",
-        "project_descriptor": {
-            "path": normalized(project_file),
-            "sha256": sha256_file(project_file),
-        },
-        "profile": {
-            "operation": operation,
-            "platform": platform,
-            "target_type": target,
-            "configuration": configuration,
-        },
-        "count": len(results),
-        "declared_enabled_count": sum(
-            1 for item in results if item["declared_enabled"]
-        ),
-        "declared_disabled_count": sum(
-            1 for item in results if not item["declared_enabled"]
-        ),
-        "resolved_count": sum(1 for item in results if item["status"] == "resolved"),
-        "declared_enabled_applicable_count": sum(
-            1
-            for item in results
-            if item["declared_enabled"] and item["applicable_for_context"]
-        ),
-        "declared_enabled_applicable_resolved_count": sum(
-            1
-            for item in results
-            if item["declared_enabled"]
-            and item["applicable_for_context"]
-            and item["status"] == "resolved"
-        ),
-        "project_descriptor_count": sum(
-            1 for item in results if is_project_origin(item["origin"])
-        ),
-        "engine_descriptor_count": sum(
-            1
-            for item in results
-            if item["origin"] in {"engine", "engine-platform"}
-        ),
-        "items": results,
-        "validation": {
-            "status": (
-                "error"
-                if any(item["severity"] == "error" for item in problems)
-                else "ok"
+    return result_document(
+        "ue-itps.project-plugin-references.v3",
+        {
+            "project_descriptor": {
+                "path": normalized(project_file),
+                "sha256": sha256_file(project_file),
+            },
+            "profile": {
+                "operation": operation,
+                "platform": platform,
+                "target_type": target,
+                "configuration": configuration,
+            },
+            "count": len(results),
+            "declared_enabled_count": sum(
+                1 for item in results if item["declared_enabled"]
             ),
-            "problems": problems,
+            "declared_disabled_count": sum(
+                1 for item in results if not item["declared_enabled"]
+            ),
+            "resolved_count": sum(
+                1 for item in results if item["status"] == "resolved"
+            ),
+            "declared_enabled_applicable_count": sum(
+                1
+                for item in results
+                if item["declared_enabled"] and item["applicable_for_context"]
+            ),
+            "declared_enabled_applicable_resolved_count": sum(
+                1
+                for item in results
+                if item["declared_enabled"]
+                and item["applicable_for_context"]
+                and item["status"] == "resolved"
+            ),
+            "project_descriptor_count": sum(
+                1 for item in results if is_project_origin(item["origin"])
+            ),
+            "engine_descriptor_count": sum(
+                1 for item in results if item["origin"] in {"engine", "engine-platform"}
+            ),
+            "items": results,
         },
-        "limits": [
+        problems,
+        responsibility=(
+            "Resolve direct .uproject Plugin references for one explicit profile."
+        ),
+        boundaries=[
             "Only direct .uproject plugin references are resolved.",
             "Effective defaults and transitive .uplugin dependency closure are not computed.",
             "Applicability currently evaluates platform and target filters; deeper UBT policy remains out of scope.",
         ],
-    }
+    )

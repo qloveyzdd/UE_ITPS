@@ -93,9 +93,7 @@ def markdown_report(manifest: dict[str, Any]) -> str:
             or item["origin"].startswith("additional-project-")
         )
     ]
-    lines.extend(
-        ["", "### `.uproject` 直接引用的项目本地插件描述符", ""]
-    )
+    lines.extend(["", "### `.uproject` 直接引用的项目本地插件描述符", ""])
     for plugin in local_plugins:
         lines.append(f"- `{plugin['name']}` → `{plugin['descriptor']}`")
     lines.extend(
@@ -148,9 +146,11 @@ def markdown_report(manifest: dict[str, Any]) -> str:
             "",
             "## 解释边界",
             "",
+            f"职责：{manifest['limits']['responsibility']}",
+            "",
         ]
     )
-    for limit in manifest["limits"]:
+    for limit in manifest["limits"]["boundaries"]:
         lines.append(f"- {limit}")
 
     problems = manifest["validation"]["problems"]
@@ -170,8 +170,7 @@ def markdown_report(manifest: dict[str, Any]) -> str:
         lines.extend(["### 诊断", ""])
         for problem in problems:
             lines.append(
-                f"- `{problem['severity']}` / `{problem['code']}`："
-                f"{problem['message']}"
+                f"- `{problem['severity']}` / `{problem['code']}`：{problem['message']}"
             )
         lines.append("")
     return "\n".join(lines)

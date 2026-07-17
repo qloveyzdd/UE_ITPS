@@ -39,7 +39,9 @@ Do not run the complete snapshot when one focused tool is sufficient.
 2. If exactly one candidate exists, use it. If multiple candidates exist, report the ambiguity and ask the user which project to inspect.
 3. Run only the selected focused tool.
 4. Parse its JSON output. Summarize the requested facts and include evidence paths for engine, Module, Target, or Plugin claims.
-5. Report warnings and limitations separately. Never reinterpret `validation: ok` as proof that the project compiles, launches, or runs correctly.
+5. Read `validation` for detected problems and `limits` for responsibility and boundaries. Report warnings and boundaries separately. Never reinterpret `validation: ok` as proof that the project compiles, launches, or runs correctly.
+
+All normal scan results follow this top-level order: `schema_version`, module facts, `validation`, then `limits`. Treat `validation: warning` as a completed scan with non-blocking problems, not as `ok` and not as a process failure.
 
 ## Focused commands
 
@@ -61,9 +63,9 @@ python tools/ue_resolve_plugins.py --project <project> --engine-root <engine-roo
 
 Use `Win64 / Editor / Development` only as the default inspection profile. If the user provides another platform, target type, configuration, or operation, pass it through and state the active profile.
 
-## Interpret descriptor v3
+## Interpret descriptor v4
 
-Treat `ue-itps.project-descriptor.v3` as a compact projection of the original `.uproject`:
+Treat `ue-itps.project-descriptor.v4` as a compact projection of the original `.uproject`:
 
 - `declared_modules` reports declared Module names in descriptor order. Use `ue_inspect_modules.py` for types, loading phases, Build.cs evidence, or entrypoints.
 - `plugin_declarations.enabled` and `.disabled` contain references whose only fields are `Name` and boolean `Enabled`.
@@ -88,7 +90,7 @@ Do not pass `--json-out` or `--markdown-out` unless the user asks to archive the
 ## Interpretation boundaries
 
 - `EngineAssociation` is an association key. Use resolved `Build.version` for the actual engine version.
-- `.uproject` declares Modules and direct Plugin references, but descriptor v3 intentionally does not repeat their full arrays. It does not declare `Target.cs` or a complete dependency graph.
+- `.uproject` declares Modules and direct Plugin references, but descriptor v4 intentionally does not repeat their full arrays. It does not declare `Target.cs` or a complete dependency graph.
 - Direct Plugin resolution is not the effective `.uplugin` dependency closure.
 - Directory presence does not prove runtime use or minimum-project necessity.
 - `Binaries`, `Intermediate`, caches, and local state are not source authority by default.

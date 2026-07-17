@@ -35,7 +35,7 @@ JSON 解析、注册表查询、路径定位、文件哈希和目录分类由程
 - Profile 下的适用性判断；
 - 尚未实现或无法证明的运行语义。
 
-`validation: ok` 只表示该次静态扫描没有阻断错误，不表示项目已经编译、运行或通过测试。
+`validation: ok` 只表示该次静态扫描未发现问题；`warning` 表示发现非阻断问题；两者都不表示项目已经编译、运行或通过测试。
 
 ### 默认只读
 
@@ -65,22 +65,22 @@ Codex / 用户
 
 | CLI | 单一职责 | 主要输入 | Schema |
 |---|---|---|---|
-| `ue_find_projects.py` | 发现 `.uproject` 并报告歧义 | Search root | `ue-itps.project-discovery.v1` |
-| `ue_read_project_descriptor.py` | 读取描述符显式事实 | `.uproject` | `ue-itps.project-descriptor.v3` |
-| `ue_resolve_engine.py` | 解析 Engine 与 `Build.version` | `.uproject`、可选 Engine override | `ue-itps.engine-resolution.v1` |
-| `ue_inspect_modules.py` | 对账项目 Module 结构 | `.uproject` | `ue-itps.project-modules.v3` |
-| `ue_inspect_targets.py` | 发现 Target 与原生 Target 证据 | `.uproject` | `ue-itps.project-targets.v1` |
-| `ue_resolve_plugins.py` | 定位直接 Plugin 引用 | `.uproject`、Engine root、Profile | `ue-itps.project-plugin-references.v2` |
-| `ue_classify_project_paths.py` | 分类项目根路径 | `.uproject` | `ue-itps.project-paths.v1` |
-| `inspect_uproject.py` | 组合已有结果 | 全部扫描上下文 | `ue-itps.uproject-structure.v4` |
+| `ue_find_projects.py` | 发现 `.uproject` 并报告歧义 | Search root | `ue-itps.project-discovery.v2` |
+| `ue_read_project_descriptor.py` | 读取描述符显式事实 | `.uproject` | `ue-itps.project-descriptor.v4` |
+| `ue_resolve_engine.py` | 解析 Engine 与 `Build.version` | `.uproject`、可选 Engine override | `ue-itps.engine-resolution.v2` |
+| `ue_inspect_modules.py` | 对账项目 Module 结构 | `.uproject` | `ue-itps.project-modules.v4` |
+| `ue_inspect_targets.py` | 发现 Target 与原生 Target 证据 | `.uproject` | `ue-itps.project-targets.v2` |
+| `ue_resolve_plugins.py` | 定位直接 Plugin 引用 | `.uproject`、Engine root、Profile | `ue-itps.project-plugin-references.v3` |
+| `ue_classify_project_paths.py` | 分类项目根路径 | `.uproject` | `ue-itps.project-paths.v2` |
+| `inspect_uproject.py` | 组合已有结果 | 全部扫描上下文 | `ue-itps.uproject-structure.v5` |
 
-CLI 只处理参数、调用服务、序列化结果和退出码，不应包含新的 UE 领域判断。
+CLI 只处理参数、调用服务、序列化结果和退出码，不应包含新的 UE 领域判断。八个入口的正常扫描输出统一为 `schema_version → 模块事实 → validation → limits`；`validation` 使用 `ok | warning | error`，`limits` 以 `responsibility` 和 `boundaries` 明示职责边界。`--help`、参数说明、输出契约和退出码均为中英文双语，stdout/stderr 固定使用 UTF-8。
 
 ### 3.2 服务层
 
 | 文件 | 当前职责 |
 |---|---|
-| `common.py` | UTF-8 JSON、路径规范化、SHA-256、受控遍历和文本输出 |
+| `common.py` | 统一结果契约、双语 CLI、UTF-8 JSON、路径规范化、SHA-256、受控遍历和文本输出 |
 | `discovery.py` | `.uproject` 搜索、唯一候选选择和歧义状态 |
 | `descriptor.py` | 顶层字段、Plugin 声明三分类、未知字段保留、Additional 目录边界 |
 | `engine.py` | GUID/版本关联、Windows 注册表、相对路径、祖先 Engine、`Build.version` |
@@ -156,12 +156,12 @@ configuration
 ### 组合器
 
 ```text
-0 = validation ok
+0 = validation ok 或 warning
 1 = 扫描完成但存在阻断诊断
 2 = 输入、发现或 JSON 解析失败
 ```
 
-诊断 `code` 使用稳定英文机器码；当前部分面向人的说明仍混在领域结果中，后续应进一步移到渲染/本地化层。
+发现工具的 `not-found` 和 `ambiguous` 属于阻断诊断并返回 1。诊断 `code` 使用稳定英文机器码；argparse 帮助为中英文双语，参数错误仍使用标准 stderr 文本。
 
 ## 7. 路径与安全策略
 
@@ -203,7 +203,7 @@ Simple Enabled / Disabled / Extended: 63 / 11 / 7
 Resolved Plugin Descriptors: 69
 Project / Engine Plugin Descriptors: 15 / 54
 Applicable Enabled Resolved: 66 / 68
-Validation: ok
+Validation: warning
 Warnings: 2 Optional Plugin descriptors not resolved
 ```
 
@@ -224,7 +224,7 @@ Warnings: 2 Optional Plugin descriptors not resolved
 
 1. 结果使用裸 `dict`，没有提交独立 JSON Schema、TypedDict 或 dataclass 契约。
 2. 完整快照包含绝对路径和 `generated_at`，不利于跨机器 golden diff。
-3. 聚焦工具的诊断信封尚未完全统一；`not-found`、`ambiguous` 与进程退出码的关系需要固定。
+3. 参数解析或输入读取失败仍使用 stderr 文本，不产生正常扫描 JSON 契约。
 4. 兼容组合器仍承担部分策略聚合，事实发现、Profile policy 和报告展示还可以进一步分离。
 
 ### 性能
@@ -243,10 +243,10 @@ Warnings: 2 Optional Plugin descriptors not resolved
 
 ### P0：固定正确性和契约
 
-1. 为七个 Schema 添加版本化 JSON Schema。
+1. 为八个 Schema 添加版本化 JSON Schema。
 2. 建立小型 fixture 仓库和 Lyra 5.6.1 smoke/golden 测试，归一化时间与绝对路径。
 3. 将事实发现、Profile policy、诊断定级和 Markdown 本地化拆开。
-4. 统一工具结果信封、状态枚举、证据结构和退出码。
+4. 为已统一的结果信封补充独立 JSON Schema 和跨版本兼容检查。
 5. 补齐外部路径、junction/symlink 和不可访问状态测试。
 
 ### P1：扩大确定性图谱输入

@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from .code_inventory import inspect_modules, inspect_targets
-from .common import normalized, utc_now
+from .common import normalized, result_document, utc_now
 from .descriptor import descriptor_result, resolve_internal_directories
 from .discovery import select_uproject
 from .engine import resolve_engine
@@ -35,10 +35,8 @@ def build_snapshot(
     additional_roots, additional_root_findings = resolve_internal_directories(
         project_root, descriptor, "AdditionalRootDirectories"
     )
-    additional_plugin_roots, additional_plugin_findings = (
-        resolve_internal_directories(
-            project_root, descriptor, "AdditionalPluginDirectories"
-        )
+    additional_plugin_roots, additional_plugin_findings = resolve_internal_directories(
+        project_root, descriptor, "AdditionalPluginDirectories"
     )
     module_info = inspect_modules(
         project_root, descriptor.get("Modules", []), additional_roots
@@ -62,20 +60,11 @@ def build_snapshot(
 
     problems: list[dict[str, str]] = []
     problems.extend(descriptor_info["validation"]["problems"])
+    problems.extend(engine_info["validation"]["problems"])
     problems.extend(module_info["validation"]["problems"])
+    problems.extend(target_info["validation"]["problems"])
     problems.extend(plugin_info["validation"]["problems"])
-    if engine_info["status"] != "resolved":
-        problems.append(
-            {
-                "severity": "error",
-                "code": f"engine-{engine_info['status']}",
-                "message": (
-                    f"EngineAssociation {association!r} has status "
-                    f"{engine_info['status']} and could not be bound to one "
-                    "Build.version"
-                ),
-            }
-        )
+    problems.extend(path_info["validation"]["problems"])
 
     descriptor_project = descriptor_info["project"]
     engine_compat = {
@@ -93,15 +82,11 @@ def build_snapshot(
     }
     project_compat = {
         **descriptor_project,
-        "descriptor_top_level_fields": descriptor_info[
-            "descriptor_top_level_fields"
-        ],
+        "descriptor_top_level_fields": descriptor_info["descriptor_top_level_fields"],
         "additional_root_directories": additional_root_findings,
         "additional_plugin_directories": additional_plugin_findings,
         "descriptor_options": descriptor_info["descriptor_options"],
-        "unmodeled_top_level_fields": descriptor_info[
-            "unmodeled_top_level_fields"
-        ],
+        "unmodeled_top_level_fields": descriptor_info["unmodeled_top_level_fields"],
     }
     module_compat = {
         "reconciled_module_count": module_info["reconciled_module_count"],
@@ -117,56 +102,55 @@ def build_snapshot(
         if key not in {"schema_version", "profile", "validation", "limits"}
     }
 
-    return {
-        "schema_version": "ue-itps.uproject-structure.v4",
-        "generated_at": utc_now(),
-        "scan_context": {
-            "operation": operation,
-            "platform": platform,
-            "target_type": target_type,
-            "configuration": configuration,
-            "requiredness_mode": (
-                "declared-and-located-only"
-                if operation == "scan"
-                else "profile-qualified-partial"
-            ),
+    return result_document(
+        "ue-itps.uproject-structure.v5",
+        {
+            "generated_at": utc_now(),
+            "scan_context": {
+                "operation": operation,
+                "platform": platform,
+                "target_type": target_type,
+                "configuration": configuration,
+                "requiredness_mode": (
+                    "declared-and-located-only"
+                    if operation == "scan"
+                    else "profile-qualified-partial"
+                ),
+            },
+            "discovery": {
+                "search_root": normalized(Path(project or search_root)),
+                "candidate_count": len(candidates),
+                "candidates": [normalized(path) for path in candidates],
+            },
+            "project": project_compat,
+            "engine": engine_compat,
+            "modules": module_compat,
+            "targets": target_compat,
+            "native_project_evidence": {
+                **target_info["native_project_evidence"],
+                "declared_module_count": len(descriptor_info["declared_modules"]),
+            },
+            "plugins": plugin_compat,
+            "structure": {
+                key: value
+                for key, value in path_info.items()
+                if key not in {"schema_version", "validation", "limits"}
+            },
+            "component_schemas": {
+                "descriptor": descriptor_info["schema_version"],
+                "engine": engine_info["schema_version"],
+                "modules": module_info["schema_version"],
+                "targets": target_info["schema_version"],
+                "plugins": plugin_info["schema_version"],
+                "paths": path_info["schema_version"],
+            },
         },
-        "discovery": {
-            "search_root": normalized(Path(project or search_root)),
-            "candidate_count": len(candidates),
-            "candidates": [normalized(path) for path in candidates],
-        },
-        "project": project_compat,
-        "engine": engine_compat,
-        "modules": module_compat,
-        "targets": target_compat,
-        "native_project_evidence": {
-            **target_info["native_project_evidence"],
-            "declared_module_count": len(descriptor_info["declared_modules"]),
-        },
-        "plugins": plugin_compat,
-        "structure": {
-            key: value
-            for key, value in path_info.items()
-            if key not in {"schema_version", "limits"}
-        },
-        "validation": {
-            "status": (
-                "error"
-                if any(item["severity"] == "error" for item in problems)
-                else "ok"
-            ),
-            "problems": problems,
-        },
-        "component_schemas": {
-            "descriptor": descriptor_info["schema_version"],
-            "engine": engine_info["schema_version"],
-            "modules": module_info["schema_version"],
-            "targets": target_info["schema_version"],
-            "plugins": plugin_info["schema_version"],
-            "paths": path_info["schema_version"],
-        },
-        "limits": [
+        problems,
+        responsibility=(
+            "Compose the focused UE project inspection results into one "
+            "versioned entry snapshot."
+        ),
+        boundaries=[
             "`.uproject` 不声明 Target.cs；Target 来自对 Source 的扫描发现。",
             "`.uproject` 不给出 Build.cs 模块依赖图，也不展开 `.uplugin` 的传递依赖。",
             "目录存在不能证明它在运行时被使用、资产可达，或属于最小项目必需项。",
@@ -175,4 +159,4 @@ def build_snapshot(
             "项目外 Additional* 目录默认只报告 skipped_external，不越界遍历。",
             "Binaries 对源码 Lyra 是生成物；对纯预编译项目可能是条件输入。",
         ],
-    }
+    )

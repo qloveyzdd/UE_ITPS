@@ -1,16 +1,23 @@
 #!/usr/bin/env python3
 """Read only the explicit facts declared by one .uproject file."""
 
-import argparse
 from pathlib import Path
 
-from ue_project_tools.common import json_text
+from ue_project_tools.common import cli_parser, json_text
 from ue_project_tools.descriptor import descriptor_result
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--project", required=True)
+    parser = cli_parser(
+        "只读取一个 .uproject 文件明确声明的事实。",
+        "Read only the explicit facts declared by one .uproject file.",
+    )
+    parser.add_argument(
+        "--project",
+        required=True,
+        metavar="FILE",
+        help=".uproject 文件路径 / Path to the .uproject file",
+    )
     args = parser.parse_args()
     try:
         _, result = descriptor_result(Path(args.project))

@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from .common import normalized, read_json, sha256_file
+from .common import normalized, read_json, result_document, sha256_file
 
 
 def engine_version_at(root: Path) -> str | None:
@@ -141,19 +141,43 @@ def resolve_engine(
         if all(isinstance(value, int) for value in parts):
             version = ".".join(str(value) for value in parts)
 
-    return {
-        "schema_version": "ue-itps.engine-resolution.v1",
-        "association_raw": association or None,
-        "status": (
-            "resolved"
-            if root and build
-            else ("ambiguous" if len(candidates) > 1 else "unresolved")
+    status = (
+        "resolved"
+        if root and build
+        else ("ambiguous" if len(candidates) > 1 else "unresolved")
+    )
+    problems: list[dict[str, str]] = []
+    if status != "resolved":
+        problems.append(
+            {
+                "severity": "error",
+                "code": f"engine-{status}",
+                "message": (
+                    f"EngineAssociation {association!r} has status {status} "
+                    "and could not be bound to one Build.version"
+                ),
+            }
+        )
+    return result_document(
+        "ue-itps.engine-resolution.v2",
+        {
+            "association_raw": association or None,
+            "status": status,
+            "resolution_method": source,
+            "resolution_candidates": candidates,
+            "engine_root": normalized(root) if root else None,
+            "build_version_file": normalized(build_file) if build_file else None,
+            "build_version_sha256": (sha256_file(build_file) if build_file else None),
+            "version": version,
+            "build": build,
+        },
+        problems,
+        responsibility=(
+            "Resolve EngineAssociation to one Engine root and read Build.version."
         ),
-        "resolution_method": source,
-        "resolution_candidates": candidates,
-        "engine_root": normalized(root) if root else None,
-        "build_version_file": normalized(build_file) if build_file else None,
-        "build_version_sha256": sha256_file(build_file) if build_file else None,
-        "version": version,
-        "build": build,
-    }
+        boundaries=[
+            "EngineAssociation is an association key, not authoritative version evidence.",
+            "The result does not prove that the project builds or runs with the Engine.",
+            "Registry and ancestor lookup are static resolution mechanisms only.",
+        ],
+    )

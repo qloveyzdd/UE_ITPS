@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .common import normalized, read_json, sha256_file
+from .common import normalized, read_json, result_document, sha256_file
 
 
 KNOWN_TOP_LEVEL_FIELDS = {
@@ -131,9 +131,7 @@ def classify_plugin_declarations(
 def descriptor_result(project_file: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     project_file = project_file.resolve()
     descriptor = read_json(project_file)
-    file_version = descriptor.get(
-        "FileVersion", descriptor.get("ProjectFileVersion")
-    )
+    file_version = descriptor.get("FileVersion", descriptor.get("ProjectFileVersion"))
     problems: list[dict[str, str]] = []
     if not isinstance(file_version, int) or file_version not in {1, 2, 3}:
         problems.append(
@@ -165,44 +163,49 @@ def descriptor_result(project_file: Path) -> tuple[dict[str, Any], dict[str, Any
     _, additional_plugins = resolve_internal_directories(
         project_file.parent, descriptor, "AdditionalPluginDirectories"
     )
-    result = {
-        "schema_version": "ue-itps.project-descriptor.v3",
-        "project": {
-            "name": project_file.stem,
-            "root": normalized(project_file.parent),
-            "descriptor": normalized(project_file),
-            "descriptor_sha256": sha256_file(project_file),
-            "file_version": file_version,
-            "engine_association": descriptor.get("EngineAssociation"),
-            "category": descriptor.get("Category"),
-            "description": descriptor.get("Description"),
+    result = result_document(
+        "ue-itps.project-descriptor.v4",
+        {
+            "project": {
+                "name": project_file.stem,
+                "root": normalized(project_file.parent),
+                "descriptor": normalized(project_file),
+                "descriptor_sha256": sha256_file(project_file),
+                "file_version": file_version,
+                "engine_association": descriptor.get("EngineAssociation"),
+                "category": descriptor.get("Category"),
+                "description": descriptor.get("Description"),
+            },
+            "declared_modules": declared_modules,
+            "plugin_declarations": plugin_declarations,
+            "additional_root_directories": additional_roots,
+            "additional_plugin_directories": additional_plugins,
+            "descriptor_options": {
+                key: descriptor[key]
+                for key in (
+                    "TargetPlatforms",
+                    "DisableEnginePluginsByDefault",
+                    "Enterprise",
+                    "InitSteps",
+                    "PreBuildSteps",
+                    "PostBuildSteps",
+                    "EpicSampleNameHash",
+                )
+                if key in descriptor
+            },
+            "descriptor_top_level_fields": sorted(descriptor.keys()),
+            "unmodeled_top_level_fields": {
+                key: value
+                for key, value in descriptor.items()
+                if key not in KNOWN_TOP_LEVEL_FIELDS
+            },
         },
-        "declared_modules": declared_modules,
-        "plugin_declarations": plugin_declarations,
-        "additional_root_directories": additional_roots,
-        "additional_plugin_directories": additional_plugins,
-        "descriptor_options": {
-            key: descriptor[key]
-            for key in (
-                "TargetPlatforms",
-                "DisableEnginePluginsByDefault",
-                "Enterprise",
-                "InitSteps",
-                "PreBuildSteps",
-                "PostBuildSteps",
-                "EpicSampleNameHash",
-            )
-            if key in descriptor
-        },
-        "descriptor_top_level_fields": sorted(descriptor.keys()),
-        "unmodeled_top_level_fields": {
-            key: value
-            for key, value in descriptor.items()
-            if key not in KNOWN_TOP_LEVEL_FIELDS
-        },
-        "validation": {
-            "status": "error" if problems else "ok",
-            "problems": problems,
-        },
-    }
+        problems,
+        responsibility="Read explicit facts declared by one .uproject file.",
+        boundaries=[
+            "The result does not locate Engine, Module, Target, or Plugin files.",
+            "Extended Plugin declarations are indexed, not fully interpreted.",
+            "Unmodeled top-level fields are preserved without being judged invalid.",
+        ],
+    )
     return descriptor, result

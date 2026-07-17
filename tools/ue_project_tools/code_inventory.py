@@ -4,7 +4,7 @@ from pathlib import Path
 import re
 from typing import Any
 
-from .common import iter_files, normalized, sha256_file
+from .common import iter_files, normalized, result_document, sha256_file
 
 
 def module_entrypoints(module_dir: Path) -> list[dict[str, str]]:
@@ -89,9 +89,7 @@ def inspect_modules(
                     "code": "project-module-declaration-duplicate",
                     "module_name": name,
                     "descriptor_pointer": f"/Modules/{declaration_index}",
-                    "first_descriptor_pointer": (
-                        f"/Modules/{declaration_indices[0]}"
-                    ),
+                    "first_descriptor_pointer": (f"/Modules/{declaration_indices[0]}"),
                     "message": (
                         f"Module {name} is declared more than once in .uproject"
                     ),
@@ -112,8 +110,7 @@ def inspect_modules(
                 {
                     "path": candidate_path,
                     "sha256": sha256_file(path),
-                    "conventional": candidate_path.casefold()
-                    == conventional_rule_key,
+                    "conventional": candidate_path.casefold() == conventional_rule_key,
                 }
             )
         status = (
@@ -206,19 +203,22 @@ def inspect_modules(
             }
         )
 
-    return {
-        "schema_version": "ue-itps.project-modules.v3",
-        "reconciled_module_count": len(modules),
-        "items": modules,
-        "validation": {
-            "status": "error" if problems else "ok",
-            "problems": problems,
+    return result_document(
+        "ue-itps.project-modules.v4",
+        {
+            "reconciled_module_count": len(modules),
+            "items": modules,
         },
-        "limits": [
+        problems,
+        responsibility=(
+            "Reconcile declared project Modules with Build.cs and entrypoint evidence."
+        ),
+        boundaries=[
             "Build.cs location is discovered by basename; Source/<Name>/<Name>.Build.cs is only conventional.",
             "AdditionalDependencies does not replace Build.cs dependency analysis.",
+            "The result does not evaluate UBT rules, compile Modules, or prove runtime loading.",
         ],
-    }
+    )
 
 
 def inspect_targets(project_root: Path) -> dict[str, Any]:
@@ -243,21 +243,28 @@ def inspect_targets(project_root: Path) -> dict[str, Any]:
         if source_root.is_dir()
         else []
     )
-    return {
-        "schema_version": "ue-itps.project-targets.v1",
-        "count": len(targets),
-        "items": targets,
-        "native_project_evidence": {
-            "rule_id": "ue5.6-project-has-code-root-target",
-            "has_native_targets": bool(root_targets),
-            "root_target_count": len(root_targets),
-            "root_targets": [normalized(path) for path in root_targets],
-            "classification": (
-                "native-project" if root_targets else "undetermined-no-native-target"
-            ),
-            "limits": (
-                "Temporary/hybrid target reasons require UBT-level analysis and "
-                "are not inferred here."
-            ),
+    return result_document(
+        "ue-itps.project-targets.v2",
+        {
+            "count": len(targets),
+            "items": targets,
+            "native_project_evidence": {
+                "rule_id": "ue5.6-project-has-code-root-target",
+                "has_native_targets": bool(root_targets),
+                "root_target_count": len(root_targets),
+                "root_targets": [normalized(path) for path in root_targets],
+                "classification": (
+                    "native-project"
+                    if root_targets
+                    else "undetermined-no-native-target"
+                ),
+            },
         },
-    }
+        [],
+        responsibility="Discover project Target.cs files and native Target evidence.",
+        boundaries=[
+            "Target files are discovered but TargetRules are not evaluated.",
+            "No root Target is valid for Blueprint-only projects and is not an error.",
+            "Temporary or hybrid Target reasons require UBT-level analysis.",
+        ],
+    )

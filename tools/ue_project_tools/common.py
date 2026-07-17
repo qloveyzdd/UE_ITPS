@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import argparse
 import datetime as dt
 import hashlib
 import json
 import os
 from pathlib import Path
+import sys
 from typing import Any, Iterable
 
 
@@ -17,6 +19,88 @@ SKIP_DIRS = {
     "Intermediate",
     "Saved",
 }
+
+
+CLI_EPILOG = """\
+输出契约 / Output contract:
+  schema_version -> 模块事实 / module facts -> validation -> limits
+
+退出码 / Exit codes:
+  0  扫描完成且无阻断问题 / Scan completed without blocking problems
+  1  扫描完成但发现阻断问题 / Scan completed with blocking problems
+  2  参数、输入或读取失败 / Argument, input, or read failure
+"""
+
+
+class BilingualArgumentParser(argparse.ArgumentParser):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._positionals.title = "位置参数 / Positional arguments"
+        self._optionals.title = "选项 / Options"
+        for action in self._actions:
+            if isinstance(action, argparse._HelpAction):
+                action.help = "显示帮助并退出 / Show this help message and exit"
+
+    def format_help(self) -> str:
+        return super().format_help().replace("usage:", "用法 / usage:", 1)
+
+    def format_usage(self) -> str:
+        return super().format_usage().replace("usage:", "用法 / usage:", 1)
+
+
+def cli_parser(
+    description_zh: str,
+    description_en: str,
+    *,
+    epilog: str | None = None,
+) -> argparse.ArgumentParser:
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+    return BilingualArgumentParser(
+        description=f"{description_zh}\n{description_en}",
+        epilog=epilog or CLI_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+
+def validation_result(problems: list[dict[str, Any]]) -> dict[str, Any]:
+    severities = {str(problem.get("severity")) for problem in problems}
+    status = (
+        "error"
+        if "error" in severities
+        else ("warning" if "warning" in severities else "ok")
+    )
+    return {
+        "status": status,
+        "problem_count": len(problems),
+        "problems": problems,
+    }
+
+
+def result_document(
+    schema_version: str,
+    content: dict[str, Any],
+    problems: list[dict[str, Any]],
+    *,
+    responsibility: str,
+    boundaries: list[str],
+) -> dict[str, Any]:
+    reserved = {"schema_version", "validation", "limits"}
+    overlap = reserved.intersection(content)
+    if overlap:
+        raise ValueError(
+            "Result content contains reserved fields: " + ", ".join(sorted(overlap))
+        )
+    return {
+        "schema_version": schema_version,
+        **content,
+        "validation": validation_result(problems),
+        "limits": {
+            "responsibility": responsibility,
+            "boundaries": boundaries,
+        },
+    }
 
 
 def utc_now() -> str:
