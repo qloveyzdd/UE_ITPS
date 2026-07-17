@@ -3,8 +3,12 @@
 
 from pathlib import Path
 
-from ue_project_tools.common import cli_parser, json_text, read_json
-from ue_project_tools.descriptor import resolve_internal_directories
+from ue_project_tools.common import OPERATION_CHOICES, cli_parser, json_text, read_json
+from ue_project_tools.descriptor import (
+    directory_finding_problems,
+    resolve_internal_directories,
+)
+from ue_project_tools.engine import resolve_engine
 from ue_project_tools.plugins import resolve_project_plugins
 
 
@@ -21,14 +25,13 @@ def main() -> int:
     )
     parser.add_argument(
         "--engine-root",
-        required=True,
         metavar="PATH",
-        help="已解析的 Engine 根目录 / Resolved Engine root",
+        help="显式 Engine 根目录覆盖 / Explicit Engine root override",
     )
     parser.add_argument(
         "--operation",
+        choices=OPERATION_CHOICES,
         default="scan",
-        metavar="NAME",
         help="操作上下文，默认 scan / Operation context; default: scan",
     )
     parser.add_argument(
@@ -43,29 +46,42 @@ def main() -> int:
         metavar="NAME",
         help="Target 类型，默认 Editor / Target type; default: Editor",
     )
-    parser.add_argument(
-        "--configuration",
-        default="Development",
-        metavar="NAME",
-        help="构建配置，默认 Development / Build configuration; default: Development",
-    )
     args = parser.parse_args()
     project = Path(args.project).resolve()
     try:
         descriptor = read_json(project)
-        roots, _ = resolve_internal_directories(
+        engine_info = resolve_engine(
+            project,
+            str(descriptor.get("EngineAssociation") or ""),
+            Path(args.engine_root) if args.engine_root else None,
+        )
+        engine_root = (
+            Path(engine_info["engine_root"])
+            if engine_info["status"] == "resolved"
+            else None
+        )
+        roots, directory_findings = resolve_internal_directories(
             project.parent, descriptor, "AdditionalPluginDirectories"
         )
+        initial_problems = [
+            *engine_info["validation"]["problems"],
+            *directory_finding_problems(
+                "AdditionalPluginDirectories",
+                directory_findings,
+                warn_external=True,
+            ),
+        ]
         result = resolve_project_plugins(
             project,
             project.parent,
-            Path(args.engine_root).resolve(),
+            engine_root,
             descriptor.get("Plugins", []),
             roots,
             args.operation,
             args.platform,
             args.target_type,
-            args.configuration,
+            directory_findings,
+            initial_problems,
         )
     except (OSError, ValueError) as exc:
         parser.error(str(exc))

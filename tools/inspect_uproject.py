@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 import sys
 
-from ue_project_tools.common import cli_parser, json_text, write_text
+from ue_project_tools.common import OPERATION_CHOICES, cli_parser, json_text, write_text
 from ue_project_tools.report import markdown_report
 from ue_project_tools.snapshot import build_snapshot
 
@@ -41,7 +41,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--operation",
-        choices=("scan", "open_editor", "build_editor", "run_game", "cook_package"),
+        choices=OPERATION_CHOICES,
         default="scan",
         help="操作上下文 / Operation context (default: scan)",
     )

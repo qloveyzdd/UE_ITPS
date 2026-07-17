@@ -140,19 +140,19 @@ python tools\ue_inspect_targets.py --project $Project
 
 ### 6. 定位直接 Plugin 引用
 
-先解析 Engine 根目录，再传给 Plugin 工具：
+Plugin 工具会根据 `.uproject` 的 `EngineAssociation` 自动解析 Engine 根目录：
 
 ```powershell
-$Engine = python tools\ue_resolve_engine.py --project $Project | ConvertFrom-Json
-
 python tools\ue_resolve_plugins.py `
   --project $Project `
-  --engine-root $Engine.engine_root `
   --operation scan `
   --platform Win64 `
-  --target-type Editor `
-  --configuration Development
+  --target-type Editor
 ```
+
+当自动解析存在歧义、注册表不可用或需要指定自定义 Engine 时，可额外传入 `--engine-root <path>` 覆盖自动结果。
+
+Plugin v4 输出在 `path_roots` 中只记录一次项目和 Engine 绝对根路径，逐项 `descriptor` 使用对应根的相对路径。正常项从 `item_defaults` 继承省略的默认状态；未定位、候选冲突或关联诊断的问题项保留全部建模字段。工具只定位 `.uplugin` 路径，不读取或计算 Plugin 描述符哈希。
 
 当前只解析 `.uproject` 的直接 Plugin 引用，不计算 `.uplugin` 传递依赖和默认启用插件闭包。
 

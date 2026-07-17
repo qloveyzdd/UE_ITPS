@@ -70,7 +70,7 @@ Codex / 用户
 | `ue_resolve_engine.py` | 解析 Engine 与 `Build.version` | `.uproject`、可选 Engine override | `ue-itps.engine-resolution.v2` |
 | `ue_inspect_modules.py` | 对账项目 Module 结构 | `.uproject` | `ue-itps.project-modules.v4` |
 | `ue_inspect_targets.py` | 发现 Target 与原生 Target 证据 | `.uproject` | `ue-itps.project-targets.v2` |
-| `ue_resolve_plugins.py` | 定位直接 Plugin 引用 | `.uproject`、Engine root、Profile | `ue-itps.project-plugin-references.v3` |
+| `ue_resolve_plugins.py` | 定位直接 Plugin 引用 | `.uproject`、可选 Engine override、Profile | `ue-itps.project-plugin-references.v4` |
 | `ue_classify_project_paths.py` | 分类项目根路径 | `.uproject` | `ue-itps.project-paths.v2` |
 | `inspect_uproject.py` | 组合已有结果 | 全部扫描上下文 | `ue-itps.uproject-structure.v5` |
 
@@ -145,6 +145,8 @@ configuration
 
 默认 Profile 为 `scan / Win64 / Editor / Development`。在 `scan` 下，程序只陈述声明、定位和适用性，不把目录或插件直接判定为某个运行场景的最小必需项。
 
+聚焦 Plugin 工具只接受 `operation / platform / target_type`；`configuration` 保留在完整快照上下文中，不参与 Plugin 适用性判断。
+
 完整的必需性计算还需要 TargetRules、Build.cs、`.uplugin` 闭包、Config 合并、资产可达性和实际构建/运行证据。
 
 ## 6. 诊断与退出码
@@ -170,8 +172,11 @@ configuration
 - 多个 `.uproject` 返回歧义，不沿用“取第一个”策略。
 - `AdditionalRootDirectories` 和 `AdditionalPluginDirectories` 先规范化路径。
 - 指向项目外部的 Additional 目录默认标记为 `skipped_external`，不遍历。
+- 聚焦 Plugin 输出保留 `AdditionalPluginDirectories` findings；非法条目为错误，跳过外部目录为警告。
 - 项目 Plugin 优先于 Engine Plugin；其他候选保留在 `alternate_descriptors` 中。
-- Plugin 声明仅含 `Name`/`Enabled` 时压缩到简单启用或禁用列表；出现其他字段时记录为 `extended` 并保留原始 JSON Pointer。
+- Plugin v4 在 `path_roots` 中集中记录项目与 Engine 绝对根；描述符路径按 `origin` 相对对应根保存。
+- 正常 Plugin 项从 `item_defaults` 继承省略状态；未定位、候选冲突或关联诊断的问题项保留全部建模字段。
+- Plugin 声明仅含 `Name`/`Enabled` 时压缩到简单启用或禁用列表；出现其他字段时记录为 `extended` 并保留原始 JSON Pointer；重复名称进入阻断诊断。
 - `extended` 表示需要回读完整声明，不保证每个额外字段都是启用条件；非法声明进入验证问题。
 - `Binaries` 对源码项目通常是生成物，但对纯预编译分发可能是条件输入。
 - `Saved/Logs` 可以作为运行证据来源，但不能反向成为源码权威。
@@ -216,7 +221,7 @@ Warnings: 2 Optional Plugin descriptors not resolved
 ### 正确性
 
 1. Plugin 工具只解析 `.uproject` 直接引用，没有计算 Engine 默认插件、项目插件默认值和 `.uplugin` 传递依赖闭包。
-2. Plugin Profile 过滤只覆盖基础 Platform/Target 字段，尚未完整实现 TargetConfiguration、Program、GameTarget 和 `HasExplicitPlatforms` 语义。
+2. Plugin Profile 过滤只覆盖基础 Platform/Target 字段；聚焦工具不接受 configuration，TargetConfiguration、Program、GameTarget 和 `HasExplicitPlatforms` 语义不参与适用性判断。
 3. Module 定位按 `*.Build.cs` basename 搜索，尚未使用 UBT 规则程序集证明最终选中项。
 4. Target 工具只发现文件，不解析 `TargetRules` 继承、TargetType、CustomConfig 或编译插件选择。
 5. 项目类型只记录根 Target 证据，尚未分析 UBT 临时 Target/hybrid 项目原因。
@@ -238,7 +243,7 @@ Warnings: 2 Optional Plugin descriptors not resolved
 ### 测试
 
 1. 当前只有描述符压缩契约的最小自动化 fixture 和真实 Lyra smoke test，尚未形成完整测试套件。
-2. 未覆盖无项目、多项目、非法 JSON、FileVersion 变体、Engine 解析歧义、外部 Additional 目录、重复插件和 Profile 过滤矩阵。
+2. 尚未完整覆盖无项目、多项目、非法 JSON、FileVersion 变体、Engine 解析歧义和 Profile 过滤矩阵。
 3. Markdown renderer 与兼容快照之间没有 schema contract test。
 
 ## 11. 建议优化顺序

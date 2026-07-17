@@ -75,7 +75,7 @@ class CliOutputContractTests(unittest.TestCase):
                 ("ue-itps.project-modules.v4", inspect_modules(root, [], [])),
                 ("ue-itps.project-targets.v2", inspect_targets(root)),
                 (
-                    "ue-itps.project-plugin-references.v3",
+                    "ue-itps.project-plugin-references.v4",
                     resolve_project_plugins(
                         project,
                         root,
@@ -85,7 +85,6 @@ class CliOutputContractTests(unittest.TestCase):
                         "scan",
                         "Win64",
                         "Editor",
-                        "Development",
                     ),
                 ),
                 (
@@ -114,7 +113,7 @@ class CliOutputContractTests(unittest.TestCase):
                     "engine": "ue-itps.engine-resolution.v2",
                     "modules": "ue-itps.project-modules.v4",
                     "targets": "ue-itps.project-targets.v2",
-                    "plugins": "ue-itps.project-plugin-references.v3",
+                    "plugins": "ue-itps.project-plugin-references.v4",
                     "paths": "ue-itps.project-paths.v2",
                 },
             )
@@ -261,6 +260,142 @@ class CliOutputContractTests(unittest.TestCase):
             result["validation"]["problems"][0]["code"],
             "project-discovery-not-found",
         )
+
+    def test_plugin_cli_resolves_engine_from_project_association(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project_root = root / "Project"
+            project_root.mkdir()
+            project = project_root / "Fixture.uproject"
+            project.write_text(
+                json.dumps(
+                    {
+                        "FileVersion": 3,
+                        "EngineAssociation": "../EngineInstall",
+                        "Plugins": [{"Name": "FixturePlugin", "Enabled": True}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            engine_root = root / "EngineInstall"
+            build_file = engine_root / "Engine" / "Build" / "Build.version"
+            build_file.parent.mkdir(parents=True)
+            build_file.write_text(
+                json.dumps(
+                    {"MajorVersion": 5, "MinorVersion": 6, "PatchVersion": 1}
+                ),
+                encoding="utf-8",
+            )
+            plugin_file = (
+                engine_root
+                / "Engine"
+                / "Plugins"
+                / "Runtime"
+                / "FixturePlugin"
+                / "FixturePlugin.uplugin"
+            )
+            plugin_file.parent.mkdir(parents=True)
+            plugin_file.write_text(json.dumps({"FileVersion": 3}), encoding="utf-8")
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(TOOLS_ROOT / "ue_resolve_plugins.py"),
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPOSITORY_ROOT,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=False,
+            )
+
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stderr, "")
+        result = json.loads(completed.stdout)
+        self.assert_envelope(result)
+        self.assertEqual(result["validation"]["status"], "ok")
+        self.assertEqual(result["resolved_count"], 1)
+        self.assertEqual(result["path_roots"]["project"], project_root.as_posix())
+        self.assertEqual(result["path_roots"]["engine"], engine_root.as_posix())
+        self.assertEqual(result["project_descriptor"]["path"], "Fixture.uproject")
+        self.assertEqual(result["items"][0]["origin"], "engine")
+        self.assertEqual(
+            result["items"][0]["descriptor"],
+            "Engine/Plugins/Runtime/FixturePlugin/FixturePlugin.uplugin",
+        )
+        self.assertNotIn("declared_enabled", result["items"][0])
+        self.assertNotIn("descriptor_sha256", result["items"][0])
+        self.assertNotIn("configuration", result["profile"])
+
+    def test_plugin_cli_reports_engine_resolution_failure_as_json(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "Fixture.uproject"
+            project.write_text(
+                json.dumps(
+                    {
+                        "FileVersion": 3,
+                        "EngineAssociation": "../MissingEngine",
+                        "Plugins": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(TOOLS_ROOT / "ue_resolve_plugins.py"),
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPOSITORY_ROOT,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=False,
+            )
+
+        self.assertEqual(completed.returncode, 1)
+        self.assertEqual(completed.stderr, "")
+        result = json.loads(completed.stdout)
+        self.assert_envelope(result)
+        self.assertEqual(result["validation"]["status"], "error")
+        self.assertEqual(
+            result["validation"]["problems"][0]["code"], "engine-unresolved"
+        )
+        self.assertIsNone(result["path_roots"]["engine"])
+
+    def test_plugin_cli_rejects_unknown_operation_and_has_no_configuration(self) -> None:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(TOOLS_ROOT / "ue_resolve_plugins.py"),
+                "--project",
+                "Fixture.uproject",
+                "--operation",
+                "typo",
+            ],
+            cwd=REPOSITORY_ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+        help_result = subprocess.run(
+            [sys.executable, str(TOOLS_ROOT / "ue_resolve_plugins.py"), "--help"],
+            cwd=REPOSITORY_ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+
+        self.assertEqual(completed.returncode, 2)
+        self.assertEqual(completed.stdout, "")
+        self.assertIn("invalid choice", completed.stderr)
+        self.assertNotIn("--configuration", help_result.stdout)
 
     def test_all_cli_help_is_bilingual(self) -> None:
         for script in CLI_SCRIPTS:

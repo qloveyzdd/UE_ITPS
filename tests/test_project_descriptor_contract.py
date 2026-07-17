@@ -11,7 +11,11 @@ TOOLS_ROOT = Path(__file__).resolve().parents[1] / "tools"
 sys.path.insert(0, str(TOOLS_ROOT))
 
 from ue_project_tools.code_inventory import inspect_modules
-from ue_project_tools.descriptor import descriptor_result
+from ue_project_tools.descriptor import (
+    descriptor_result,
+    directory_finding_problems,
+    resolve_internal_directories,
+)
 from ue_project_tools.plugins import resolve_project_plugins
 
 
@@ -86,6 +90,95 @@ class ProjectDescriptorContractTests(unittest.TestCase):
                 result["validation"]["problems"][0]["code"],
                 "invalid-plugin-reference",
             )
+
+    def test_descriptor_rejects_invalid_directories_and_duplicate_plugins(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            project_file = Path(temporary_directory) / "Fixture.uproject"
+            self.write_json(
+                project_file,
+                {
+                    "FileVersion": 3,
+                    "Plugins": [
+                        {"Name": "FixturePlugin", "Enabled": True},
+                        {"Name": "fixtureplugin", "Enabled": False},
+                    ],
+                    "AdditionalPluginDirectories": "Plugins",
+                },
+            )
+
+            _, result = descriptor_result(project_file)
+
+        problems = {
+            problem["code"]: problem
+            for problem in result["validation"]["problems"]
+        }
+        self.assertEqual(result["validation"]["status"], "error")
+        self.assertEqual(
+            problems["duplicate-plugin-reference"]["descriptor_pointers"],
+            ["/Plugins/0", "/Plugins/1"],
+        )
+        self.assertEqual(
+            problems["invalid-additional-directory"]["descriptor_pointer"],
+            "/AdditionalPluginDirectories",
+        )
+
+    def test_external_additional_plugin_directory_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            project_root = Path(temporary_directory) / "Project"
+            project_root.mkdir()
+            project_file = project_root / "Fixture.uproject"
+            self.write_json(project_file, {"FileVersion": 3, "Plugins": []})
+            descriptor = {"AdditionalPluginDirectories": ["../ExternalPlugins"]}
+            roots, findings = resolve_internal_directories(
+                project_root, descriptor, "AdditionalPluginDirectories"
+            )
+            problems = directory_finding_problems(
+                "AdditionalPluginDirectories", findings, warn_external=True
+            )
+            result = resolve_project_plugins(
+                project_file,
+                project_root,
+                None,
+                [],
+                roots,
+                "scan",
+                "Win64",
+                "Editor",
+                findings,
+                problems,
+            )
+
+        self.assertEqual(roots, [])
+        self.assertEqual(findings[0]["status"], "skipped_external")
+        self.assertEqual(
+            problems[0]["code"], "external-additional-plugin-directory-skipped"
+        )
+        self.assertEqual(result["additional_plugin_directories"], findings)
+        self.assertEqual(result["validation"]["status"], "warning")
+
+    def test_plugin_resolution_rejects_non_array_declarations(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            project_root = Path(temporary_directory)
+            project_file = project_root / "Fixture.uproject"
+            self.write_json(project_file, {"FileVersion": 3, "Plugins": 42})
+
+            result = resolve_project_plugins(
+                project_file,
+                project_root,
+                None,
+                42,
+                [],
+                "scan",
+                "Win64",
+                "Editor",
+            )
+
+        self.assertEqual(result["items"], [])
+        self.assertEqual(result["validation"]["status"], "error")
+        self.assertEqual(
+            result["validation"]["problems"][0]["code"],
+            "invalid-plugin-references",
+        )
 
     def test_module_inspection_does_not_repeat_raw_declaration(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -266,6 +359,7 @@ class ProjectDescriptorContractTests(unittest.TestCase):
             declarations = [
                 {"Name": "FixturePlugin", "Enabled": True},
                 {"Name": "OptionalPlugin", "Enabled": True, "Optional": True},
+                {"Name": "DisabledPlugin", "Enabled": False},
             ]
             self.write_json(
                 project_file,
@@ -278,6 +372,13 @@ class ProjectDescriptorContractTests(unittest.TestCase):
                 / "FixturePlugin.uplugin",
                 {"FileVersion": 3},
             )
+            self.write_json(
+                project_root
+                / "Plugins"
+                / "DisabledPlugin"
+                / "DisabledPlugin.uplugin",
+                {"FileVersion": 3},
+            )
 
             result = resolve_project_plugins(
                 project_file,
@@ -288,18 +389,46 @@ class ProjectDescriptorContractTests(unittest.TestCase):
                 "scan",
                 "Win64",
                 "Editor",
-                "Development",
             )
 
             self.assertEqual(
                 result["schema_version"],
-                "ue-itps.project-plugin-references.v3",
+                "ue-itps.project-plugin-references.v4",
             )
             self.assertEqual(result["declared_enabled_count"], 2)
-            self.assertEqual(result["declared_disabled_count"], 0)
+            self.assertEqual(result["declared_disabled_count"], 1)
             self.assertIsNotNone(result["project_descriptor"]["sha256"])
-            self.assertTrue(result["items"][0]["declared_enabled"])
+            self.assertEqual(result["project_descriptor"]["path"], "Fixture.uproject")
+            self.assertEqual(
+                result["items"][0]["descriptor"],
+                "Plugins/FixturePlugin/FixturePlugin.uplugin",
+            )
+            self.assertTrue(result["item_defaults"]["declared_enabled"])
+            self.assertNotIn("declared_enabled", result["items"][0])
+            self.assertNotIn("descriptor_pointer", result["items"][0])
+            self.assertNotIn("descriptor_sha256", result["items"][0])
             self.assertNotIn("raw_declaration", result["items"][0])
+            self.assertEqual(result["items"][1]["status"], "not-found")
+            self.assertTrue(result["items"][1]["declared_enabled"])
+            self.assertIsNone(result["items"][1]["descriptor"])
+            self.assertEqual(result["items"][1]["alternate_descriptors"], [])
+            self.assertEqual(result["items"][1]["filters"], {})
+            self.assertNotIn("descriptor_sha256", result["items"][1])
+            self.assertFalse(result["items"][2]["declared_enabled"])
+            self.assertNotIn("status", result["items"][2])
+
+            result["item_defaults"]["filters"]["mutated"] = True
+            second_result = resolve_project_plugins(
+                project_file,
+                project_root,
+                None,
+                declarations,
+                [],
+                "scan",
+                "Win64",
+                "Editor",
+            )
+            self.assertEqual(second_result["item_defaults"]["filters"], {})
 
 
 if __name__ == "__main__":

@@ -54,7 +54,7 @@ def build_snapshot(
         operation,
         platform,
         target_type,
-        configuration,
+        additional_plugin_findings,
     )
     path_info = classify_project_paths(project_root, project_file)
 

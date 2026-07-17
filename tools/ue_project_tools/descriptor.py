@@ -30,16 +30,47 @@ PLUGIN_CORE_FIELDS = {"Name", "Enabled"}
 
 def resolve_internal_directories(
     project_root: Path, descriptor: dict[str, Any], field: str
-) -> tuple[list[Path], list[dict[str, str]]]:
+) -> tuple[list[Path], list[dict[str, Any]]]:
     roots: list[Path] = []
-    findings: list[dict[str, str]] = []
-    for index, raw in enumerate(descriptor.get(field, [])):
-        if not isinstance(raw, str):
+    findings: list[dict[str, Any]] = []
+    raw_entries = descriptor.get(field, [])
+    if not isinstance(raw_entries, list):
+        return roots, [
+            {
+                "descriptor_pointer": f"/{field}",
+                "raw": raw_entries,
+                "resolved": None,
+                "status": "invalid",
+            }
+        ]
+
+    for index, raw in enumerate(raw_entries):
+        pointer = f"/{field}/{index}"
+        if not isinstance(raw, str) or not raw:
+            findings.append(
+                {
+                    "descriptor_pointer": pointer,
+                    "raw": raw,
+                    "resolved": None,
+                    "status": "invalid",
+                }
+            )
             continue
-        candidate = Path(raw).expanduser()
-        candidate = (
-            candidate if candidate.is_absolute() else project_root / candidate
-        ).resolve()
+        try:
+            candidate = Path(raw).expanduser()
+            candidate = (
+                candidate if candidate.is_absolute() else project_root / candidate
+            ).resolve()
+        except (OSError, RuntimeError, ValueError):
+            findings.append(
+                {
+                    "descriptor_pointer": pointer,
+                    "raw": raw,
+                    "resolved": None,
+                    "status": "invalid",
+                }
+            )
+            continue
         try:
             candidate.relative_to(project_root.resolve())
             roots.append(candidate)
@@ -48,7 +79,7 @@ def resolve_internal_directories(
             status = "skipped_external"
         findings.append(
             {
-                "descriptor_pointer": f"/{field}/{index}",
+                "descriptor_pointer": pointer,
                 "raw": raw,
                 "resolved": normalized(candidate),
                 "status": status,
@@ -57,13 +88,49 @@ def resolve_internal_directories(
     return roots, findings
 
 
+def directory_finding_problems(
+    field: str,
+    findings: list[dict[str, Any]],
+    *,
+    warn_external: bool = False,
+) -> list[dict[str, Any]]:
+    problems: list[dict[str, Any]] = []
+    for finding in findings:
+        status = finding["status"]
+        if status == "invalid":
+            problems.append(
+                {
+                    "severity": "error",
+                    "code": "invalid-additional-directory",
+                    "descriptor_pointer": finding["descriptor_pointer"],
+                    "message": (
+                        f"{field} entries must be non-empty path strings"
+                    ),
+                }
+            )
+        elif status == "skipped_external" and warn_external:
+            problems.append(
+                {
+                    "severity": "warning",
+                    "code": "external-additional-plugin-directory-skipped",
+                    "descriptor_pointer": finding["descriptor_pointer"],
+                    "message": (
+                        "External AdditionalPluginDirectories entry was not scanned: "
+                        f"{finding['resolved']}"
+                    ),
+                }
+            )
+    return problems
+
+
 def classify_plugin_declarations(
     declarations: Any,
-) -> tuple[dict[str, Any], list[dict[str, str]]]:
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     enabled: list[str] = []
     disabled: list[str] = []
     extended: list[dict[str, Any]] = []
-    problems: list[dict[str, str]] = []
+    problems: list[dict[str, Any]] = []
+    first_pointer_by_name: dict[str, str] = {}
 
     if not isinstance(declarations, list):
         problems.append(
@@ -97,6 +164,23 @@ def classify_plugin_declarations(
             continue
 
         name = raw["Name"]
+        folded_name = name.casefold()
+        first_pointer = first_pointer_by_name.get(folded_name)
+        if first_pointer:
+            problems.append(
+                {
+                    "severity": "error",
+                    "code": "duplicate-plugin-reference",
+                    "descriptor_pointer": pointer,
+                    "descriptor_pointers": [first_pointer, pointer],
+                    "message": (
+                        f"Plugin {name} is declared more than once at "
+                        f"{first_pointer} and {pointer}"
+                    ),
+                }
+            )
+        else:
+            first_pointer_by_name[folded_name] = pointer
         declared_enabled = raw["Enabled"]
         additional_fields = sorted(set(raw) - PLUGIN_CORE_FIELDS)
         if additional_fields:
@@ -132,7 +216,7 @@ def descriptor_result(project_file: Path) -> tuple[dict[str, Any], dict[str, Any
     project_file = project_file.resolve()
     descriptor = read_json(project_file)
     file_version = descriptor.get("FileVersion", descriptor.get("ProjectFileVersion"))
-    problems: list[dict[str, str]] = []
+    problems: list[dict[str, Any]] = []
     if not isinstance(file_version, int) or file_version not in {1, 2, 3}:
         problems.append(
             {
@@ -162,6 +246,16 @@ def descriptor_result(project_file: Path) -> tuple[dict[str, Any], dict[str, Any
     )
     _, additional_plugins = resolve_internal_directories(
         project_file.parent, descriptor, "AdditionalPluginDirectories"
+    )
+    problems.extend(
+        directory_finding_problems("AdditionalRootDirectories", additional_roots)
+    )
+    problems.extend(
+        directory_finding_problems(
+            "AdditionalPluginDirectories",
+            additional_plugins,
+            warn_external=True,
+        )
     )
     result = result_document(
         "ue-itps.project-descriptor.v4",

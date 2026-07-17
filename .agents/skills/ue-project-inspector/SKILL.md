@@ -55,13 +55,23 @@ python tools/ue_inspect_targets.py --project <project>
 python tools/ue_classify_project_paths.py --project <project>
 ```
 
-Plugin resolution requires the Engine root returned by `ue_resolve_engine.py`:
+Plugin resolution derives the Engine root from the project's `EngineAssociation` by default. Pass `--engine-root` only as an explicit override:
 
 ```powershell
-python tools/ue_resolve_plugins.py --project <project> --engine-root <engine-root> --operation scan --platform Win64 --target-type Editor --configuration Development
+python tools/ue_resolve_plugins.py --project <project> --operation scan --platform Win64 --target-type Editor
 ```
 
-Use `Win64 / Editor / Development` only as the default inspection profile. If the user provides another platform, target type, configuration, or operation, pass it through and state the active profile.
+Use `Win64 / Editor` only as the default focused Plugin profile. If the user provides another platform, target type, or operation, pass it through and state the active profile. Configuration remains part of the complete snapshot context but is intentionally not evaluated by the focused Plugin tool.
+
+## Interpret Plugin v4
+
+Treat `ue-itps.project-plugin-references.v4` items as sparse records:
+
+- `path_roots.project` and `.engine` are absolute roots recorded once. Plugin `descriptor` paths are relative to the project root for `project*` and `additional-project-*` origins, or to the Engine root for `engine*` origins.
+- `project_descriptor.path` is relative to `path_roots.project`; compare its `sha256` with descriptor results when combining scans.
+- A missing state field inherits its value from `item_defaults`; absence is not an unknown value.
+- Normal resolved items keep only name, origin, relative descriptor path, and state fields that differ from defaults. Plugin descriptor contents and hashes are not read.
+- Not-found items, alternate descriptor conflicts, and items associated with validation problems retain every modeled field, including empty values.
 
 ## Interpret descriptor v4
 

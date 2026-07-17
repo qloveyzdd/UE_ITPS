@@ -20,6 +20,14 @@ SKIP_DIRS = {
     "Saved",
 }
 
+OPERATION_CHOICES = (
+    "scan",
+    "open_editor",
+    "build_editor",
+    "run_game",
+    "cook_package",
+)
+
 
 CLI_EPILOG = """\
 输出契约 / Output contract:
