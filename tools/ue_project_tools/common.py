@@ -119,9 +119,26 @@ def normalized(path: Path) -> str:
     return str(path.resolve()).replace("\\", "/")
 
 
+def _reject_json_constant(value: str) -> Any:
+    raise ValueError(f"Non-standard JSON constant is not allowed: {value}")
+
+
+def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError(f"Duplicate JSON object key: {key!r}")
+        value[key] = item
+    return value
+
+
 def read_json(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8-sig") as handle:
-        value = json.load(handle)
+        value = json.load(
+            handle,
+            object_pairs_hook=_unique_json_object,
+            parse_constant=_reject_json_constant,
+        )
     if not isinstance(value, dict):
         raise ValueError(f"Expected a JSON object: {path}")
     return value

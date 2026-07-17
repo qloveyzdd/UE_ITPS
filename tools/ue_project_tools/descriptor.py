@@ -26,6 +26,7 @@ KNOWN_TOP_LEVEL_FIELDS = {
 }
 
 PLUGIN_CORE_FIELDS = {"Name", "Enabled"}
+OPTIONAL_STRING_FIELDS = ("EngineAssociation", "Category", "Description")
 
 
 def resolve_internal_directories(
@@ -201,11 +202,6 @@ def classify_plugin_declarations(
 
     return (
         {
-            "count": len(declarations),
-            "enabled_count": len(enabled),
-            "disabled_count": len(disabled),
-            "extended_count": len(extended),
-            "invalid_count": len(problems),
             "enabled": enabled,
             "disabled": disabled,
             "extended": extended,
@@ -214,12 +210,86 @@ def classify_plugin_declarations(
     )
 
 
+def classify_module_declarations(
+    declarations: Any,
+) -> tuple[list[str], list[dict[str, Any]]]:
+    names: list[str] = []
+    problems: list[dict[str, Any]] = []
+    first_pointer_by_name: dict[str, str] = {}
+
+    if not isinstance(declarations, list):
+        return names, [
+            {
+                "severity": "error",
+                "code": "invalid-module-declarations",
+                "message": ".uproject Modules must be an array",
+            }
+        ]
+
+    for index, raw in enumerate(declarations):
+        pointer = f"/Modules/{index}"
+        if (
+            not isinstance(raw, dict)
+            or not isinstance(raw.get("Name"), str)
+            or not raw["Name"]
+        ):
+            problems.append(
+                {
+                    "severity": "error",
+                    "code": "invalid-module-declaration",
+                    "descriptor_pointer": pointer,
+                    "message": (
+                        f"Module declaration at {pointer} requires a non-empty "
+                        "string Name"
+                    ),
+                }
+            )
+            continue
+
+        name = raw["Name"]
+        names.append(name)
+        folded_name = name.casefold()
+        first_pointer = first_pointer_by_name.get(folded_name)
+        if first_pointer:
+            problems.append(
+                {
+                    "severity": "error",
+                    "code": "duplicate-module-declaration",
+                    "descriptor_pointer": pointer,
+                    "descriptor_pointers": [first_pointer, pointer],
+                    "message": (
+                        f"Module {name} is declared more than once at "
+                        f"{first_pointer} and {pointer}"
+                    ),
+                }
+            )
+        else:
+            first_pointer_by_name[folded_name] = pointer
+
+    return names, problems
+
+
+def validate_core_field_types(descriptor: dict[str, Any]) -> list[dict[str, Any]]:
+    problems: list[dict[str, Any]] = []
+    for field in OPTIONAL_STRING_FIELDS:
+        if field in descriptor and not isinstance(descriptor[field], str):
+            problems.append(
+                {
+                    "severity": "error",
+                    "code": "invalid-project-field-type",
+                    "descriptor_pointer": f"/{field}",
+                    "message": f".uproject {field} must be a string",
+                }
+            )
+    return problems
+
+
 def descriptor_result(project_file: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     project_file = project_file.resolve()
     descriptor = read_json(project_file)
     file_version = descriptor.get("FileVersion", descriptor.get("ProjectFileVersion"))
     problems: list[dict[str, Any]] = []
-    if not isinstance(file_version, int) or file_version not in {1, 2, 3}:
+    if type(file_version) is not int or file_version not in {1, 2, 3}:
         problems.append(
             {
                 "severity": "error",
@@ -233,15 +303,11 @@ def descriptor_result(project_file: Path) -> tuple[dict[str, Any], dict[str, Any
     )
     problems.extend(plugin_problems)
     module_declarations = descriptor.get("Modules", [])
-    declared_modules = (
-        [
-            raw["Name"]
-            for raw in module_declarations
-            if isinstance(raw, dict) and isinstance(raw.get("Name"), str)
-        ]
-        if isinstance(module_declarations, list)
-        else []
+    declared_modules, module_problems = classify_module_declarations(
+        module_declarations
     )
+    problems.extend(module_problems)
+    problems.extend(validate_core_field_types(descriptor))
 
     _, additional_roots = resolve_internal_directories(
         project_file, descriptor, "AdditionalRootDirectories"

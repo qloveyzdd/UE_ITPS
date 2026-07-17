@@ -11,6 +11,7 @@ TOOLS_ROOT = Path(__file__).resolve().parents[1] / "tools"
 sys.path.insert(0, str(TOOLS_ROOT))
 
 from ue_project_tools.code_inventory import inspect_modules
+from ue_project_tools.common import read_json
 from ue_project_tools.descriptor import (
     descriptor_result,
     directory_finding_problems,
@@ -23,6 +24,104 @@ class ProjectDescriptorContractTests(unittest.TestCase):
     def write_json(self, path: Path, value: object) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(value), encoding="utf-8")
+
+    def test_json_reader_rejects_duplicate_keys_and_nonstandard_constants(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "Fixture.uproject"
+            cases = (
+                ('{"FileVersion": 3, "FileVersion": 2}', "Duplicate JSON object key"),
+                ('{"FileVersion": NaN}', "Non-standard JSON constant"),
+                ('{"FileVersion": Infinity}', "Non-standard JSON constant"),
+                ('{"FileVersion": -Infinity}', "Non-standard JSON constant"),
+            )
+
+            for content, expected_message in cases:
+                with self.subTest(content=content):
+                    path.write_text(content, encoding="utf-8")
+                    with self.assertRaisesRegex(ValueError, expected_message):
+                        read_json(path)
+
+    def test_json_reader_rejects_malformed_structure(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "Fixture.uproject"
+            cases = (
+                '{"FileVersion": 3',
+                '{"Modules": [}',
+                '{"Plugins": [],}',
+            )
+
+            for content in cases:
+                with self.subTest(content=content):
+                    path.write_text(content, encoding="utf-8")
+                    with self.assertRaises(ValueError):
+                        read_json(path)
+
+    def test_descriptor_validates_modules_and_core_field_types(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            project_file = Path(temporary_directory) / "Fixture.uproject"
+            self.write_json(
+                project_file,
+                {
+                    "FileVersion": 3,
+                    "EngineAssociation": 5,
+                    "Category": [],
+                    "Description": {},
+                    "Modules": [
+                        {"Name": "Fixture"},
+                        {"Name": "fixture"},
+                        {"Name": ""},
+                        {"Type": "Runtime"},
+                        42,
+                    ],
+                    "Plugins": [],
+                },
+            )
+
+            _, result = descriptor_result(project_file)
+
+        self.assertEqual(result["declared_modules"], ["Fixture", "fixture"])
+        self.assertEqual(result["validation"]["status"], "error")
+        problems = result["validation"]["problems"]
+        self.assertEqual(
+            {
+                problem.get("descriptor_pointer")
+                for problem in problems
+                if problem["code"] == "invalid-project-field-type"
+            },
+            {"/EngineAssociation", "/Category", "/Description"},
+        )
+        duplicate = next(
+            problem
+            for problem in problems
+            if problem["code"] == "duplicate-module-declaration"
+        )
+        self.assertEqual(
+            duplicate["descriptor_pointers"], ["/Modules/0", "/Modules/1"]
+        )
+        self.assertEqual(
+            {
+                problem["descriptor_pointer"]
+                for problem in problems
+                if problem["code"] == "invalid-module-declaration"
+            },
+            {"/Modules/2", "/Modules/3", "/Modules/4"},
+        )
+
+    def test_descriptor_rejects_non_array_modules_and_boolean_file_version(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            project_file = Path(temporary_directory) / "Fixture.uproject"
+            self.write_json(
+                project_file,
+                {"FileVersion": True, "Modules": {}, "Plugins": []},
+            )
+
+            _, result = descriptor_result(project_file)
+
+        self.assertEqual(result["declared_modules"], [])
+        self.assertEqual(
+            {problem["code"] for problem in result["validation"]["problems"]},
+            {"unsupported-project-file-version", "invalid-module-declarations"},
+        )
 
     def test_descriptor_compacts_modules_and_plugin_declarations(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -68,11 +167,6 @@ class ProjectDescriptorContractTests(unittest.TestCase):
             self.assertEqual(
                 result["plugin_declarations"],
                 {
-                    "count": 4,
-                    "enabled_count": 1,
-                    "disabled_count": 1,
-                    "extended_count": 1,
-                    "invalid_count": 1,
                     "enabled": ["SimpleEnabled"],
                     "disabled": ["SimpleDisabled"],
                     "extended": [
