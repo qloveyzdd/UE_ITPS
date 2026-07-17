@@ -1,0 +1,622 @@
+{
+  "schema_version": "ue-itps.project-plugin-references.v4",
+  "path_roots": {
+    "project": "E:/UE_ITPS/LyraStarterGame",
+    "engine": "D:/UnrealEngine_5.6"
+  },
+  "project_descriptor": {
+    "path": "LyraStarterGame.uproject",
+    "sha256": "a42824b8d829dc00b290ada29ba94cb5f5cbdfe517cdace2b84714cf5cde27ff"
+  },
+  "additional_plugin_directories": [],
+  "item_defaults": {
+    "declared_enabled": true,
+    "optional": false,
+    "applicable_for_context": true,
+    "status": "resolved",
+    "additional_fields": [],
+    "alternate_descriptors": [],
+    "filters": {}
+  },
+  "profile": {
+    "operation": "scan",
+    "platform": "Win64",
+    "target_type": "Editor"
+  },
+  "count": 81,
+  "declared_enabled_count": 69,
+  "declared_disabled_count": 12,
+  "resolved_count": 69,
+  "declared_enabled_applicable_count": 68,
+  "declared_enabled_applicable_resolved_count": 66,
+  "project_descriptor_count": 15,
+  "engine_descriptor_count": 54,
+  "items": [
+    {
+      "name": "ActorPalette",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Experimental/ActorPalette/ActorPalette.uplugin"
+    },
+    {
+      "name": "AESGCMHandlerComponent",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Runtime/PacketHandlers/AESGCMHandlerComponent/AESGCMHandlerComponent.uplugin"
+    },
+    {
+      "name": "DTLSHandlerComponent",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Runtime/PacketHandlers/DTLSHandlerComponent/DTLSHandlerComponent.uplugin"
+    },
+    {
+      "name": "GameplayAbilities",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Runtime/GameplayAbilities/GameplayAbilities.uplugin"
+    },
+    {
+      "name": "Gauntlet",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Experimental/Gauntlet/Gauntlet.uplugin"
+    },
+    {
+      "name": "D3DExternalGPUStatistics",
+      "descriptor_pointer": "/Plugins/5",
+      "declared_enabled": true,
+      "optional": true,
+      "additional_fields": [
+        "Optional",
+        "SupportedTargetPlatforms"
+      ],
+      "applicable_for_context": true,
+      "status": "not-found",
+      "origin": null,
+      "descriptor": null,
+      "alternate_descriptors": [],
+      "filters": {
+        "SupportedTargetPlatforms": [
+          "Win64"
+        ]
+      }
+    },
+    {
+      "name": "CommonLoadingScreen",
+      "origin": "project",
+      "descriptor": "Plugins/CommonLoadingScreen/CommonLoadingScreen.uplugin"
+    },
+    {
+      "name": "CommonConversation",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Experimental/CommonConversation/CommonConversation.uplugin"
+    },
+    {
+      "name": "GameFeatures",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Runtime/GameFeatures/GameFeatures.uplugin"
+    },
+    {
+      "name": "ModularGameplay",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Runtime/ModularGameplay/ModularGameplay.uplugin"
+    },
+    {
+      "name": "ModularGameplayActors",
+      "origin": "project",
+      "descriptor": "Plugins/ModularGameplayActors/ModularGameplayActors.uplugin"
+    },
+    {
+      "name": "EnhancedInput",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/EnhancedInput/EnhancedInput.uplugin"
+    },
+    {
+      "name": "WinDualShock",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Runtime/Windows/WinDualShock/WinDualShock.uplugin",
+      "additional_fields": [
+        "SupportedTargetPlatforms"
+      ],
+      "filters": {
+        "SupportedTargetPlatforms": [
+          "Win64"
+        ]
+      }
+    },
+    {
+      "name": "Volumetrics",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Experimental/Volumetrics/Volumetrics.uplugin"
+    },
+    {
+      "name": "DataRegistry",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Runtime/DataRegistry/DataRegistry.uplugin"
+    },
+    {
+      "name": "ReplicationGraph",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Runtime/ReplicationGraph/ReplicationGraph.uplugin"
+    },
+    {
+      "name": "SignificanceManager",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Runtime/SignificanceManager/SignificanceManager.uplugin"
+    },
+    {
+      "name": "Niagara",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/FX/Niagara/Niagara.uplugin"
+    },
+    {
+      "name": "Water",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Experimental/Water/Water.uplugin"
+    },
+    {
+      "name": "CommonUI",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Runtime/CommonUI/CommonUI.uplugin"
+    },
+    {
+      "name": "ControlFlows",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Experimental/ControlFlows/ControlFlows.uplugin"
+    },
+    {
+      "name": "GameSettings",
+      "origin": "project",
+      "descriptor": "Plugins/GameSettings/GameSettings.uplugin"
+    },
+    {
+      "name": "CommonUser",
+      "origin": "project",
+      "descriptor": "Plugins/CommonUser/CommonUser.uplugin"
+    },
+    {
+      "name": "CommonGame",
+      "origin": "project",
+      "descriptor": "Plugins/CommonGame/CommonGame.uplugin"
+    },
+    {
+      "name": "GameSubtitles",
+      "origin": "project",
+      "descriptor": "Plugins/GameSubtitles/GameSubtitles.uplugin"
+    },
+    {
+      "name": "PocketWorlds",
+      "origin": "project",
+      "descriptor": "Plugins/PocketWorlds/PocketWorlds.uplugin"
+    },
+    {
+      "name": "UIExtension",
+      "origin": "project",
+      "descriptor": "Plugins/UIExtension/UIExtension.uplugin"
+    },
+    {
+      "name": "AsyncMixin",
+      "origin": "project",
+      "descriptor": "Plugins/AsyncMixin/AsyncMixin.uplugin"
+    },
+    {
+      "name": "Metasound",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Runtime/Metasound/Metasound.uplugin"
+    },
+    {
+      "name": "MagicLeap",
+      "descriptor_pointer": "/Plugins/29",
+      "declared_enabled": false,
+      "optional": false,
+      "additional_fields": [],
+      "applicable_for_context": true,
+      "status": "not-found",
+      "origin": null,
+      "descriptor": null,
+      "alternate_descriptors": [],
+      "filters": {}
+    },
+    {
+      "name": "MagicLeapMedia",
+      "descriptor_pointer": "/Plugins/30",
+      "declared_enabled": false,
+      "optional": false,
+      "additional_fields": [],
+      "applicable_for_context": true,
+      "status": "not-found",
+      "origin": null,
+      "descriptor": null,
+      "alternate_descriptors": [],
+      "filters": {}
+    },
+    {
+      "name": "MagicLeapPassableWorld",
+      "descriptor_pointer": "/Plugins/31",
+      "declared_enabled": false,
+      "optional": false,
+      "additional_fields": [],
+      "applicable_for_context": true,
+      "status": "not-found",
+      "origin": null,
+      "descriptor": null,
+      "alternate_descriptors": [],
+      "filters": {}
+    },
+    {
+      "name": "OpenXREyeTracker",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Runtime/OpenXREyeTracker/OpenXREyeTracker.uplugin",
+      "declared_enabled": false
+    },
+    {
+      "name": "OpenXRHandTracking",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Runtime/OpenXRHandTracking/OpenXRHandTracking.uplugin",
+      "declared_enabled": false
+    },
+    {
+      "name": "OpenXRHMD",
+      "descriptor_pointer": "/Plugins/34",
+      "declared_enabled": false,
+      "optional": false,
+      "additional_fields": [],
+      "applicable_for_context": true,
+      "status": "not-found",
+      "origin": null,
+      "descriptor": null,
+      "alternate_descriptors": [],
+      "filters": {}
+    },
+    {
+      "name": "SteamVR",
+      "descriptor_pointer": "/Plugins/35",
+      "declared_enabled": false,
+      "optional": false,
+      "additional_fields": [],
+      "applicable_for_context": true,
+      "status": "not-found",
+      "origin": null,
+      "descriptor": null,
+      "alternate_descriptors": [],
+      "filters": {}
+    },
+    {
+      "name": "GearVR",
+      "descriptor_pointer": "/Plugins/36",
+      "declared_enabled": false,
+      "optional": false,
+      "additional_fields": [],
+      "applicable_for_context": true,
+      "status": "not-found",
+      "origin": null,
+      "descriptor": null,
+      "alternate_descriptors": [],
+      "filters": {}
+    },
+    {
+      "name": "LuminPlatformFeatures",
+      "descriptor_pointer": "/Plugins/37",
+      "declared_enabled": false,
+      "optional": false,
+      "additional_fields": [
+        "SupportedTargetPlatforms"
+      ],
+      "applicable_for_context": false,
+      "status": "not-found",
+      "origin": null,
+      "descriptor": null,
+      "alternate_descriptors": [],
+      "filters": {
+        "SupportedTargetPlatforms": [
+          "Lumin"
+        ]
+      }
+    },
+    {
+      "name": "MLSDK",
+      "descriptor_pointer": "/Plugins/38",
+      "declared_enabled": false,
+      "optional": false,
+      "additional_fields": [],
+      "applicable_for_context": true,
+      "status": "not-found",
+      "origin": null,
+      "descriptor": null,
+      "alternate_descriptors": [],
+      "filters": {}
+    },
+    {
+      "name": "OnlineFramework",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Online/OnlineFramework/OnlineFramework.uplugin"
+    },
+    {
+      "name": "PlayFabParty",
+      "descriptor_pointer": "/Plugins/40",
+      "declared_enabled": true,
+      "optional": false,
+      "additional_fields": [
+        "PlatformAllowList",
+        "SupportedTargetPlatforms"
+      ],
+      "applicable_for_context": false,
+      "status": "not-found",
+      "origin": null,
+      "descriptor": null,
+      "alternate_descriptors": [],
+      "filters": {
+        "PlatformAllowList": [
+          "XB1",
+          "XSX",
+          "WinGDK"
+        ],
+        "SupportedTargetPlatforms": [
+          "XB1",
+          "XSX",
+          "WinGDK"
+        ]
+      }
+    },
+    {
+      "name": "EOSReservedHooks",
+      "descriptor_pointer": "/Plugins/41",
+      "declared_enabled": true,
+      "optional": true,
+      "additional_fields": [
+        "Optional"
+      ],
+      "applicable_for_context": true,
+      "status": "not-found",
+      "origin": null,
+      "descriptor": null,
+      "alternate_descriptors": [],
+      "filters": {}
+    },
+    {
+      "name": "OnlineSubsystemEOS",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Online/OnlineSubsystemEOS/OnlineSubsystemEOS.uplugin"
+    },
+    {
+      "name": "OnlineServicesEOS",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Online/OnlineServicesEOS/OnlineServicesEOS.uplugin"
+    },
+    {
+      "name": "OnlineServicesNull",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Online/OnlineServicesNull/OnlineServicesNull.uplugin"
+    },
+    {
+      "name": "OnlineServicesOSSAdapter",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Online/OnlineServicesOSSAdapter/OnlineServicesOSSAdapter.uplugin"
+    },
+    {
+      "name": "OnlineSubsystemSteam",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Online/OnlineSubsystemSteam/OnlineSubsystemSteam.uplugin"
+    },
+    {
+      "name": "SocketSubsystemSteamIP",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Online/SocketSubsystemSteamIP/SocketSubsystemSteamIP.uplugin"
+    },
+    {
+      "name": "GameplayMessageRouter",
+      "origin": "project",
+      "descriptor": "Plugins/GameplayMessageRouter/GameplayMessageRouter.uplugin"
+    },
+    {
+      "name": "SteamSockets",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Runtime/Steam/SteamSockets/SteamSockets.uplugin"
+    },
+    {
+      "name": "AssetReferenceRestrictions",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Editor/AssetReferenceRestrictions/AssetReferenceRestrictions.uplugin"
+    },
+    {
+      "name": "ModelingToolsEditorMode",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Editor/ModelingToolsEditorMode/ModelingToolsEditorMode.uplugin"
+    },
+    {
+      "name": "GeometryScripting",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Runtime/GeometryScripting/GeometryScripting.uplugin"
+    },
+    {
+      "name": "AnimationLocomotionLibrary",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Animation/AnimationLocomotionLibrary/AnimationLocomotionLibrary.uplugin"
+    },
+    {
+      "name": "AudioModulation",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Runtime/AudioModulation/AudioModulation.uplugin"
+    },
+    {
+      "name": "AudioGameplayVolume",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/AudioGameplayVolume/AudioGameplayVolume.uplugin"
+    },
+    {
+      "name": "AudioGameplay",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/AudioGameplay/AudioGameplay.uplugin"
+    },
+    {
+      "name": "SoundUtilities",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Runtime/SoundUtilities/SoundUtilities.uplugin"
+    },
+    {
+      "name": "AnimationWarping",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Animation/AnimationWarping/AnimationWarping.uplugin"
+    },
+    {
+      "name": "MovieRenderPipeline",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/MovieScene/MovieRenderPipeline/MovieRenderPipeline.uplugin",
+      "additional_fields": [
+        "TargetAllowList"
+      ],
+      "filters": {
+        "TargetAllowList": [
+          "Editor"
+        ]
+      }
+    },
+    {
+      "name": "MoviePipelineMaskRenderPass",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/MovieScene/MoviePipelineMaskRenderPass/MoviePipelineMaskRenderPass.uplugin",
+      "additional_fields": [
+        "TargetAllowList"
+      ],
+      "filters": {
+        "TargetAllowList": [
+          "Editor"
+        ]
+      }
+    },
+    {
+      "name": "AssetSearch",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Editor/AssetSearch/AssetSearch.uplugin"
+    },
+    {
+      "name": "GameplayInsights",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Animation/GameplayInsights/GameplayInsights.uplugin"
+    },
+    {
+      "name": "ResonanceAudio",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Runtime/ResonanceAudio/ResonanceAudio.uplugin",
+      "declared_enabled": false
+    },
+    {
+      "name": "RuntimePhysXCooking",
+      "descriptor_pointer": "/Plugins/64",
+      "declared_enabled": false,
+      "optional": false,
+      "additional_fields": [],
+      "applicable_for_context": true,
+      "status": "not-found",
+      "origin": null,
+      "descriptor": null,
+      "alternate_descriptors": [],
+      "filters": {}
+    },
+    {
+      "name": "Spatialization",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Runtime/Spatialization/Spatialization.uplugin"
+    },
+    {
+      "name": "ShooterCore",
+      "origin": "project",
+      "descriptor": "Plugins/GameFeatures/ShooterCore/ShooterCore.uplugin"
+    },
+    {
+      "name": "ShooterMaps",
+      "origin": "project",
+      "descriptor": "Plugins/GameFeatures/ShooterMaps/ShooterMaps.uplugin"
+    },
+    {
+      "name": "TopDownArena",
+      "origin": "project",
+      "descriptor": "Plugins/GameFeatures/TopDownArena/TopDownArena.uplugin"
+    },
+    {
+      "name": "FunctionalTestingEditor",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Tests/FunctionalTestingEditor/FunctionalTestingEditor.uplugin"
+    },
+    {
+      "name": "ShooterExplorer",
+      "origin": "project",
+      "descriptor": "Plugins/GameFeatures/ShooterExplorer/ShooterExplorer.uplugin"
+    },
+    {
+      "name": "ShooterTests",
+      "origin": "project",
+      "descriptor": "Plugins/GameFeatures/ShooterTests/ShooterTests.uplugin"
+    },
+    {
+      "name": "GameplayInteractions",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Runtime/GameplayInteractions/GameplayInteractions.uplugin"
+    },
+    {
+      "name": "SmartObjects",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Runtime/SmartObjects/SmartObjects.uplugin"
+    },
+    {
+      "name": "ContextualAnimation",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Experimental/Animation/ContextualAnimation/ContextualAnimation.uplugin"
+    },
+    {
+      "name": "GameplayBehaviorSmartObjects",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Runtime/GameplayBehaviorSmartObjects/GameplayBehaviorSmartObjects.uplugin"
+    },
+    {
+      "name": "GameplayStateTree",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Runtime/GameplayStateTree/GameplayStateTree.uplugin"
+    },
+    {
+      "name": "GameplayBehaviors",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Experimental/GameplayBehaviors/GameplayBehaviors.uplugin"
+    },
+    {
+      "name": "RuntimeTests",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Tests/RuntimeTests/RuntimeTests.uplugin"
+    },
+    {
+      "name": "AutomatedPerfTesting",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Performance/AutomatedPerfTesting/AutomatedPerfTesting.uplugin"
+    },
+    {
+      "name": "Reflex",
+      "origin": "engine",
+      "descriptor": "Engine/Plugins/Runtime/Nvidia/Reflex/Reflex.uplugin"
+    }
+  ],
+  "validation": {
+    "status": "warning",
+    "problem_count": 2,
+    "problems": [
+      {
+        "severity": "warning",
+        "code": "plugin-not-found",
+        "descriptor_pointer": "/Plugins/5",
+        "message": "Plugin D3DExternalGPUStatistics is enabled for Win64/Editor but was not resolved"
+      },
+      {
+        "severity": "warning",
+        "code": "plugin-not-found",
+        "descriptor_pointer": "/Plugins/41",
+        "message": "Plugin EOSReservedHooks is enabled for Win64/Editor but was not resolved"
+      }
+    ]
+  },
+  "limits": {
+    "responsibility": "Resolve direct .uproject Plugin references for one explicit profile.",
+    "boundaries": [
+      "Only direct .uproject plugin references are resolved.",
+      "Effective defaults and transitive .uplugin dependency closure are not computed.",
+      "Applicability evaluates platform and target filters; configuration and deeper UBT policy remain out of scope.",
+      "Plugin descriptor contents and hashes are not read.",
+      "Sparse items inherit omitted fields from item_defaults; problem items retain all modeled fields.",
+      "Descriptor paths are relative to path_roots according to origin."
+    ]
+  }
+}

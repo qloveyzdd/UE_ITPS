@@ -1,0 +1,82 @@
+{
+  "schema_version": "ue-itps.project-targets.v2",
+  "items": [
+    {
+      "name": "LyraClient",
+      "path": "E:/UE_ITPS/LyraStarterGame/Source/LyraClient.Target.cs",
+      "sha256": "c03c1292e97656715d59b39489b3e2a2f068fa30395cda98020af4a02c1f234e",
+      "is_root_target": true
+    },
+    {
+      "name": "LyraEditor",
+      "path": "E:/UE_ITPS/LyraStarterGame/Source/LyraEditor.Target.cs",
+      "sha256": "ea5883e6701ef8c8e4ac41f562fc851bd80349e826e750c0419ffe4e731e5206",
+      "is_root_target": true
+    },
+    {
+      "name": "LyraGame",
+      "path": "E:/UE_ITPS/LyraStarterGame/Source/LyraGame.Target.cs",
+      "sha256": "2ad574553cd0290f875a572ae6eb48b4e33c1468767837ccc33b6d15bc821ef1",
+      "is_root_target": true
+    },
+    {
+      "name": "LyraGameEOS",
+      "path": "E:/UE_ITPS/LyraStarterGame/Source/LyraGameEOS.Target.cs",
+      "sha256": "02b60faced294e29fcc2b487efea21f7c79ba7210a742033bc3579b7ef0e3b6a",
+      "is_root_target": true
+    },
+    {
+      "name": "LyraGameSteam",
+      "path": "E:/UE_ITPS/LyraStarterGame/Source/LyraGameSteam.Target.cs",
+      "sha256": "67cc373dd543e32dd3547b3a31fbc2b7491299859db65f411ba2a45c1d6ffad3",
+      "is_root_target": true
+    },
+    {
+      "name": "LyraGameSteamEOS",
+      "path": "E:/UE_ITPS/LyraStarterGame/Source/LyraGameSteamEOS.Target.cs",
+      "sha256": "a3e3288d0b54c08bc21e25d02f6c084183b0b609d904a9ee8d13957e67b485db",
+      "is_root_target": true
+    },
+    {
+      "name": "LyraServer",
+      "path": "E:/UE_ITPS/LyraStarterGame/Source/LyraServer.Target.cs",
+      "sha256": "c2ceb2e9ab2e91efc119be39f019e3919d27b6e33b3aed0cdfadb20bd1b58115",
+      "is_root_target": true
+    },
+    {
+      "name": "LyraServerEOS",
+      "path": "E:/UE_ITPS/LyraStarterGame/Source/LyraServerEOS.Target.cs",
+      "sha256": "7098c368de549da4ee8433ae46965f5c020bdcb59f649e2109f16584ca1abf10",
+      "is_root_target": true
+    },
+    {
+      "name": "LyraServerSteam",
+      "path": "E:/UE_ITPS/LyraStarterGame/Source/LyraServerSteam.Target.cs",
+      "sha256": "acf25fb199a5e152c855069b9f64c320cbffc06704f7bfa4a9f650242d6481b5",
+      "is_root_target": true
+    },
+    {
+      "name": "LyraServerSteamEOS",
+      "path": "E:/UE_ITPS/LyraStarterGame/Source/LyraServerSteamEOS.Target.cs",
+      "sha256": "92ae2cf2d01ef42f1e0c52863618dec8f14689801b45eba64257a468e18da4a0",
+      "is_root_target": true
+    }
+  ],
+  "classification": "native-project",
+  "validation": {
+    "status": "ok",
+    "problem_count": 0,
+    "problems": []
+  },
+  "limits": {
+    "responsibility": "Discover project Target.cs files, validate their placement, and classify native Target evidence.",
+    "boundaries": [
+      "native-project means at least one Source/*.Target.cs file was discovered.",
+      "No root Target produces undetermined-no-native-target; it does not prove the project is Blueprint-only.",
+      "A Target in a Source subdirectory is supported by UBT and is not invalid by itself; nested-only placement is a warning.",
+      "Root and nested Targets together produce a distinct placement warning.",
+      "Target files are discovered but TargetRules are not evaluated.",
+      "Temporary or hybrid Target reasons require UBT-level analysis."
+    ]
+  }
+}

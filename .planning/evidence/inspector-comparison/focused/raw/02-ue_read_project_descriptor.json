@@ -1,0 +1,185 @@
+{
+  "schema_version": "ue-itps.project-descriptor.v4",
+  "project": {
+    "name": "LyraStarterGame",
+    "root": "E:/UE_ITPS/LyraStarterGame",
+    "descriptor": "E:/UE_ITPS/LyraStarterGame/LyraStarterGame.uproject",
+    "descriptor_sha256": "a42824b8d829dc00b290ada29ba94cb5f5cbdfe517cdace2b84714cf5cde27ff",
+    "file_version": 3,
+    "engine_association": "{6D46E408-487A-23A8-6BF7-4F8E40277C23}",
+    "category": "Samples",
+    "description": ""
+  },
+  "declared_modules": [
+    "LyraGame",
+    "LyraEditor"
+  ],
+  "plugin_declarations": {
+    "enabled": [
+      "ActorPalette",
+      "AESGCMHandlerComponent",
+      "DTLSHandlerComponent",
+      "GameplayAbilities",
+      "Gauntlet",
+      "CommonLoadingScreen",
+      "CommonConversation",
+      "GameFeatures",
+      "ModularGameplay",
+      "ModularGameplayActors",
+      "EnhancedInput",
+      "Volumetrics",
+      "DataRegistry",
+      "ReplicationGraph",
+      "SignificanceManager",
+      "Niagara",
+      "Water",
+      "CommonUI",
+      "ControlFlows",
+      "GameSettings",
+      "CommonUser",
+      "CommonGame",
+      "GameSubtitles",
+      "PocketWorlds",
+      "UIExtension",
+      "AsyncMixin",
+      "Metasound",
+      "OnlineFramework",
+      "OnlineSubsystemEOS",
+      "OnlineServicesEOS",
+      "OnlineServicesNull",
+      "OnlineServicesOSSAdapter",
+      "OnlineSubsystemSteam",
+      "SocketSubsystemSteamIP",
+      "GameplayMessageRouter",
+      "SteamSockets",
+      "AssetReferenceRestrictions",
+      "ModelingToolsEditorMode",
+      "GeometryScripting",
+      "AnimationLocomotionLibrary",
+      "AudioModulation",
+      "AudioGameplayVolume",
+      "AudioGameplay",
+      "SoundUtilities",
+      "AnimationWarping",
+      "AssetSearch",
+      "GameplayInsights",
+      "Spatialization",
+      "ShooterCore",
+      "ShooterMaps",
+      "TopDownArena",
+      "FunctionalTestingEditor",
+      "ShooterExplorer",
+      "ShooterTests",
+      "GameplayInteractions",
+      "SmartObjects",
+      "ContextualAnimation",
+      "GameplayBehaviorSmartObjects",
+      "GameplayStateTree",
+      "GameplayBehaviors",
+      "RuntimeTests",
+      "AutomatedPerfTesting",
+      "Reflex"
+    ],
+    "disabled": [
+      "MagicLeap",
+      "MagicLeapMedia",
+      "MagicLeapPassableWorld",
+      "OpenXREyeTracker",
+      "OpenXRHandTracking",
+      "OpenXRHMD",
+      "SteamVR",
+      "GearVR",
+      "MLSDK",
+      "ResonanceAudio",
+      "RuntimePhysXCooking"
+    ],
+    "extended": [
+      {
+        "name": "D3DExternalGPUStatistics",
+        "declared_enabled": true,
+        "descriptor_pointer": "/Plugins/5",
+        "additional_fields": [
+          "Optional",
+          "SupportedTargetPlatforms"
+        ]
+      },
+      {
+        "name": "WinDualShock",
+        "declared_enabled": true,
+        "descriptor_pointer": "/Plugins/12",
+        "additional_fields": [
+          "SupportedTargetPlatforms"
+        ]
+      },
+      {
+        "name": "LuminPlatformFeatures",
+        "declared_enabled": false,
+        "descriptor_pointer": "/Plugins/37",
+        "additional_fields": [
+          "SupportedTargetPlatforms"
+        ]
+      },
+      {
+        "name": "PlayFabParty",
+        "declared_enabled": true,
+        "descriptor_pointer": "/Plugins/40",
+        "additional_fields": [
+          "PlatformAllowList",
+          "SupportedTargetPlatforms"
+        ]
+      },
+      {
+        "name": "EOSReservedHooks",
+        "declared_enabled": true,
+        "descriptor_pointer": "/Plugins/41",
+        "additional_fields": [
+          "Optional"
+        ]
+      },
+      {
+        "name": "MovieRenderPipeline",
+        "declared_enabled": true,
+        "descriptor_pointer": "/Plugins/59",
+        "additional_fields": [
+          "TargetAllowList"
+        ]
+      },
+      {
+        "name": "MoviePipelineMaskRenderPass",
+        "declared_enabled": true,
+        "descriptor_pointer": "/Plugins/60",
+        "additional_fields": [
+          "TargetAllowList"
+        ]
+      }
+    ]
+  },
+  "additional_root_directories": [],
+  "additional_plugin_directories": [],
+  "descriptor_options": {
+    "EpicSampleNameHash": "451731683"
+  },
+  "descriptor_top_level_fields": [
+    "Category",
+    "Description",
+    "EngineAssociation",
+    "EpicSampleNameHash",
+    "FileVersion",
+    "Modules",
+    "Plugins"
+  ],
+  "unmodeled_top_level_fields": {},
+  "validation": {
+    "status": "ok",
+    "problem_count": 0,
+    "problems": []
+  },
+  "limits": {
+    "responsibility": "Read explicit facts declared by one .uproject file.",
+    "boundaries": [
+      "The result does not locate Engine, Module, Target, or Plugin files.",
+      "Extended Plugin declarations are indexed, not fully interpreted.",
+      "Unmodeled top-level fields are preserved without being judged invalid."
+    ]
+  }
+}

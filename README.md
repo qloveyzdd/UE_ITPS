@@ -55,14 +55,14 @@ $ue-project-inspector 检查项目 Module 结构，不扫描插件。
 ```
 
 ```text
-$ue-project-inspector 生成完整的项目入口扫描报告。
+$ue-project-inspector 依次检查当前项目的描述符、Engine、Module、Target、Plugin 和根目录，并汇总结果。
 ```
 
-Skill 默认选择能回答问题的最小工具。只有明确要求完整报告时，才运行组合器。
+Skill 默认选择能回答问题的最小工具。只有明确要求全部类别时，才依次运行相关聚焦工具；各工具保留独立 Schema、验证结果和解释边界。
 
 ## 统一 CLI 输出契约
 
-八个 UE 项目检查 CLI 的正常扫描结果使用同一顶层顺序：
+七个 UE 项目检查 CLI 的正常扫描结果使用同一顶层顺序：
 
 ```json
 {
@@ -173,21 +173,6 @@ python tools\ue_classify_project_paths.py --project $Project
 
 除顶层 `project_root` 外，路径项和诊断只保存 `project_relative_path`，不重复绝对路径。工具读取 `.uproject` 的显式顶层声明，但不读取目录内容、Module/Plugin 文件或资产。当 `Modules` 非空、没有声明 `AdditionalRootDirectories` 且 `Source` 缺失时，`validation` 报告阻断错误；路径项不增加额外的必要性字段。没有 Module 声明不能反向证明 `Source` 不需要。工具也不判断源码权威、自包含、删除安全性或可重建性。
 
-### 8. 生成完整兼容快照
-
-```powershell
-python tools\inspect_uproject.py `
-  --project $Project `
-  --operation scan `
-  --platform Win64 `
-  --target-type Editor `
-  --configuration Development `
-  --json-out .planning\evidence\lyra-5.6.1\uproject-structure.json `
-  --markdown-out .planning\codebase\UPROJECT-ENTRYPOINT.md
-```
-
-`inspect_uproject.py` 是薄组合器，用于兼容生成完整 JSON 和 Markdown；各领域事实仍由小工具实现。省略两个输出参数时，组合器只向标准输出写 JSON，不创建文件。
-
 ## Lyra 研究证据工具
 
 ### 生成基线文件指纹
@@ -226,8 +211,6 @@ python tools\inspect_uproject.py `
 ## 输出与安全边界
 
 - 七个聚焦的 UE 项目检查 CLI 默认只读，并将 JSON 写到标准输出。
-- 完整组合器只有在显式传入 `--json-out` 或 `--markdown-out` 时写文件。
-- 完整组合器无论是否归档文件，标准输出都返回相同的完整快照契约。
 - `--help`、参数说明、输出契约和退出码采用中英文双语；argparse 参数错误仍写入标准错误。
 - 基线指纹、运行日志归档和 Asset Registry 查询属于证据生成工具，会写入 `.planning/evidence/`。
 - 项目检查结果只证明静态声明和文件定位，不证明项目已经编译、启动、联网或通过测试。

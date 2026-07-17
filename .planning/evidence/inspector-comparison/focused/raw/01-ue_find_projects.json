@@ -1,0 +1,21 @@
+{
+  "schema_version": "ue-itps.project-discovery.v2",
+  "search_root": "E:/UE_ITPS",
+  "status": "selected",
+  "candidate_count": 1,
+  "candidates": [
+    "E:/UE_ITPS/LyraStarterGame/LyraStarterGame.uproject"
+  ],
+  "validation": {
+    "status": "ok",
+    "problem_count": 0,
+    "problems": []
+  },
+  "limits": {
+    "responsibility": "Discover .uproject files under one search root.",
+    "boundaries": [
+      "The tool does not choose between multiple candidates.",
+      "Discovery does not parse, validate, build, or run a project."
+    ]
+  }
+}

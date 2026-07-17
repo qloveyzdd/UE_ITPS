@@ -1,0 +1,39 @@
+{
+  "schema_version": "ue-itps.engine-resolution.v2",
+  "association_raw": "{6D46E408-487A-23A8-6BF7-4F8E40277C23}",
+  "status": "resolved",
+  "resolution_method": "windows-registry:Software\\Epic Games\\Unreal Engine\\Builds:{6D46E408-487A-23A8-6BF7-4F8E40277C23}",
+  "resolution_candidates": [
+    {
+      "root": "D:/UnrealEngine_5.6",
+      "source": "windows-registry:Software\\Epic Games\\Unreal Engine\\Builds:{6D46E408-487A-23A8-6BF7-4F8E40277C23}"
+    }
+  ],
+  "engine_root": "D:/UnrealEngine_5.6",
+  "build_version_file": "D:/UnrealEngine_5.6/Engine/Build/Build.version",
+  "build_version_sha256": "0b835329767015bfd93fc7222c02c1c5c83c830b33caf35ecd824d7b848af333",
+  "version": "5.6.1",
+  "build": {
+    "MajorVersion": 5,
+    "MinorVersion": 6,
+    "PatchVersion": 1,
+    "Changelist": 0,
+    "CompatibleChangelist": 43139311,
+    "IsLicenseeVersion": 0,
+    "IsPromotedBuild": 0,
+    "BranchName": "UE5"
+  },
+  "validation": {
+    "status": "ok",
+    "problem_count": 0,
+    "problems": []
+  },
+  "limits": {
+    "responsibility": "Resolve EngineAssociation to one Engine root and read Build.version.",
+    "boundaries": [
+      "EngineAssociation is an association key, not authoritative version evidence.",
+      "The result does not prove that the project builds or runs with the Engine.",
+      "Registry and ancestor lookup are static resolution mechanisms only."
+    ]
+  }
+}

@@ -1,0 +1,79 @@
+{
+    "schema_version":  "focused-inspector-execution-metrics.v1",
+    "project":  "E:\\UE_ITPS\\LyraStarterGame\\LyraStarterGame.uproject",
+    "context":  {
+                    "operation":  "scan",
+                    "platform":  "Win64",
+                    "target_type":  "Editor",
+                    "configuration":  {
+                                          "supplied":  false,
+                                          "reason":  "The focused Plugin CLI does not accept or evaluate configuration."
+                                      }
+                },
+    "commands":  [
+                     {
+                         "sequence":  1,
+                         "command":  "python tools/ue_find_projects.py --search-root E:\\UE_ITPS",
+                         "output_file":  "E:\\UE_ITPS\\.planning\\evidence\\inspector-comparison\\focused\\raw\\01-ue_find_projects.json",
+                         "exit_code":  0,
+                         "elapsed_ms":  223.91,
+                         "stdout_size_bytes":  572,
+                         "stderr":  ""
+                     },
+                     {
+                         "sequence":  2,
+                         "command":  "python tools/ue_read_project_descriptor.py --project E:\\UE_ITPS\\LyraStarterGame\\LyraStarterGame.uproject",
+                         "output_file":  "E:\\UE_ITPS\\.planning\\evidence\\inspector-comparison\\focused\\raw\\02-ue_read_project_descriptor.json",
+                         "exit_code":  0,
+                         "elapsed_ms":  44.805,
+                         "stdout_size_bytes":  4950,
+                         "stderr":  ""
+                     },
+                     {
+                         "sequence":  3,
+                         "command":  "python tools/ue_resolve_engine.py --project E:\\UE_ITPS\\LyraStarterGame\\LyraStarterGame.uproject",
+                         "output_file":  "E:\\UE_ITPS\\.planning\\evidence\\inspector-comparison\\focused\\raw\\03-ue_resolve_engine.json",
+                         "exit_code":  0,
+                         "elapsed_ms":  43.108,
+                         "stdout_size_bytes":  1433,
+                         "stderr":  ""
+                     },
+                     {
+                         "sequence":  4,
+                         "command":  "python tools/ue_inspect_modules.py --project E:\\UE_ITPS\\LyraStarterGame\\LyraStarterGame.uproject",
+                         "output_file":  "E:\\UE_ITPS\\.planning\\evidence\\inspector-comparison\\focused\\raw\\04-ue_inspect_modules.json",
+                         "exit_code":  0,
+                         "elapsed_ms":  98.418,
+                         "stdout_size_bytes":  2391,
+                         "stderr":  ""
+                     },
+                     {
+                         "sequence":  5,
+                         "command":  "python tools/ue_inspect_targets.py --project E:\\UE_ITPS\\LyraStarterGame\\LyraStarterGame.uproject",
+                         "output_file":  "E:\\UE_ITPS\\.planning\\evidence\\inspector-comparison\\focused\\raw\\05-ue_inspect_targets.json",
+                         "exit_code":  0,
+                         "elapsed_ms":  47.381,
+                         "stdout_size_bytes":  3299,
+                         "stderr":  ""
+                     },
+                     {
+                         "sequence":  6,
+                         "command":  "python tools/ue_resolve_plugins.py --project E:\\UE_ITPS\\LyraStarterGame\\LyraStarterGame.uproject --operation scan --platform Win64 --target-type Editor",
+                         "output_file":  "E:\\UE_ITPS\\.planning\\evidence\\inspector-comparison\\focused\\raw\\06-ue_resolve_plugins.json",
+                         "exit_code":  0,
+                         "elapsed_ms":  738.224,
+                         "stdout_size_bytes":  18925,
+                         "stderr":  ""
+                     },
+                     {
+                         "sequence":  7,
+                         "command":  "python tools/ue_classify_project_paths.py --project E:\\UE_ITPS\\LyraStarterGame\\LyraStarterGame.uproject",
+                         "output_file":  "E:\\UE_ITPS\\.planning\\evidence\\inspector-comparison\\focused\\raw\\07-ue_classify_project_paths.json",
+                         "exit_code":  0,
+                         "elapsed_ms":  45.311,
+                         "stdout_size_bytes":  3408,
+                         "stderr":  ""
+                     }
+                 ],
+    "total_elapsed_ms":  1293.729
+}

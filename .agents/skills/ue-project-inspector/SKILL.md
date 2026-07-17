@@ -1,6 +1,6 @@
 ---
 name: ue-project-inspector
-description: Inspect Unreal Engine projects through the repository's deterministic, read-only UE project tools. Use when Codex needs to find .uproject files; read compact descriptor v3 facts including declared Module names, Plugin declared enabled/disabled/extended state, or descriptor field inventory; resolve EngineAssociation to the actual Engine/Build/Build.version; inspect project Modules or Targets; locate direct Plugin references; classify project directories; or produce a scoped UE project intake snapshot. Do not use for runtime behavior, asset reachability, feature graphs, code generation, builds, tests, or project modification.
+description: Inspect Unreal Engine projects through the repository's deterministic, read-only UE project tools. Use when Codex needs to find .uproject files; read compact descriptor facts including declared Module names, Plugin declared enabled/disabled/extended state, or descriptor field inventory; resolve EngineAssociation to the actual Engine/Build/Build.version; inspect project Modules or Targets; locate direct Plugin references; classify project directories; or summarize several focused results. Do not use for runtime behavior, asset reachability, feature graphs, code generation, builds, tests, or project modification.
 ---
 
 # UE Project Inspector
@@ -24,9 +24,8 @@ If the scripts are missing, report that this repository does not contain the exp
 | Discover project Targets | `ue_inspect_targets.py` |
 | Locate direct `.uproject` Plugin references | `ue_resolve_plugins.py` |
 | Classify project-root paths with explicit descriptor evidence | `ue_classify_project_paths.py` |
-| Produce the complete compatibility snapshot | `inspect_uproject.py` |
 
-Do not run the complete snapshot when one focused tool is sufficient.
+When the user explicitly requests all categories, run the relevant focused tools independently, validate each result, and summarize them without inventing a merged schema. For every other request, use only the smallest tool that answers the question.
 
 ## Workflow
 
@@ -61,7 +60,7 @@ Plugin resolution derives the Engine root from the project's `EngineAssociation`
 python tools/ue_resolve_plugins.py --project <project> --operation scan --platform Win64 --target-type Editor
 ```
 
-Use `Win64 / Editor` only as the default focused Plugin profile. If the user provides another platform, target type, or operation, pass it through and state the active profile. Configuration remains part of the complete snapshot context but is intentionally not evaluated by the focused Plugin tool.
+Use `Win64 / Editor` only as the default focused Plugin profile. If the user provides another platform, target type, or operation, pass it through and state the active profile. Configuration is not accepted or evaluated by the focused Plugin tool.
 
 ## Interpret Plugin v4
 
@@ -86,16 +85,6 @@ Treat `ue-itps.project-descriptor.v4` as a compact projection of the original `.
 For a simple enabled/disabled question, stop after `ue_read_project_descriptor.py`. If the user asks for exact values of one extended declaration, read only the original `.uproject` object identified by its `descriptor_pointer`. Resolve Engine and run `ue_resolve_plugins.py` only when the question also needs Plugin location, origin, `.uplugin` evidence, or Profile applicability.
 
 When combining descriptor and Plugin results from separate commands, compare `project.descriptor_sha256` with `project_descriptor.sha256`. Discard the earlier result and reread if they differ.
-
-## Complete snapshot
-
-Use the compatibility composer only when the user explicitly asks for a complete project-entry report or all available categories:
-
-```powershell
-python tools/inspect_uproject.py --project <project> --operation scan --platform Win64 --target-type Editor --configuration Development
-```
-
-Do not pass `--json-out` or `--markdown-out` unless the user asks to archive the result; omitting them keeps the workflow read-only.
 
 ## Interpretation boundaries
 

@@ -18,7 +18,6 @@ from ue_project_tools.descriptor import descriptor_result
 from ue_project_tools.discovery import discovery_result
 from ue_project_tools.engine import resolve_engine
 from ue_project_tools.plugins import resolve_project_plugins
-from ue_project_tools.snapshot import build_snapshot
 from ue_project_tools.structure import classify_project_paths
 
 
@@ -30,7 +29,6 @@ CLI_SCRIPTS = (
     "ue_inspect_targets.py",
     "ue_resolve_plugins.py",
     "ue_classify_project_paths.py",
-    "inspect_uproject.py",
 )
 
 
@@ -94,32 +92,12 @@ class CliOutputContractTests(unittest.TestCase):
                         {"FileVersion": 3, "Modules": [], "Plugins": []},
                     ),
                 ),
-                (
-                    "ue-itps.uproject-structure.v5",
-                    build_snapshot(
-                        project=str(project),
-                        engine_root=str(root / "MissingEngine"),
-                    ),
-                ),
             ]
 
             for expected_schema, result in results:
                 with self.subTest(schema=expected_schema):
                     self.assertEqual(result["schema_version"], expected_schema)
                     self.assert_envelope(result)
-
-            snapshot = results[-1][1]
-            self.assertEqual(
-                snapshot["component_schemas"],
-                {
-                    "descriptor": "ue-itps.project-descriptor.v4",
-                    "engine": "ue-itps.engine-resolution.v2",
-                    "modules": "ue-itps.project-modules.v4",
-                    "targets": "ue-itps.project-targets.v2",
-                    "plugins": "ue-itps.project-plugin-references.v4",
-                    "paths": "ue-itps.project-paths.v3",
-                },
-            )
 
     def test_project_paths_report_directory_facts_only(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -597,42 +575,6 @@ class CliOutputContractTests(unittest.TestCase):
                 self.assertIn("Output contract", completed.stdout)
                 self.assertIn("退出码", completed.stdout)
                 self.assertIn("Exit codes", completed.stdout)
-
-    def test_composer_stdout_matches_archived_json_contract(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            root = Path(temporary_directory)
-            project = self.write_project(root)
-            json_output = root / "snapshot.json"
-            markdown_output = root / "snapshot.md"
-            completed = subprocess.run(
-                [
-                    sys.executable,
-                    str(TOOLS_ROOT / "inspect_uproject.py"),
-                    "--project",
-                    str(project),
-                    "--engine-root",
-                    str(root / "MissingEngine"),
-                    "--json-out",
-                    str(json_output),
-                    "--markdown-out",
-                    str(markdown_output),
-                ],
-                cwd=REPOSITORY_ROOT,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                check=False,
-            )
-
-            stdout_result = json.loads(completed.stdout)
-            archived_result = json.loads(json_output.read_text(encoding="utf-8"))
-            markdown = markdown_output.read_text(encoding="utf-8")
-
-        self.assertEqual(completed.returncode, 1)
-        self.assertEqual(stdout_result, archived_result)
-        self.assert_envelope(stdout_result)
-        self.assertIn("职责：", markdown)
-
 
 if __name__ == "__main__":
     unittest.main()
