@@ -137,6 +137,105 @@ class CliOutputContractTests(unittest.TestCase):
         self.assertEqual(result["validation"]["status"], "warning")
         self.assertEqual(result["validation"]["problem_count"], 1)
 
+    def test_target_inventory_classifies_from_root_item_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            source_root = root / "Source"
+            nested_root = source_root / "Nested"
+            nested_root.mkdir(parents=True)
+            (source_root / "Root.Target.cs").write_text("", encoding="utf-8")
+            (nested_root / "Nested.Target.cs").write_text("", encoding="utf-8")
+
+            result = inspect_targets(root)
+
+        items = {item["name"]: item for item in result["items"]}
+        self.assertEqual(result["schema_version"], "ue-itps.project-targets.v2")
+        self.assertNotIn("count", result)
+        self.assertEqual(result["classification"], "native-project")
+        self.assertTrue(items["Root"]["is_root_target"])
+        self.assertFalse(items["Nested"]["is_root_target"])
+        self.assertNotIn("native_project_evidence", result)
+        self.assertEqual(result["validation"]["status"], "warning")
+        self.assertEqual(
+            result["validation"]["problems"][0]["code"],
+            "project-target-nested",
+        )
+        self.assertEqual(
+            result["validation"]["problems"][0]["target_names"],
+            ["Nested"],
+        )
+        self.assertEqual(
+            result["validation"]["problems"][0]["message"],
+            (
+                "Target.cs files exist both directly under Source and in its "
+                "subdirectories; review and move nested targets directly under "
+                "Source when possible."
+            ),
+        )
+
+    def test_nested_target_does_not_prove_native_project(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            nested_root = root / "Source" / "Nested"
+            nested_root.mkdir(parents=True)
+            (nested_root / "Nested.Target.cs").write_text("", encoding="utf-8")
+
+            result = inspect_targets(root)
+
+        self.assertEqual(
+            result["classification"], "undetermined-no-native-target"
+        )
+        self.assertFalse(result["items"][0]["is_root_target"])
+        self.assertEqual(result["validation"]["status"], "warning")
+        self.assertEqual(
+            result["validation"]["problems"][0]["code"],
+            "project-target-root-missing",
+        )
+        self.assertEqual(
+            result["validation"]["problems"][0]["target_names"],
+            ["Nested"],
+        )
+        self.assertEqual(
+            result["validation"]["problems"][0]["message"],
+            (
+                "Target.cs files exist only in Source subdirectories; add or move "
+                "at least one directly under Source for UE source-project "
+                "detection."
+            ),
+        )
+
+    def test_missing_target_is_an_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            result = inspect_targets(Path(temporary_directory))
+
+        self.assertEqual(result["classification"], "undetermined-no-native-target")
+        self.assertEqual(result["validation"]["status"], "error")
+        self.assertEqual(
+            result["validation"]["problems"][0]["code"],
+            "project-target-not-found",
+        )
+        self.assertEqual(
+            result["validation"]["problems"][0]["message"],
+            (
+                "No project Target.cs files were found under Source; add at least "
+                "one, preferably directly under Source."
+            ),
+        )
+
+    def test_root_targets_without_nested_targets_are_ok(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            source_root = root / "Source"
+            source_root.mkdir()
+            (source_root / "Game.Target.cs").write_text("", encoding="utf-8")
+            (source_root / "Editor.Target.cs").write_text("", encoding="utf-8")
+
+            result = inspect_targets(root)
+
+        self.assertEqual(result["classification"], "native-project")
+        self.assertEqual(result["validation"]["status"], "ok")
+        self.assertTrue(all(item["is_root_target"] for item in result["items"]))
+
     def test_discovery_failure_is_json_and_returns_one(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             completed = subprocess.run(

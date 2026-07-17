@@ -134,7 +134,9 @@ python tools\ue_inspect_modules.py --project $Project
 python tools\ue_inspect_targets.py --project $Project
 ```
 
-发现 `Source/**/*.Target.cs`，并单独报告根 `Source/*.Target.cs` 的原生项目证据。Target 不由 `.uproject` 声明。
+发现 `Source/**/*.Target.cs`，在每个结果上标记是否位于 `Source` 根目录，并据此给出原生项目证据分类。Target 不由 `.uproject` 声明。
+
+位置校验规则：`Source` 下没有 Target 为错误；Target 只位于子目录为警告；根目录与子目录同时存在 Target 为另一类警告；Target 只位于 `Source` 根目录为正常。
 
 ### 6. 定位直接 Plugin 引用
 
@@ -227,7 +229,7 @@ python tools\inspect_uproject.py `
 ```text
 Engine: 5.6.1
 Project Modules: 2
-Root Targets: 10
+Target classification: native-project
 Direct Plugin References: 81
 Declared Enabled / Disabled: 69 / 12
 Simple Enabled / Disabled / Extended: 63 / 11 / 7

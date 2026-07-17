@@ -11,7 +11,6 @@ def markdown_report(manifest: dict[str, Any]) -> str:
     targets = manifest["targets"]
     plugins = manifest["plugins"]
     profile = manifest["scan_context"]
-    native = manifest["native_project_evidence"]
     lines = [
         "# `.uproject` 入口扫描报告",
         "",
@@ -43,11 +42,8 @@ def markdown_report(manifest: dict[str, Any]) -> str:
         "## `.uproject` 声明对账",
         "",
         f"- 成功对账的项目模块：{modules['reconciled_module_count']} 个",
-        f"- 扫描到 Target：{targets['count']} 个（Target 不由 `.uproject` 声明）",
-        (
-            f"- 原生项目证据：根 `Source/*.Target.cs` 为 "
-            f"{native['root_target_count']} 个；分类 `{native['classification']}`"
-        ),
+        f"- 扫描到 Target：{len(targets['items'])} 个（Target 不由 `.uproject` 声明）",
+        f"- 原生项目证据分类：`{targets['classification']}`",
         (
             f"- 插件引用：{plugins['count']} 个；声明启用 "
             f"{plugins['declared_enabled_count']}；声明禁用 "

@@ -93,8 +93,8 @@ def build_snapshot(
         "items": module_info["items"],
     }
     target_compat = {
-        "count": target_info["count"],
         "items": target_info["items"],
+        "classification": target_info["classification"],
     }
     plugin_compat = {
         key: value
@@ -126,10 +126,6 @@ def build_snapshot(
             "engine": engine_compat,
             "modules": module_compat,
             "targets": target_compat,
-            "native_project_evidence": {
-                **target_info["native_project_evidence"],
-                "declared_module_count": len(descriptor_info["declared_modules"]),
-            },
             "plugins": plugin_compat,
             "structure": {
                 key: value

@@ -223,48 +223,86 @@ def inspect_modules(
 
 def inspect_targets(project_root: Path) -> dict[str, Any]:
     targets: list[dict[str, Any]] = []
-    for path in iter_files(project_root / "Source", ".Target.cs"):
+    problems: list[dict[str, Any]] = []
+    source_root = (project_root / "Source").resolve()
+    for path in iter_files(source_root, ".Target.cs"):
         name = path.name[: -len(".Target.cs")]
         targets.append(
-            {"name": name, "path": normalized(path), "sha256": sha256_file(path)}
+            {
+                "name": name,
+                "path": normalized(path),
+                "sha256": sha256_file(path),
+                "is_root_target": path.parent == source_root,
+            }
         )
     targets.sort(key=lambda item: str(item["name"]).casefold())
-
-    source_root = project_root / "Source"
-    root_targets = (
-        sorted(
-            [
-                path.resolve()
-                for path in source_root.glob("*.Target.cs")
-                if path.is_file()
-            ],
-            key=lambda path: normalized(path).casefold(),
-        )
-        if source_root.is_dir()
-        else []
+    classification = (
+        "native-project"
+        if any(target["is_root_target"] for target in targets)
+        else "undetermined-no-native-target"
     )
+    root_targets = [target for target in targets if target["is_root_target"]]
+    nested_targets = [target for target in targets if not target["is_root_target"]]
+    if not targets:
+        problems.append(
+            {
+                "severity": "error",
+                "code": "project-target-not-found",
+                "message": (
+                    "No project Target.cs files were found under Source; add at "
+                    "least one, preferably directly under Source."
+                ),
+            }
+        )
+    elif not root_targets:
+        problems.append(
+            {
+                "severity": "warning",
+                "code": "project-target-root-missing",
+                "target_names": [target["name"] for target in nested_targets],
+                "message": (
+                    "Target.cs files exist only in Source subdirectories; add or "
+                    "move at least one directly under Source for UE source-project "
+                    "detection."
+                ),
+            }
+        )
+    elif nested_targets:
+        problems.append(
+            {
+                "severity": "warning",
+                "code": "project-target-nested",
+                "target_names": [target["name"] for target in nested_targets],
+                "message": (
+                    "Target.cs files exist both directly under Source and in its "
+                    "subdirectories; review and move nested targets directly under "
+                    "Source when possible."
+                ),
+            }
+        )
     return result_document(
         "ue-itps.project-targets.v2",
         {
-            "count": len(targets),
             "items": targets,
-            "native_project_evidence": {
-                "rule_id": "ue5.6-project-has-code-root-target",
-                "has_native_targets": bool(root_targets),
-                "root_target_count": len(root_targets),
-                "root_targets": [normalized(path) for path in root_targets],
-                "classification": (
-                    "native-project"
-                    if root_targets
-                    else "undetermined-no-native-target"
-                ),
-            },
+            "classification": classification,
         },
-        [],
-        responsibility="Discover project Target.cs files and native Target evidence.",
+        problems,
+        responsibility=(
+            "Discover project Target.cs files, validate their placement, and "
+            "classify native Target evidence."
+        ),
         boundaries=[
+            "native-project means at least one Source/*.Target.cs file was discovered.",
+            (
+                "No root Target produces undetermined-no-native-target; "
+                "it does not prove the project is Blueprint-only."
+            ),
+            (
+                "A Target in a Source subdirectory is supported by UBT and is not "
+                "invalid by itself; nested-only placement is a warning."
+            ),
+            "Root and nested Targets together produce a distinct placement warning.",
             "Target files are discovered but TargetRules are not evaluated.",
-            "No root Target is valid for Blueprint-only projects and is not an error.",
             "Temporary or hybrid Target reasons require UBT-level analysis.",
         ],
     )
