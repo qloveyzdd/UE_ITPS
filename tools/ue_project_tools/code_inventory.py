@@ -49,6 +49,18 @@ def inspect_modules(
             {path.resolve() for path in rule_candidates},
             key=lambda path: normalized(path).casefold(),
         )
+        conventional_rule_key = normalized(conventional_rules).casefold()
+        build_rule_candidates = []
+        for path in unique_rules:
+            candidate_path = normalized(path)
+            build_rule_candidates.append(
+                {
+                    "path": candidate_path,
+                    "sha256": sha256_file(path),
+                    "conventional": candidate_path.casefold()
+                    == conventional_rule_key,
+                }
+            )
         module_dirs = sorted(
             {path.parent for path in unique_rules},
             key=lambda path: normalized(path).casefold(),
@@ -67,15 +79,20 @@ def inspect_modules(
             key=str.casefold,
         )
         status = (
-            "complete"
+            "resolved"
             if len(unique_rules) == 1
             else ("missing" if not unique_rules else "ambiguous")
         )
-        if status != "complete":
+        if status != "resolved":
             problems.append(
                 {
                     "severity": "error",
-                    "code": "project-module-build-rules-not-unique",
+                    "code": (
+                        "project-module-build-rules-missing"
+                        if status == "missing"
+                        else "project-module-build-rules-ambiguous"
+                    ),
+                    "descriptor_pointer": f"/Modules/{declaration_index}",
                     "message": (
                         f"Declared module {name} has {len(unique_rules)} "
                         "Build.cs candidates"
@@ -89,24 +106,16 @@ def inspect_modules(
                 "loading_phase": raw.get("LoadingPhase", "Default"),
                 "additional_dependencies": raw.get("AdditionalDependencies", []),
                 "descriptor_pointer": f"/Modules/{declaration_index}",
-                "conventional_location": {
-                    "directory": normalized(conventional_dir),
-                    "build_rules": normalized(conventional_rules),
+                "build_rules": {
+                    "status": status,
+                    "candidates": build_rule_candidates,
                 },
                 "actual": {
-                    "build_rule_candidates": [
-                        normalized(path) for path in unique_rules
-                    ],
-                    "build_rule_evidence": [
-                        {"path": normalized(path), "sha256": sha256_file(path)}
-                        for path in unique_rules
-                    ],
                     "source_file_count": len(
                         {path.resolve() for path in source_files}
                     ),
                     "module_entrypoint_candidates": entrypoints,
                 },
-                "status": status,
             }
         )
     return {

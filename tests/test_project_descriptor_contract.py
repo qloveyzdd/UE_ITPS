@@ -108,7 +108,61 @@ class ProjectDescriptorContractTests(unittest.TestCase):
                 result["schema_version"], "ue-itps.project-modules.v2"
             )
             self.assertEqual(result["validation"]["status"], "ok")
-            self.assertNotIn("raw_declaration", result["items"][0])
+            module = result["items"][0]
+            self.assertNotIn("raw_declaration", module)
+            self.assertNotIn("conventional_location", module)
+            self.assertNotIn("build_rule_candidates", module["actual"])
+            self.assertNotIn("build_rule_evidence", module["actual"])
+            self.assertNotIn("status", module)
+            self.assertEqual(module["build_rules"]["status"], "resolved")
+            self.assertEqual(len(module["build_rules"]["candidates"]), 1)
+            candidate = module["build_rules"]["candidates"][0]
+            self.assertEqual(candidate["path"], module_root.as_posix() + "/Fixture.Build.cs")
+            self.assertTrue(candidate["conventional"])
+            self.assertEqual(len(candidate["sha256"]), 64)
+
+    def test_module_inspection_reports_missing_build_rules(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            result = inspect_modules(
+                Path(temporary_directory), [{"Name": "Fixture"}], []
+            )
+
+            module = result["items"][0]
+            self.assertEqual(module["build_rules"]["status"], "missing")
+            self.assertEqual(module["build_rules"]["candidates"], [])
+            self.assertEqual(result["validation"]["status"], "error")
+            self.assertEqual(
+                result["validation"]["problems"][0]["code"],
+                "project-module-build-rules-missing",
+            )
+
+    def test_module_inspection_reports_ambiguous_build_rules(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            project_root = Path(temporary_directory)
+            conventional_root = project_root / "Source" / "Fixture"
+            platform_root = project_root / "Platforms" / "Win64" / "Fixture"
+            conventional_root.mkdir(parents=True)
+            platform_root.mkdir(parents=True)
+            (conventional_root / "Fixture.Build.cs").write_text("", encoding="utf-8")
+            (platform_root / "Fixture.Build.cs").write_text("", encoding="utf-8")
+
+            result = inspect_modules(project_root, [{"Name": "Fixture"}], [])
+
+            module = result["items"][0]
+            self.assertEqual(module["build_rules"]["status"], "ambiguous")
+            self.assertEqual(len(module["build_rules"]["candidates"]), 2)
+            self.assertEqual(
+                sum(
+                    candidate["conventional"]
+                    for candidate in module["build_rules"]["candidates"]
+                ),
+                1,
+            )
+            self.assertEqual(result["validation"]["status"], "error")
+            self.assertEqual(
+                result["validation"]["problems"][0]["code"],
+                "project-module-build-rules-ambiguous",
+            )
 
     def test_plugin_resolution_uses_declared_state_without_raw_copy(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

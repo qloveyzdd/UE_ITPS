@@ -65,12 +65,19 @@ def markdown_report(manifest: dict[str, Any]) -> str:
         "|---|---|---|---|---:|---|",
     ]
     for module in modules["items"]:
+        build_rules = module["build_rules"]
+        candidates = build_rules["candidates"]
+        build_rules_display = (
+            candidates[0]["path"]
+            if build_rules["status"] == "resolved"
+            else f"{len(candidates)} candidates"
+        )
         lines.append(
             f"| `{module['name']}` | `{module['type']}` | "
             f"`{module['loading_phase']}` | "
-            f"`{module['conventional_location']['build_rules']}` | "
+            f"`{build_rules_display}` | "
             f"{len(module['actual']['module_entrypoint_candidates'])} | "
-            f"`{module['status']}` |"
+            f"`{build_rules['status']}` |"
         )
 
     lines.extend(["", "### Target 文件（扫描发现）", ""])
