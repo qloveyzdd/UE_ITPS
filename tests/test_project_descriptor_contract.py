@@ -176,6 +176,87 @@ class ProjectDescriptorContractTests(unittest.TestCase):
                 "project-module-build-rules-ambiguous",
             )
 
+    def test_module_inspection_reports_undeclared_build_rules(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            project_root = Path(temporary_directory)
+            declared_root = project_root / "Source" / "Fixture"
+            undeclared_root = project_root / "Source" / "ExtraModule"
+            declared_root.mkdir(parents=True)
+            undeclared_root.mkdir(parents=True)
+            (declared_root / "Fixture.Build.cs").write_text("", encoding="utf-8")
+            (undeclared_root / "ExtraModule.Build.cs").write_text(
+                "", encoding="utf-8"
+            )
+
+            result = inspect_modules(project_root, [{"Name": "Fixture"}], [])
+
+            self.assertEqual(result["count"], 1)
+            self.assertEqual([item["name"] for item in result["items"]], ["Fixture"])
+            self.assertEqual(result["validation"]["status"], "error")
+            problem = result["validation"]["problems"][0]
+            self.assertEqual(
+                problem["code"], "project-module-build-rules-undeclared"
+            )
+            self.assertEqual(problem["module_name"], "ExtraModule")
+            self.assertEqual(len(problem["candidates"]), 1)
+            candidate = problem["candidates"][0]
+            self.assertEqual(
+                candidate["path"],
+                undeclared_root.as_posix() + "/ExtraModule.Build.cs",
+            )
+            self.assertEqual(len(candidate["sha256"]), 64)
+
+    def test_module_inspection_compares_names_when_counts_match(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            project_root = Path(temporary_directory)
+            actual_root = project_root / "Source" / "Actual"
+            actual_root.mkdir(parents=True)
+            (actual_root / "Actual.Build.cs").write_text("", encoding="utf-8")
+
+            result = inspect_modules(project_root, [{"Name": "Expected"}], [])
+
+            self.assertEqual(result["count"], 1)
+            self.assertEqual(result["items"][0]["name"], "Expected")
+            self.assertEqual(
+                result["items"][0]["build_rules"]["status"], "missing"
+            )
+            self.assertEqual(result["validation"]["status"], "error")
+            self.assertEqual(
+                {
+                    problem["code"]
+                    for problem in result["validation"]["problems"]
+                },
+                {
+                    "project-module-build-rules-missing",
+                    "project-module-build-rules-undeclared",
+                },
+            )
+
+    def test_module_inspection_reports_duplicate_declarations(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            project_root = Path(temporary_directory)
+            module_root = project_root / "Source" / "Fixture"
+            module_root.mkdir(parents=True)
+            (module_root / "Fixture.Build.cs").write_text("", encoding="utf-8")
+
+            result = inspect_modules(
+                project_root,
+                [{"Name": "Fixture"}, {"Name": "Fixture"}],
+                [],
+            )
+
+            self.assertEqual(result["count"], 2)
+            self.assertEqual(len(result["items"]), 2)
+            self.assertEqual(result["validation"]["status"], "error")
+            self.assertEqual(
+                result["validation"]["problems"][0]["code"],
+                "project-module-declaration-duplicate",
+            )
+            self.assertEqual(
+                result["validation"]["problems"][0]["descriptor_pointer"],
+                "/Modules/1",
+            )
+
     def test_plugin_resolution_uses_declared_state_without_raw_copy(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             project_root = Path(temporary_directory)

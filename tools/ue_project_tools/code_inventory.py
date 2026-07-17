@@ -50,25 +50,52 @@ def inspect_modules(
     modules: list[dict[str, Any]] = []
     source_root = project_root / "Source"
     search_roots = [source_root, project_root / "Platforms", *additional_roots]
-    problems: list[dict[str, str]] = []
+    problems: list[dict[str, Any]] = []
+
+    all_rules = sorted(
+        {
+            path.resolve()
+            for search_root in search_roots
+            for path in iter_files(search_root, ".Build.cs")
+        },
+        key=lambda path: normalized(path).casefold(),
+    )
+    rules_by_module: dict[str, list[Path]] = {}
+    discovered_module_names: dict[str, str] = {}
+    for path in all_rules:
+        module_name = path.name[: -len(".Build.cs")]
+        module_key = module_name.casefold()
+        rules_by_module.setdefault(module_key, []).append(path)
+        discovered_module_names.setdefault(module_key, module_name)
+
+    declared_module_indices: dict[str, int] = {}
 
     for declaration_index, raw in enumerate(declarations):
         if not isinstance(raw, dict) or not isinstance(raw.get("Name"), str):
             continue
         name = raw["Name"]
+        module_key = name.casefold()
+        first_declaration_index = declared_module_indices.get(module_key)
+        if first_declaration_index is None:
+            declared_module_indices[module_key] = declaration_index
+        else:
+            problems.append(
+                {
+                    "severity": "error",
+                    "code": "project-module-declaration-duplicate",
+                    "module_name": name,
+                    "descriptor_pointer": f"/Modules/{declaration_index}",
+                    "first_descriptor_pointer": (
+                        f"/Modules/{first_declaration_index}"
+                    ),
+                    "message": (
+                        f"Module {name} is declared more than once in .uproject"
+                    ),
+                }
+            )
         conventional_dir = source_root / name
         conventional_rules = conventional_dir / f"{name}.Build.cs"
-        rule_candidates: list[Path] = []
-        for search_root in search_roots:
-            rule_candidates.extend(
-                path
-                for path in iter_files(search_root, ".Build.cs")
-                if path.name.casefold() == f"{name}.Build.cs".casefold()
-            )
-        unique_rules = sorted(
-            {path.resolve() for path in rule_candidates},
-            key=lambda path: normalized(path).casefold(),
-        )
+        unique_rules = rules_by_module.get(module_key, [])
         conventional_rule_key = normalized(conventional_rules).casefold()
         build_rule_candidates = []
         for path in unique_rules:
@@ -144,6 +171,29 @@ def inspect_modules(
                 },
             }
         )
+
+    for module_key in sorted(
+        set(rules_by_module) - set(declared_module_indices),
+        key=lambda key: discovered_module_names[key].casefold(),
+    ):
+        module_name = discovered_module_names[module_key]
+        candidates = [
+            {"path": normalized(path), "sha256": sha256_file(path)}
+            for path in rules_by_module[module_key]
+        ]
+        problems.append(
+            {
+                "severity": "error",
+                "code": "project-module-build-rules-undeclared",
+                "module_name": module_name,
+                "candidates": candidates,
+                "message": (
+                    f"Module {module_name} has {len(candidates)} Build.cs "
+                    "candidates but is not declared in .uproject"
+                ),
+            }
+        )
+
     return {
         "schema_version": "ue-itps.project-modules.v2",
         "count": len(modules),
