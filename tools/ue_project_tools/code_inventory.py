@@ -65,11 +65,6 @@ def inspect_modules(
             {path.parent for path in unique_rules},
             key=lambda path: normalized(path).casefold(),
         )
-        source_files = [
-            path
-            for module_dir in module_dirs
-            for path in [*iter_files(module_dir, ".h"), *iter_files(module_dir, ".cpp")]
-        ]
         entrypoints = sorted(
             {
                 entrypoint
@@ -111,9 +106,6 @@ def inspect_modules(
                     "candidates": build_rule_candidates,
                 },
                 "actual": {
-                    "source_file_count": len(
-                        {path.resolve() for path in source_files}
-                    ),
                     "module_entrypoint_candidates": entrypoints,
                 },
             }

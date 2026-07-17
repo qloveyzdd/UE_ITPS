@@ -113,6 +113,7 @@ class ProjectDescriptorContractTests(unittest.TestCase):
             self.assertNotIn("conventional_location", module)
             self.assertNotIn("build_rule_candidates", module["actual"])
             self.assertNotIn("build_rule_evidence", module["actual"])
+            self.assertNotIn("source_file_count", module["actual"])
             self.assertNotIn("status", module)
             self.assertEqual(module["build_rules"]["status"], "resolved")
             self.assertEqual(len(module["build_rules"]["candidates"]), 1)
