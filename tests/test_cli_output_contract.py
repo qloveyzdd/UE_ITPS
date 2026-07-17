@@ -64,16 +64,16 @@ class CliOutputContractTests(unittest.TestCase):
             project = self.write_project(root)
             _, descriptor = descriptor_result(project)
             results = [
-                ("ue-itps.project-discovery.v2", discovery_result(root)),
-                ("ue-itps.project-descriptor.v5", descriptor),
+                ("ue-itps.project-discovery.v1", discovery_result(root)),
+                ("ue-itps.project-descriptor.v1", descriptor),
                 (
-                    "ue-itps.engine-resolution.v3",
+                    "ue-itps.engine-resolution.v1",
                     resolve_engine(project, "", root / "MissingEngine"),
                 ),
-                ("ue-itps.project-modules.v5", inspect_modules(root, [], [])),
-                ("ue-itps.project-targets.v3", inspect_targets(root)),
+                ("ue-itps.project-modules.v1", inspect_modules(root, [], [])),
+                ("ue-itps.project-targets.v1", inspect_targets(root)),
                 (
-                    "ue-itps.project-plugin-references.v5",
+                    "ue-itps.project-plugin-references.v1",
                     resolve_project_plugins(
                         project,
                         root,
@@ -86,7 +86,7 @@ class CliOutputContractTests(unittest.TestCase):
                     ),
                 ),
                 (
-                    "ue-itps.project-paths.v3",
+                    "ue-itps.project-paths.v1",
                     classify_project_paths(
                         project,
                         {"FileVersion": 3, "Modules": [], "Plugins": []},
@@ -125,7 +125,7 @@ class CliOutputContractTests(unittest.TestCase):
             item["project_relative_path"]: item
             for item in result["cache_and_local_state_paths"]
         }
-        self.assertEqual(result["schema_version"], "ue-itps.project-paths.v3")
+        self.assertEqual(result["schema_version"], "ue-itps.project-paths.v1")
         self.assertEqual(result["project_root"], root.as_posix())
         self.assertEqual(
             result["project_descriptor"]["project_relative_path"],
@@ -203,7 +203,7 @@ class CliOutputContractTests(unittest.TestCase):
             result = inspect_targets(root)
 
         items = {item["name"]: item for item in result["items"]}
-        self.assertEqual(result["schema_version"], "ue-itps.project-targets.v3")
+        self.assertEqual(result["schema_version"], "ue-itps.project-targets.v1")
         self.assertNotIn("count", result)
         self.assertEqual(result["classification"], "native-project")
         self.assertTrue(items["Root"]["is_root_target"])

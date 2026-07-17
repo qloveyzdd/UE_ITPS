@@ -326,7 +326,7 @@ def descriptor_result(project_file: Path) -> tuple[dict[str, Any], dict[str, Any
         )
     )
     result = result_document(
-        "ue-itps.project-descriptor.v5",
+        "ue-itps.project-descriptor.v1",
         {
             "project": {
                 "name": project_file.stem,

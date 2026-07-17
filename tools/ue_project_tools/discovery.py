@@ -56,7 +56,7 @@ def discovery_result(root: Path) -> dict[str, object]:
             }
         )
     return result_document(
-        "ue-itps.project-discovery.v2",
+        "ue-itps.project-discovery.v1",
         {
             "search_root": normalized(root.expanduser()),
             "status": status,

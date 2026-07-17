@@ -202,7 +202,7 @@ def inspect_modules(
         )
 
     return result_document(
-        "ue-itps.project-modules.v5",
+        "ue-itps.project-modules.v1",
         {
             "reconciled_module_count": len(modules),
             "items": modules,
@@ -278,7 +278,7 @@ def inspect_targets(project_root: Path) -> dict[str, Any]:
             }
         )
     return result_document(
-        "ue-itps.project-targets.v3",
+        "ue-itps.project-targets.v1",
         {
             "items": targets,
             "classification": classification,

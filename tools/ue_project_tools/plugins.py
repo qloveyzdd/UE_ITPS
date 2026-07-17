@@ -278,7 +278,7 @@ def resolve_project_plugins(
         )
 
     return result_document(
-        "ue-itps.project-plugin-references.v5",
+        "ue-itps.project-plugin-references.v1",
         {
             "path_roots": {
                 "project": normalized(project_root),

@@ -62,9 +62,9 @@ python tools/ue_resolve_plugins.py --project <project> --operation scan --platfo
 
 Use `Win64 / Editor` only as the default focused Plugin profile. If the user provides another platform, target type, or operation, pass it through and state the active profile. Configuration is not accepted or evaluated by the focused Plugin tool.
 
-## Interpret Plugin v5
+## Interpret Plugin v1
 
-Treat `ue-itps.project-plugin-references.v5` items as sparse records:
+Treat `ue-itps.project-plugin-references.v1` items as sparse records:
 
 - `path_roots.project` and `.engine` are absolute roots recorded once. Plugin `descriptor` paths are relative to the project root for `project*` and `additional-project-*` origins, or to the Engine root for `engine*` origins.
 - `project_descriptor.path` is relative to `path_roots.project`.
@@ -72,9 +72,9 @@ Treat `ue-itps.project-plugin-references.v5` items as sparse records:
 - Normal resolved items keep only name, origin, relative descriptor path, and state fields that differ from defaults. Plugin descriptor contents and hashes are not read.
 - Not-found items, alternate descriptor conflicts, and items associated with validation problems retain every modeled field, including empty values.
 
-## Interpret descriptor v5
+## Interpret descriptor v1
 
-Treat `ue-itps.project-descriptor.v5` as a compact projection of the original `.uproject`:
+Treat `ue-itps.project-descriptor.v1` as a compact projection of the original `.uproject`:
 
 - `declared_modules` reports declared Module names in descriptor order. Use `ue_inspect_modules.py` for types, loading phases, Build.cs evidence, or entrypoints.
 - `plugin_declarations.enabled` and `.disabled` contain references whose only fields are `Name` and boolean `Enabled`.
@@ -87,11 +87,11 @@ For a simple enabled/disabled question, stop after `ue_read_project_descriptor.p
 ## Interpretation boundaries
 
 - `EngineAssociation` is an association key. Use resolved `Build.version` for the actual engine version.
-- `.uproject` declares Modules and direct Plugin references, but descriptor v4 intentionally does not repeat their full arrays. It does not declare `Target.cs` or a complete dependency graph.
+- `.uproject` declares Modules and direct Plugin references, but descriptor v1 intentionally does not repeat their full arrays. It does not declare `Target.cs` or a complete dependency graph.
 - Direct Plugin resolution is not the effective `.uplugin` dependency closure.
-- Path v3 derives the project root from the selected `.uproject` and reports conventional path roles, filesystem state (`missing | file | directory | other`), and unclassified root directories.
-- Path v3 records the absolute `project_root` once; path items and validation problems use only `project_relative_path`.
-- Path v3 reads explicit descriptor fields only to emit validation problems: declared Modules without AdditionalRootDirectories require the conventional Source directory. It does not add requiredness fields to path items.
-- Absence of Module declarations does not prove Source is unnecessary. Path v3 does not inspect directory contents or determine source authority, deletion safety, self-containment, or rebuildability.
+- Path v1 derives the project root from the selected `.uproject` and reports conventional path roles, filesystem state (`missing | file | directory | other`), and unclassified root directories.
+- Path v1 records the absolute `project_root` once; path items and validation problems use only `project_relative_path`.
+- Path v1 reads explicit descriptor fields only to emit validation problems: declared Modules without AdditionalRootDirectories require the conventional Source directory. It does not add requiredness fields to path items.
+- Absence of Module declarations does not prove Source is unnecessary. Path v1 does not inspect directory contents or determine source authority, deletion safety, self-containment, or rebuildability.
 - Resolve relative Additional* declarations separately through descriptor-aware tools; do not substitute the repository root or current working directory.
 - Do not modify UE source, assets, configuration, registry entries, or Engine installations.

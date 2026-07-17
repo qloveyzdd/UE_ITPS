@@ -153,7 +153,7 @@ class ProjectDescriptorContractTests(unittest.TestCase):
             _, result = descriptor_result(project_file)
 
             self.assertEqual(
-                result["schema_version"], "ue-itps.project-descriptor.v5"
+                result["schema_version"], "ue-itps.project-descriptor.v1"
             )
             self.assertEqual(result["declared_modules"], ["Fixture"])
             self.assertNotIn("descriptor_sha256", result["project"])
@@ -293,7 +293,7 @@ class ProjectDescriptorContractTests(unittest.TestCase):
             )
 
             self.assertEqual(
-                result["schema_version"], "ue-itps.project-modules.v5"
+                result["schema_version"], "ue-itps.project-modules.v1"
             )
             self.assertNotIn("count", result)
             self.assertEqual(result["reconciled_module_count"], 1)
@@ -488,7 +488,7 @@ class ProjectDescriptorContractTests(unittest.TestCase):
 
             self.assertEqual(
                 result["schema_version"],
-                "ue-itps.project-plugin-references.v5",
+                "ue-itps.project-plugin-references.v1",
             )
             self.assertEqual(result["declared_enabled_count"], 2)
             self.assertEqual(result["declared_disabled_count"], 1)
