@@ -61,7 +61,7 @@ def main() -> int:
             else None
         )
         roots, directory_findings = resolve_internal_directories(
-            project.parent, descriptor, "AdditionalPluginDirectories"
+            project, descriptor, "AdditionalPluginDirectories"
         )
         initial_problems = [
             *engine_info["validation"]["problems"],

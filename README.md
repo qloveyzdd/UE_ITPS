@@ -162,7 +162,16 @@ Plugin v4 输出在 `path_roots` 中只记录一次项目和 Engine 绝对根路
 python tools\ue_classify_project_paths.py --project $Project
 ```
 
-将路径分成描述符输入、条件输入、生成物、缓存和本地运行状态。目录存在不代表运行时真正使用，也不代表最小项目必需。
+只根据 `.uproject` 的位置和项目根文件系统状态输出目录事实：
+
+- `project_root`：由所选 `.uproject` 父目录唯一确定的绝对项目根，只记录一次。
+- `project_descriptor`：所选 `.uproject` 的项目相对路径与文件系统状态。
+- `project_directories`：`Source`、`Config`、`Content`、`Plugins`、`Build`、`Platforms` 的约定角色和实际类型；`actual_type: missing` 表示路径不存在。
+- `build_and_ide_paths`：`Binaries`、`Intermediate` 和 `.sln` 的约定位置；该分组不判断来源、必要性、删除安全性或可重建性。
+- `cache_and_local_state_paths`：`DerivedDataCache`、`Saved`、`.vs` 和 `.idea`。
+- `unclassified_root_directories`：不能安全判断为可删除、必须人工复核的其他项目根目录。
+
+除顶层 `project_root` 外，路径项和诊断只保存 `project_relative_path`，不重复绝对路径。工具读取 `.uproject` 的显式顶层声明，但不读取目录内容、Module/Plugin 文件或资产。当 `Modules` 非空、没有声明 `AdditionalRootDirectories` 且 `Source` 缺失时，`validation` 报告阻断错误；路径项不增加额外的必要性字段。没有 Module 声明不能反向证明 `Source` 不需要。工具也不判断源码权威、自包含、删除安全性或可重建性。
 
 ### 8. 生成完整兼容快照
 

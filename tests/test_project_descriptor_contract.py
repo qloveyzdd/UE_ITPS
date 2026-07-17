@@ -130,7 +130,7 @@ class ProjectDescriptorContractTests(unittest.TestCase):
             self.write_json(project_file, {"FileVersion": 3, "Plugins": []})
             descriptor = {"AdditionalPluginDirectories": ["../ExternalPlugins"]}
             roots, findings = resolve_internal_directories(
-                project_root, descriptor, "AdditionalPluginDirectories"
+                project_file, descriptor, "AdditionalPluginDirectories"
             )
             problems = directory_finding_problems(
                 "AdditionalPluginDirectories", findings, warn_external=True

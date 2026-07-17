@@ -29,8 +29,10 @@ PLUGIN_CORE_FIELDS = {"Name", "Enabled"}
 
 
 def resolve_internal_directories(
-    project_root: Path, descriptor: dict[str, Any], field: str
+    project_file: Path, descriptor: dict[str, Any], field: str
 ) -> tuple[list[Path], list[dict[str, Any]]]:
+    """Resolve descriptor paths relative to the directory containing .uproject."""
+    project_root = project_file.resolve().parent
     roots: list[Path] = []
     findings: list[dict[str, Any]] = []
     raw_entries = descriptor.get(field, [])
@@ -242,10 +244,10 @@ def descriptor_result(project_file: Path) -> tuple[dict[str, Any], dict[str, Any
     )
 
     _, additional_roots = resolve_internal_directories(
-        project_file.parent, descriptor, "AdditionalRootDirectories"
+        project_file, descriptor, "AdditionalRootDirectories"
     )
     _, additional_plugins = resolve_internal_directories(
-        project_file.parent, descriptor, "AdditionalPluginDirectories"
+        project_file, descriptor, "AdditionalPluginDirectories"
     )
     problems.extend(
         directory_finding_problems("AdditionalRootDirectories", additional_roots)

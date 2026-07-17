@@ -33,10 +33,10 @@ def build_snapshot(
         Path(engine_root) if engine_root else None,
     )
     additional_roots, additional_root_findings = resolve_internal_directories(
-        project_root, descriptor, "AdditionalRootDirectories"
+        project_file, descriptor, "AdditionalRootDirectories"
     )
     additional_plugin_roots, additional_plugin_findings = resolve_internal_directories(
-        project_root, descriptor, "AdditionalPluginDirectories"
+        project_file, descriptor, "AdditionalPluginDirectories"
     )
     module_info = inspect_modules(
         project_root, descriptor.get("Modules", []), additional_roots
@@ -56,7 +56,7 @@ def build_snapshot(
         target_type,
         additional_plugin_findings,
     )
-    path_info = classify_project_paths(project_root, project_file)
+    path_info = classify_project_paths(project_file, descriptor)
 
     problems: list[dict[str, str]] = []
     problems.extend(descriptor_info["validation"]["problems"])

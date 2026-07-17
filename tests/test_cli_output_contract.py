@@ -88,8 +88,11 @@ class CliOutputContractTests(unittest.TestCase):
                     ),
                 ),
                 (
-                    "ue-itps.project-paths.v2",
-                    classify_project_paths(root, project),
+                    "ue-itps.project-paths.v3",
+                    classify_project_paths(
+                        project,
+                        {"FileVersion": 3, "Modules": [], "Plugins": []},
+                    ),
                 ),
                 (
                     "ue-itps.uproject-structure.v5",
@@ -114,9 +117,82 @@ class CliOutputContractTests(unittest.TestCase):
                     "modules": "ue-itps.project-modules.v4",
                     "targets": "ue-itps.project-targets.v2",
                     "plugins": "ue-itps.project-plugin-references.v4",
-                    "paths": "ue-itps.project-paths.v2",
+                    "paths": "ue-itps.project-paths.v3",
                 },
             )
+
+    def test_project_paths_report_directory_facts_only(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = self.write_project(root)
+            (root / "Source").mkdir()
+            (root / "Binaries").mkdir()
+            (root / "Saved").mkdir()
+
+            result = classify_project_paths(
+                project,
+                {"FileVersion": 3, "Modules": [], "Plugins": []},
+            )
+
+        project_directories = {
+            item["project_relative_path"]: item
+            for item in result["project_directories"]
+        }
+        build_and_ide_paths = {
+            item["project_relative_path"]: item
+            for item in result["build_and_ide_paths"]
+        }
+        local_state = {
+            item["project_relative_path"]: item
+            for item in result["cache_and_local_state_paths"]
+        }
+        self.assertEqual(result["schema_version"], "ue-itps.project-paths.v3")
+        self.assertEqual(result["project_root"], root.as_posix())
+        self.assertEqual(
+            result["project_descriptor"]["project_relative_path"],
+            "Fixture.uproject",
+        )
+        path_items = [
+            result["project_descriptor"],
+            *result["project_directories"],
+            *result["build_and_ide_paths"],
+            *result["cache_and_local_state_paths"],
+            *result["unclassified_root_directories"],
+        ]
+        self.assertTrue(all("path" not in item for item in path_items))
+        self.assertTrue(all("reason" not in item for item in path_items))
+        self.assertEqual(project_directories["Source"]["role"], "source")
+        self.assertEqual(project_directories["Source"]["actual_type"], "directory")
+        self.assertEqual(build_and_ide_paths["Binaries"]["role"], "binaries")
+        self.assertEqual(local_state["Saved"]["role"], "saved-state")
+        self.assertEqual(result["validation"]["status"], "ok")
+
+    def test_project_paths_fail_closed_for_unknown_or_invalid_directories(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = self.write_project(root)
+            (root / "Source").write_text("not a directory", encoding="utf-8")
+            (root / "CustomDirectory").mkdir()
+
+            result = classify_project_paths(
+                project,
+                {"FileVersion": 3, "Modules": [], "Plugins": []},
+            )
+
+        codes = {problem["code"] for problem in result["validation"]["problems"]}
+        self.assertEqual(result["validation"]["status"], "error")
+        self.assertIn("project-path-type-mismatch", codes)
+        self.assertIn("unclassified-project-root-directory", codes)
+        self.assertTrue(
+            all(
+                "path" not in problem and "project_relative_path" in problem
+                for problem in result["validation"]["problems"]
+            )
+        )
+        self.assertEqual(
+            result["unclassified_root_directories"][0]["project_relative_path"],
+            "CustomDirectory",
+        )
 
     def test_validation_status_reports_warnings(self) -> None:
         result = result_document(
@@ -260,6 +336,111 @@ class CliOutputContractTests(unittest.TestCase):
             result["validation"]["problems"][0]["code"],
             "project-discovery-not-found",
         )
+
+    def test_path_classifier_rejects_a_missing_project_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            missing_project = Path(temporary_directory) / "Missing.uproject"
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(TOOLS_ROOT / "ue_classify_project_paths.py"),
+                    "--project",
+                    str(missing_project),
+                ],
+                cwd=REPOSITORY_ROOT,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=False,
+            )
+
+        self.assertEqual(completed.returncode, 2)
+        self.assertEqual(completed.stdout, "")
+        self.assertIn("Missing.uproject", completed.stderr)
+
+    def test_path_classifier_rejects_invalid_project_descriptor(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            project = Path(temporary_directory) / "Fixture.uproject"
+            project.write_text("this is intentionally not JSON", encoding="utf-8")
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(TOOLS_ROOT / "ue_classify_project_paths.py"),
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPOSITORY_ROOT,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=False,
+            )
+
+        self.assertEqual(completed.returncode, 2)
+        self.assertEqual(completed.stdout, "")
+        self.assertIn("Expecting value", completed.stderr)
+
+    def test_path_classifier_requires_source_for_declared_modules(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "Fixture.uproject"
+            descriptor = {
+                "FileVersion": 3,
+                "Modules": [{"Name": "Fixture", "Type": "Runtime"}],
+                "Plugins": [],
+            }
+            project.write_text(json.dumps(descriptor), encoding="utf-8")
+
+            result = classify_project_paths(project, descriptor)
+
+        self.assertEqual(result["validation"]["status"], "error")
+        self.assertEqual(
+            result["validation"]["problems"][0]["code"],
+            "declared-modules-source-directory-missing",
+        )
+        self.assertEqual(
+            result["validation"]["problems"][0]["project_relative_path"],
+            "Source",
+        )
+        self.assertNotIn("path", result["validation"]["problems"][0])
+        source_item = next(
+            item for item in result["project_directories"] if item["role"] == "source"
+        )
+        self.assertEqual(source_item["actual_type"], "missing")
+        self.assertNotIn("requiredness", source_item)
+        self.assertNotIn("requiredness_evidence", source_item)
+
+    def test_path_classifier_does_not_infer_source_from_absent_modules(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = self.write_project(root)
+
+            result = classify_project_paths(
+                project,
+                {"FileVersion": 3, "Modules": [], "Plugins": []},
+            )
+
+        self.assertEqual(result["validation"]["status"], "ok")
+
+    def test_path_classifier_defers_source_when_additional_roots_are_declared(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "Fixture.uproject"
+            descriptor = {
+                "FileVersion": 3,
+                "Modules": [{"Name": "Fixture", "Type": "Runtime"}],
+                "Plugins": [],
+                "AdditionalRootDirectories": ["AlternateSource"],
+            }
+            project.write_text(json.dumps(descriptor), encoding="utf-8")
+
+            result = classify_project_paths(project, descriptor)
+
+        codes = {problem["code"] for problem in result["validation"]["problems"]}
+        self.assertNotIn("declared-modules-source-directory-missing", codes)
+        self.assertEqual(result["validation"]["status"], "ok")
 
     def test_plugin_cli_resolves_engine_from_project_association(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

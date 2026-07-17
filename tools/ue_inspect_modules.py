@@ -24,7 +24,7 @@ def main() -> int:
     try:
         descriptor = read_json(project)
         roots, _ = resolve_internal_directories(
-            project.parent, descriptor, "AdditionalRootDirectories"
+            project, descriptor, "AdditionalRootDirectories"
         )
         result = inspect_modules(project.parent, descriptor.get("Modules", []), roots)
     except (OSError, ValueError) as exc:

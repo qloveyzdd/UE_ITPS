@@ -23,7 +23,7 @@ If the scripts are missing, report that this repository does not contain the exp
 | Check declared project Module structure | `ue_inspect_modules.py` |
 | Discover project Targets | `ue_inspect_targets.py` |
 | Locate direct `.uproject` Plugin references | `ue_resolve_plugins.py` |
-| Classify root directories | `ue_classify_project_paths.py` |
+| Classify project-root paths with explicit descriptor evidence | `ue_classify_project_paths.py` |
 | Produce the complete compatibility snapshot | `inspect_uproject.py` |
 
 Do not run the complete snapshot when one focused tool is sufficient.
@@ -102,6 +102,9 @@ Do not pass `--json-out` or `--markdown-out` unless the user asks to archive the
 - `EngineAssociation` is an association key. Use resolved `Build.version` for the actual engine version.
 - `.uproject` declares Modules and direct Plugin references, but descriptor v4 intentionally does not repeat their full arrays. It does not declare `Target.cs` or a complete dependency graph.
 - Direct Plugin resolution is not the effective `.uplugin` dependency closure.
-- Directory presence does not prove runtime use or minimum-project necessity.
-- `Binaries`, `Intermediate`, caches, and local state are not source authority by default.
+- Path v3 derives the project root from the selected `.uproject` and reports conventional path roles, filesystem state (`missing | file | directory | other`), and unclassified root directories.
+- Path v3 records the absolute `project_root` once; path items and validation problems use only `project_relative_path`.
+- Path v3 reads explicit descriptor fields only to emit validation problems: declared Modules without AdditionalRootDirectories require the conventional Source directory. It does not add requiredness fields to path items.
+- Absence of Module declarations does not prove Source is unnecessary. Path v3 does not inspect directory contents or determine source authority, deletion safety, self-containment, or rebuildability.
+- Resolve relative Additional* declarations separately through descriptor-aware tools; do not substitute the repository root or current working directory.
 - Do not modify UE source, assets, configuration, registry entries, or Engine installations.
