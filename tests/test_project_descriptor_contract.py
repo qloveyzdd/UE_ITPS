@@ -107,8 +107,11 @@ class ProjectDescriptorContractTests(unittest.TestCase):
             self.assertEqual(
                 result["schema_version"], "ue-itps.project-modules.v2"
             )
-            self.assertEqual(result["count"], 1)
-            self.assertEqual(result["count"], len(result["items"]))
+            self.assertNotIn("count", result)
+            self.assertEqual(result["reconciled_module_count"], 1)
+            self.assertEqual(
+                result["reconciled_module_count"], len(result["items"])
+            )
             self.assertEqual(result["validation"]["status"], "ok")
             module = result["items"][0]
             self.assertNotIn("raw_declaration", module)
@@ -141,7 +144,7 @@ class ProjectDescriptorContractTests(unittest.TestCase):
                 Path(temporary_directory), [{"Name": "Fixture"}], []
             )
 
-            self.assertEqual(result["count"], 0)
+            self.assertEqual(result["reconciled_module_count"], 0)
             self.assertEqual(result["items"], [])
             self.assertEqual(result["validation"]["status"], "error")
             problem = result["validation"]["problems"][0]
@@ -161,7 +164,7 @@ class ProjectDescriptorContractTests(unittest.TestCase):
 
             result = inspect_modules(project_root, [{"Name": "Fixture"}], [])
 
-            self.assertEqual(result["count"], 0)
+            self.assertEqual(result["reconciled_module_count"], 0)
             self.assertEqual(result["items"], [])
             self.assertEqual(result["validation"]["status"], "error")
             problem = result["validation"]["problems"][0]
@@ -192,7 +195,7 @@ class ProjectDescriptorContractTests(unittest.TestCase):
 
             result = inspect_modules(project_root, [{"Name": "Fixture"}], [])
 
-            self.assertEqual(result["count"], 1)
+            self.assertEqual(result["reconciled_module_count"], 1)
             self.assertEqual([item["name"] for item in result["items"]], ["Fixture"])
             self.assertEqual(result["validation"]["status"], "error")
             problem = result["validation"]["problems"][0]
@@ -217,7 +220,7 @@ class ProjectDescriptorContractTests(unittest.TestCase):
 
             result = inspect_modules(project_root, [{"Name": "Expected"}], [])
 
-            self.assertEqual(result["count"], 0)
+            self.assertEqual(result["reconciled_module_count"], 0)
             self.assertEqual(result["items"], [])
             self.assertEqual(result["validation"]["status"], "error")
             self.assertEqual(
@@ -244,7 +247,7 @@ class ProjectDescriptorContractTests(unittest.TestCase):
                 [],
             )
 
-            self.assertEqual(result["count"], 0)
+            self.assertEqual(result["reconciled_module_count"], 0)
             self.assertEqual(result["items"], [])
             self.assertEqual(result["validation"]["status"], "error")
             self.assertEqual(

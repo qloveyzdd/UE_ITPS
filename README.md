@@ -98,7 +98,7 @@ python tools\ue_resolve_engine.py --project $Project
 python tools\ue_inspect_modules.py --project $Project
 ```
 
-对账 `.uproject` Module 与项目 `*.Build.cs`；`count/items` 仅包含一一匹配成功的 Module，缺失、歧义、未声明或重复声明进入 `validation`，并记录 `IMPLEMENT_*_MODULE` 入口证据。
+对账 `.uproject` Module 与项目 `*.Build.cs`；`reconciled_module_count/items` 仅包含一一匹配成功的 Module，缺失、歧义、未声明或重复声明进入 `validation`，并记录 `IMPLEMENT_*_MODULE` 入口证据。
 
 ### 5. 发现项目 Target
 

@@ -104,7 +104,7 @@ def build_snapshot(
         ],
     }
     module_compat = {
-        "count": module_info["count"],
+        "reconciled_module_count": module_info["reconciled_module_count"],
         "items": module_info["items"],
     }
     target_compat = {
