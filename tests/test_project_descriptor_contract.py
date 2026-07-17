@@ -105,7 +105,7 @@ class ProjectDescriptorContractTests(unittest.TestCase):
             )
 
             self.assertEqual(
-                result["schema_version"], "ue-itps.project-modules.v2"
+                result["schema_version"], "ue-itps.project-modules.v3"
             )
             self.assertNotIn("count", result)
             self.assertEqual(result["reconciled_module_count"], 1)

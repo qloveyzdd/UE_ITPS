@@ -207,7 +207,7 @@ def inspect_modules(
         )
 
     return {
-        "schema_version": "ue-itps.project-modules.v2",
+        "schema_version": "ue-itps.project-modules.v3",
         "reconciled_module_count": len(modules),
         "items": modules,
         "validation": {

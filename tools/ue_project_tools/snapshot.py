@@ -118,7 +118,7 @@ def build_snapshot(
     }
 
     return {
-        "schema_version": "ue-itps.uproject-structure.v3",
+        "schema_version": "ue-itps.uproject-structure.v4",
         "generated_at": utc_now(),
         "scan_context": {
             "operation": operation,

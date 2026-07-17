@@ -68,11 +68,11 @@ Codex / 用户
 | `ue_find_projects.py` | 发现 `.uproject` 并报告歧义 | Search root | `ue-itps.project-discovery.v1` |
 | `ue_read_project_descriptor.py` | 读取描述符显式事实 | `.uproject` | `ue-itps.project-descriptor.v3` |
 | `ue_resolve_engine.py` | 解析 Engine 与 `Build.version` | `.uproject`、可选 Engine override | `ue-itps.engine-resolution.v1` |
-| `ue_inspect_modules.py` | 对账项目 Module 结构 | `.uproject` | `ue-itps.project-modules.v2` |
+| `ue_inspect_modules.py` | 对账项目 Module 结构 | `.uproject` | `ue-itps.project-modules.v3` |
 | `ue_inspect_targets.py` | 发现 Target 与原生 Target 证据 | `.uproject` | `ue-itps.project-targets.v1` |
 | `ue_resolve_plugins.py` | 定位直接 Plugin 引用 | `.uproject`、Engine root、Profile | `ue-itps.project-plugin-references.v2` |
 | `ue_classify_project_paths.py` | 分类项目根路径 | `.uproject` | `ue-itps.project-paths.v1` |
-| `inspect_uproject.py` | 组合已有结果 | 全部扫描上下文 | `ue-itps.uproject-structure.v3` |
+| `inspect_uproject.py` | 组合已有结果 | 全部扫描上下文 | `ue-itps.uproject-structure.v4` |
 
 CLI 只处理参数、调用服务、序列化结果和退出码，不应包含新的 UE 领域判断。
 
