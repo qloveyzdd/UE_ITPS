@@ -1,6 +1,6 @@
 ---
 name: ue-project-inspector
-description: Inspect Unreal Engine projects through the repository's deterministic, read-only UE project tools. Use when Codex needs to find .uproject files; read compact descriptor facts including declared Module names, Plugin declared enabled/disabled/extended state, or descriptor field inventory; resolve EngineAssociation to the actual Engine/Build/Build.version; inspect project Modules or Targets; locate direct Plugin references; classify project directories; or summarize several focused results. Do not use for runtime behavior, asset reachability, feature graphs, code generation, builds, tests, or project modification.
+description: Inspect Unreal Engine projects and explicitly selected source entry files through the repository's deterministic, read-only tools. Use when Codex needs to find or read .uproject files; resolve Engine identity; locate direct Plugin references; inspect one .uplugin; navigate one plugin's declared modules; read one Build.cs or Target.cs; inspect one module's lifecycle entry source; classify project directories; or summarize focused results. Do not use for runtime behavior, asset reachability, general class/call graphs, code generation, builds, tests, or project modification.
 ---
 
 # UE Project Inspector
@@ -24,6 +24,11 @@ If the scripts are missing, report that this repository does not contain the exp
 | Discover project Targets | `ue_inspect_targets.py` |
 | Locate direct `.uproject` Plugin references | `ue_resolve_plugins.py` |
 | Classify project-root paths with explicit descriptor evidence | `ue_classify_project_paths.py` |
+| Read one explicitly selected `.uplugin` | `ue_read_plugin_descriptor.py` |
+| Locate one plugin's declared Build.cs and module entrypoints | `ue_inspect_plugin_modules.py` |
+| Read static rules from one Build.cs | `ue_inspect_module_rules.py` |
+| Read static rules from one Target.cs | `ue_inspect_target_rules.py` |
+| Inspect one module's registration, lifecycle, delegates, and bound callbacks | `ue_inspect_module_entry.py` |
 
 When the user explicitly requests all categories, run the relevant focused tools independently, validate each result, and summarize them without inventing a merged schema. For every other request, use only the smallest tool that answers the question.
 
@@ -40,6 +45,16 @@ When the user explicitly requests all categories, run the relevant focused tools
 4. Parse its JSON output. Summarize the requested facts and include evidence paths for engine, Module, Target, or Plugin claims.
 5. Read `validation` for detected problems and `limits` for responsibility and boundaries. Report warnings and boundaries separately. Never reinterpret `validation: ok` as proof that the project compiles, launches, or runs correctly.
 
+When the user needs to modify or understand one plugin, drill down instead of merging all facts into a project-wide result:
+
+1. Read the `.uproject` declaration with `ue_read_project_descriptor.py`.
+2. Locate its direct plugin descriptors with `ue_resolve_plugins.py`.
+3. Select one resolved `.uplugin` and read it with `ue_read_plugin_descriptor.py`.
+4. If module paths are needed, run `ue_inspect_plugin_modules.py` for that same descriptor.
+5. Select one returned Build.cs path and run only the source tool needed next: `ue_inspect_module_rules.py` for UBT declarations or `ue_inspect_module_entry.py` for C++ module lifecycle evidence.
+
+Do not embed or reinterpret later source-tool results as fields of the earlier `.uproject` result. Each tool keeps its own schema, validation, and limits.
+
 All normal scan results follow this top-level order: `schema_version`, module facts, `validation`, then `limits`. Treat `validation: warning` as a completed scan with non-blocking problems, not as `ok` and not as a process failure.
 
 ## Focused commands
@@ -52,6 +67,16 @@ python tools/ue_resolve_engine.py --project <project>
 python tools/ue_inspect_modules.py --project <project>
 python tools/ue_inspect_targets.py --project <project>
 python tools/ue_classify_project_paths.py --project <project>
+```
+
+Replace `<plugin>`, `<rules>`, and `<target>` with one explicit file selected from prior evidence or supplied by the user:
+
+```powershell
+python tools/ue_read_plugin_descriptor.py --plugin <plugin>
+python tools/ue_inspect_plugin_modules.py --plugin <plugin>
+python tools/ue_inspect_module_rules.py --rules <rules>
+python tools/ue_inspect_target_rules.py --target <target>
+python tools/ue_inspect_module_entry.py --rules <rules>
 ```
 
 Plugin resolution derives the Engine root from the project's `EngineAssociation` by default. Pass `--engine-root` only as an explicit override:
@@ -89,6 +114,10 @@ For a simple enabled/disabled question, stop after `ue_read_project_descriptor.p
 - `EngineAssociation` is an association key. Use resolved `Build.version` for the actual engine version.
 - `.uproject` declares Modules and direct Plugin references, but descriptor v1 intentionally does not repeat their full arrays. It does not declare `Target.cs` or a complete dependency graph.
 - Direct Plugin resolution is not the effective `.uplugin` dependency closure.
+- The single-plugin descriptor tool reports direct Plugin dependency declarations but does not locate or traverse their descriptors.
+- Plugin module navigation only returns Build.cs and entrypoint evidence for the selected plugin; it does not expand source facts.
+- Build.cs and Target.cs operations are static declarations with preserved conditions and unresolved expressions, not effective UBT results.
+- Module entry inspection follows lifecycle helpers and actually bound same-module callbacks only; it is not a general C++ class or call graph.
 - Path v1 derives the project root from the selected `.uproject` and reports conventional path roles, filesystem state (`missing | file | directory | other`), and unclassified root directories.
 - Path v1 records the absolute `project_root` once; path items and validation problems use only `project_relative_path`.
 - Path v1 reads explicit descriptor fields only to emit validation problems: declared Modules without AdditionalRootDirectories require the conventional Source directory. It does not add requiredness fields to path items.

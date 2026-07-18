@@ -29,6 +29,11 @@ CLI_SCRIPTS = (
     "ue_inspect_targets.py",
     "ue_resolve_plugins.py",
     "ue_classify_project_paths.py",
+    "ue_read_plugin_descriptor.py",
+    "ue_inspect_plugin_modules.py",
+    "ue_inspect_module_rules.py",
+    "ue_inspect_target_rules.py",
+    "ue_inspect_module_entry.py",
 )
 
 
