@@ -2,9 +2,30 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
-from typing import Any
+from typing import Any, Iterable
 
 from .common import iter_files, normalized, result_document
+
+
+def discover_module_build_rules(
+    search_roots: Iterable[Path],
+) -> tuple[dict[str, list[Path]], dict[str, str]]:
+    all_rules = sorted(
+        {
+            path.resolve()
+            for search_root in search_roots
+            for path in iter_files(search_root, ".Build.cs")
+        },
+        key=lambda path: normalized(path).casefold(),
+    )
+    rules_by_module: dict[str, list[Path]] = {}
+    discovered_module_names: dict[str, str] = {}
+    for path in all_rules:
+        module_name = path.name[: -len(".Build.cs")]
+        module_key = module_name.casefold()
+        rules_by_module.setdefault(module_key, []).append(path)
+        discovered_module_names.setdefault(module_key, module_name)
+    return rules_by_module, discovered_module_names
 
 
 def module_entrypoints(module_dir: Path) -> list[dict[str, str]]:
@@ -52,21 +73,9 @@ def inspect_modules(
     search_roots = [source_root, project_root / "Platforms", *additional_roots]
     problems: list[dict[str, Any]] = []
 
-    all_rules = sorted(
-        {
-            path.resolve()
-            for search_root in search_roots
-            for path in iter_files(search_root, ".Build.cs")
-        },
-        key=lambda path: normalized(path).casefold(),
+    rules_by_module, discovered_module_names = discover_module_build_rules(
+        search_roots
     )
-    rules_by_module: dict[str, list[Path]] = {}
-    discovered_module_names: dict[str, str] = {}
-    for path in all_rules:
-        module_name = path.name[: -len(".Build.cs")]
-        module_key = module_name.casefold()
-        rules_by_module.setdefault(module_key, []).append(path)
-        discovered_module_names.setdefault(module_key, module_name)
 
     valid_declarations: list[tuple[int, dict[str, Any], str, str]] = []
     declaration_indices_by_module: dict[str, list[int]] = {}

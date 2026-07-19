@@ -50,7 +50,7 @@ When the user needs to modify or understand one plugin, drill down instead of me
 1. Read the `.uproject` declaration with `ue_read_project_descriptor.py`.
 2. Locate its direct plugin descriptors with `ue_resolve_plugins.py`.
 3. Select one resolved `.uplugin` and read it with `ue_read_plugin_descriptor.py`.
-4. If module paths are needed, run `ue_inspect_plugin_modules.py` for that same descriptor.
+4. If module entrypoint paths are needed, run `ue_inspect_plugin_modules.py` for that same descriptor.
 5. Select one returned Build.cs path and run only the source tool needed next: `ue_inspect_module_rules.py` for UBT declarations or `ue_inspect_module_entry.py` for C++ module lifecycle evidence.
 
 Do not embed or reinterpret later source-tool results as fields of the earlier `.uproject` result. Each tool keeps its own schema, validation, and limits.
@@ -114,8 +114,8 @@ For a simple enabled/disabled question, stop after `ue_read_project_descriptor.p
 - `EngineAssociation` is an association key. Use resolved `Build.version` for the actual engine version.
 - `.uproject` declares Modules and direct Plugin references, but descriptor v1 intentionally does not repeat their full arrays. It does not declare `Target.cs` or a complete dependency graph.
 - Direct Plugin resolution is not the effective `.uplugin` dependency closure.
-- The single-plugin descriptor tool reports direct Plugin dependency declarations but does not locate or traverse their descriptors.
-- Plugin module navigation only returns Build.cs and entrypoint evidence for the selected plugin; it does not expand source facts.
+- The single-plugin descriptor tool reports direct Plugin dependency declarations without locating or traversing their descriptors; it recursively reconciles declared Modules with Build.cs files under the selected plugin's Source and Platforms directories.
+- Plugin module navigation reuses Build.cs reconciliation and adds entrypoint evidence for the selected plugin; it does not expand source facts.
 - Build.cs and Target.cs operations are static declarations with preserved conditions and unresolved expressions, not effective UBT results.
 - Module entry inspection follows lifecycle helpers and actually bound same-module callbacks only; it is not a general C++ class or call graph.
 - Path v1 derives the project root from the selected `.uproject` and reports conventional path roles, filesystem state (`missing | file | directory | other`), and unclassified root directories.
