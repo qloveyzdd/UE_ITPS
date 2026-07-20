@@ -18,29 +18,292 @@ from ue_project_tools.rule_source import inspect_module_rules, inspect_target_ru
 
 
 class SourceToolsTests(unittest.TestCase):
-    def test_target_rules_are_a_standalone_source_contract(self) -> None:
+    def test_target_rules_project_reachable_setting_mutations(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             target = Path(temporary_directory) / "Fixture.Target.cs"
             target.write_text(
                 """
 public class FixtureTarget : TargetRules
 {
+    private static bool bClassState = false;
+    private static List<string> LocalCache = new List<string>();
+
     public FixtureTarget(TargetInfo Target) : base(Target)
     {
         Type = TargetType.Game;
-        ExtraModuleNames.AddRange(new string[] { "Fixture", GetEditorModule() });
+        ExtraModuleNames.AddRange(new string[] { "Fixture" });
         ApplyShared(Target);
     }
 
     static void ApplyShared(TargetRules Target)
     {
+        bool bLocalState = false;
         if (Target.bBuildEditor)
         {
             Target.GlobalDefinitions.Add("WITH_EDITOR_CODE=1");
+            Target.bUseLoggingInShipping = true;
+            bLocalState = true;
+            ApplyExternalRules(Target);
         }
         else
         {
             Target.GlobalDefinitions.Remove("WITH_EDITOR_CODE=1");
+        }
+
+        string[] PluginNames = new string[] { "FixturePlugin" };
+        foreach (string PluginName in PluginNames)
+        {
+            if (PluginName != null)
+            {
+                Target.DisablePlugins.Add(PluginName);
+            }
+        }
+
+        Dictionary<string, List<string>> LocalMap = new Dictionary<string, List<string>>();
+        LocalMap["Fixture"].Add("IgnoredLocalMutation");
+        JsonObject DeferredObject;
+        DeferredObject = JsonObject.Read("IgnoredDeferredLocal");
+        bClassState = true;
+        LocalCache.Add("IgnoredClassFieldMutation");
+    }
+
+    static void Unused(TargetRules Target)
+    {
+        Target.EnablePlugins.Add("UnusedPlugin");
+    }
+}
+""",
+                encoding="utf-8",
+            )
+
+            result = inspect_target_rules(target)
+
+        self.assertEqual(
+            result["schema_version"], "ue-itps.target-rule-relations.v1"
+        )
+        self.assertEqual(result["validation"]["status"], "ok")
+        rules_class = result["rules_classes"][0]
+        self.assertEqual(rules_class["name"], "FixtureTarget")
+        self.assertEqual(
+            list(rules_class),
+            [
+                "name",
+                "inheritance",
+                "declared_mutations",
+                "unclassified_mutations",
+                "unresolved_effect_calls",
+            ],
+        )
+        self.assertEqual(
+            rules_class["inheritance"],
+            {"kind": "confirmed", "base_types": ["TargetRules"]},
+        )
+        mutations = rules_class["declared_mutations"]
+        self.assertEqual(
+            [(item["setting"], item["operation"]) for item in mutations],
+            [
+                ("Type", "set"),
+                ("ExtraModuleNames", "add"),
+                ("GlobalDefinitions", "add"),
+                ("bUseLoggingInShipping", "set"),
+                ("GlobalDefinitions", "remove"),
+                ("DisablePlugins", "add"),
+            ],
+        )
+        self.assertEqual(
+            mutations[0]["operand"],
+            {"kind": "symbol", "references": ["TargetType.Game"]},
+        )
+        self.assertEqual(
+            mutations[1]["operand"],
+            {
+                "kind": "literal",
+                "reference_kind": "module",
+                "references": ["Fixture"],
+            },
+        )
+        self.assertEqual(
+            mutations[3]["operand"], {"kind": "literal", "values": [True]}
+        )
+        self.assertEqual(mutations[0]["source"]["method"], "FixtureTarget")
+        self.assertEqual(mutations[2]["source"]["method"], "ApplyShared")
+        branches = {
+            mutation["applicability"]["controls"][0]["branch"]
+            for mutation in mutations
+            if mutation["setting"] == "GlobalDefinitions"
+        }
+        self.assertEqual(branches, {"then", "else"})
+        self.assertTrue(
+            all(
+                mutation["applicability"]["controls"][0]["expression"]
+                == "Target.bBuildEditor"
+                for mutation in mutations
+                if mutation["setting"] == "GlobalDefinitions"
+            )
+        )
+        plugin_mutation = mutations[-1]
+        self.assertEqual(
+            plugin_mutation["applicability"]["controls"],
+            [
+                {
+                    "kind": "foreach",
+                    "expression": "string PluginName in PluginNames",
+                },
+                {
+                    "kind": "if",
+                    "expression": "PluginName != null",
+                    "branch": "then",
+                },
+            ],
+        )
+        self.assertEqual(rules_class["unclassified_mutations"], [])
+        self.assertEqual(
+            rules_class["unresolved_effect_calls"],
+            [
+                {
+                    "callee": "ApplyExternalRules",
+                    "arguments": ["Target"],
+                    "applicability": {
+                        "kind": "conditional",
+                        "controls": [
+                            {
+                                "kind": "if",
+                                "expression": "Target.bBuildEditor",
+                                "branch": "then",
+                            }
+                        ],
+                    },
+                    "source": {
+                        "method": "ApplyShared",
+                        "line": rules_class["unresolved_effect_calls"][0][
+                            "source"
+                        ]["line"],
+                    },
+                }
+            ],
+        )
+        rendered = json.dumps(rules_class)
+        self.assertNotIn("UnusedPlugin", rendered)
+        self.assertNotIn("IgnoredLocalMutation", rendered)
+        self.assertNotIn("IgnoredDeferredLocal", rendered)
+        self.assertNotIn("IgnoredClassFieldMutation", rendered)
+        self.assertNotIn('"conditions"', rendered)
+        self.assertNotIn('"control_path"', rendered)
+        self.assertNotIn('"related_symbols"', rendered)
+        self.assertTrue(
+            all(
+                list(mutation["source"]) == ["method", "line"]
+                for mutation in mutations
+            )
+        )
+
+    def test_target_rules_report_filename_candidate_with_unresolved_base(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            target = Path(temporary_directory) / "Derived.Target.cs"
+            target.write_text(
+                """
+public class DerivedTarget : SharedTarget
+{
+    public DerivedTarget(TargetInfo Target) : base(Target)
+    {
+        CustomConfig = "EOS";
+    }
+}
+""",
+                encoding="utf-8",
+            )
+
+            result = inspect_target_rules(target)
+
+        self.assertEqual(result["validation"]["status"], "warning")
+        self.assertEqual(
+            [problem["code"] for problem in result["validation"]["problems"]],
+            ["target-rules-base-unresolved"],
+        )
+        rules_class = result["rules_classes"][0]
+        self.assertEqual(rules_class["name"], "DerivedTarget")
+        self.assertEqual(
+            rules_class["inheritance"],
+            {"kind": "unresolved", "base_types": ["SharedTarget"]},
+        )
+        self.assertEqual(
+            rules_class["declared_mutations"],
+            [
+                {
+                    "setting": "CustomConfig",
+                    "operation": "set",
+                    "operand": {"kind": "literal", "references": ["EOS"]},
+                    "applicability": {"kind": "direct"},
+                    "source": {
+                        "method": "DerivedTarget",
+                        "line": rules_class["declared_mutations"][0]["source"][
+                            "line"
+                        ],
+                    },
+                }
+            ],
+        )
+        self.assertTrue(result["limits"]["boundaries"])
+
+    def test_target_rules_emit_ordered_structured_controls(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            target = Path(temporary_directory) / "Controls.Target.cs"
+            target.write_text(
+                """
+public class ControlsTarget : TargetRules
+{
+    public ControlsTarget(TargetInfo Target) : base(Target)
+    {
+        ApplyControls(this);
+    }
+
+    static void ApplyControls(TargetRules Rules)
+    {
+#if WITH_TARGET_FEATURE
+        foreach (string Name in Rules.ExtraModuleNames)
+        {
+            if (Rules.bBuildEditor)
+                Rules.GlobalDefinitions.Add("EDITOR=1");
+            else if (Rules.Type == TargetType.Server)
+                Rules.GlobalDefinitions.Add("SERVER=1");
+        }
+#endif
+
+        for (int Index = 0; Index < 2; ++Index)
+        {
+            while (Rules.bCompileAgainstEngine)
+            {
+                Rules.GlobalDefinitions.Add("LOOP=1");
+                break;
+            }
+        }
+
+        switch (Rules.Configuration)
+        {
+            case UnrealTargetConfiguration.Shipping:
+                Rules.GlobalDefinitions.Add("CASE=1");
+                break;
+            default:
+                Rules.GlobalDefinitions.Add("DEFAULT=1");
+                break;
+        }
+
+        try
+        {
+        }
+        catch (BuildException Error) when (Rules.bBuildEditor)
+        {
+            Rules.GlobalDefinitions.Add("CATCH=1");
+        }
+
+        if (Rules.bBuildEditor && (Rules.bUseLoggingInShipping = true))
+        {
+        }
+
+        if (Rules.bBuildEditor
+            ? (Rules.bAllowGeneratedIniWhenCooked = false)
+            : false)
+        {
         }
     }
 }
@@ -50,47 +313,89 @@ public class FixtureTarget : TargetRules
 
             result = inspect_target_rules(target)
 
-        self.assertEqual(result["schema_version"], "ue-itps.target-rules-source.v1")
-        self.assertEqual(result["validation"]["status"], "ok")
-        rules_class = result["rules_classes"][0]
-        self.assertEqual(rules_class["name"], "FixtureTarget")
-        self.assertEqual(rules_class["base_types"], ["TargetRules"])
+        mutations = result["rules_classes"][0]["declared_mutations"]
+
+        def definition(name: str) -> dict[str, object]:
+            return next(
+                item
+                for item in mutations
+                if item.get("operand", {}).get("references") == [name]
+            )
+
+        editor_controls = definition("EDITOR=1")["applicability"]["controls"]
         self.assertEqual(
-            rules_class["same_file_calls"],
+            [item["kind"] for item in editor_controls],
+            ["preprocessor", "foreach", "if"],
+        )
+        self.assertEqual(editor_controls[0]["expression"], "WITH_TARGET_FEATURE")
+        self.assertEqual(
+            editor_controls[1]["expression"],
+            "string Name in Rules.ExtraModuleNames",
+        )
+
+        server_controls = definition("SERVER=1")["applicability"]["controls"]
+        self.assertEqual(
+            [(item["kind"], item.get("branch")) for item in server_controls],
             [
-                {
-                    "caller": "FixtureTarget",
-                    "callee": "ApplyShared",
-                    "location": rules_class["same_file_calls"][0]["location"],
-                }
+                ("preprocessor", "then"),
+                ("foreach", None),
+                ("if", "else"),
+                ("if", "then"),
             ],
         )
-        constructor = next(
-            method for method in rules_class["methods"] if method["is_constructor"]
+
+        loop_controls = definition("LOOP=1")["applicability"]["controls"]
+        self.assertEqual(
+            [item["kind"] for item in loop_controls], ["for", "while"]
         )
-        add_range = next(
-            operation
-            for operation in constructor["operations"]
-            if operation.get("callee") == "ExtraModuleNames.AddRange"
+        self.assertIn("Index < 2", loop_controls[0]["expression"])
+        self.assertEqual(
+            loop_controls[1]["expression"], "Rules.bCompileAgainstEngine"
         )
-        self.assertEqual(add_range["evaluation"]["status"], "partial")
-        self.assertEqual(add_range["evaluation"]["literal_values"], ["Fixture"])
-        helper = next(
-            method for method in rules_class["methods"] if method["name"] == "ApplyShared"
+
+        case_controls = definition("CASE=1")["applicability"]["controls"]
+        self.assertEqual(
+            case_controls,
+            [
+                {"kind": "switch", "expression": "Rules.Configuration"},
+                {
+                    "kind": "case",
+                    "expression": "UnrealTargetConfiguration.Shipping",
+                },
+            ],
         )
-        branches = {
-            operation["conditions"][0]["branch"]
-            for operation in helper["operations"]
-            if operation.get("callee", "").endswith((".Add", ".Remove"))
-        }
-        self.assertEqual(branches, {"then", "else"})
-        self.assertTrue(
-            all(
-                operation["conditions"][0]["expression"] == "Target.bBuildEditor"
-                for operation in helper["operations"]
-                if operation.get("callee", "").endswith((".Add", ".Remove"))
-            )
+        self.assertEqual(
+            definition("DEFAULT=1")["applicability"]["controls"],
+            [
+                {"kind": "switch", "expression": "Rules.Configuration"},
+                {"kind": "case"},
+            ],
         )
+        self.assertEqual(
+            definition("CATCH=1")["applicability"]["controls"],
+            [{"kind": "catch", "expression": "Rules.bBuildEditor"}],
+        )
+
+        logging = next(
+            item for item in mutations if item["setting"] == "bUseLoggingInShipping"
+        )
+        self.assertEqual(
+            logging["applicability"]["controls"],
+            [{"kind": "short_circuit", "expression": "Rules.bBuildEditor"}],
+        )
+        generated_ini = next(
+            item
+            for item in mutations
+            if item["setting"] == "bAllowGeneratedIniWhenCooked"
+        )
+        self.assertEqual(
+            generated_ini["applicability"]["controls"],
+            [{"kind": "ternary", "expression": "Rules.bBuildEditor"}],
+        )
+        rendered = json.dumps(result)
+        self.assertNotIn('"conditions"', rendered)
+        self.assertNotIn('"control_path"', rendered)
+        self.assertNotIn('"related_symbols"', rendered)
 
     def test_module_rules_emit_relevant_mutations_from_reachable_methods(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

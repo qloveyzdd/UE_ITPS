@@ -123,6 +123,21 @@ Treat `ue-itps.module-rule-relations.v1` as a relevance projection, not a C# syn
 - Explicit assignments, updates, and calls inside control expressions are also scanned. An `if`, `while`, or `switch` expression does not inherit its own body control; short-circuit/ternary branches, `for` iterators, and `catch when` filters remain conditional.
 - Control paths are local to each reported mutation; caller controls are not propagated into reachable helpers.
 
+## Interpret Target rule relations v1
+
+Treat `ue-itps.target-rule-relations.v1` as a TargetRules relevance projection, not a C# syntax tree or effective UBT result:
+
+- `declared_mutations` contains local Target setting assignments and collection changes from constructors and statically reachable same-file helpers.
+- `inheritance.kind` is `confirmed` when the selected file proves the TargetRules chain. A filename-matching class with a `TargetInfo` constructor may be reported as `unresolved` with a validation warning when its base is defined elsewhere; its local mutations remain evidence, but its inheritance and base effects are not inferred.
+- `operand.kind` is `literal`, `symbol`, or `expression`; module, plugin, and definition references are labeled when statically recognized.
+- `unclassified_mutations` retains mutation-shaped candidates that cannot be confirmed as TargetRules settings.
+- `unresolved_effect_calls` records external or inherited calls that may change rules without inferring their effects.
+- `applicability.controls` preserves recognized source controls in outer-to-inner order; each item carries `kind` and, when available, its source `expression` and `branch`. Target results do not expose parallel `conditions` or `control_path` arrays.
+- Target results omit flattened `related_symbols` because full local control expressions are already preserved.
+- `source.method` and `source.line` identify the containing same-file method and source evidence for each mutation or unresolved effect call.
+- Declared local variables, class fields, and mutations rooted at them are excluded from Target setting mutations.
+- Caller conditions are not propagated into mutations inside reachable helpers.
+
 ## Interpretation boundaries
 
 - `EngineAssociation` is an association key. Use resolved `Build.version` for the actual engine version.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inspect static declarations in one Target.cs file."""
+"""Inspect declared TargetRules mutations in one Target.cs file."""
 
 from pathlib import Path
 
@@ -9,8 +9,8 @@ from ue_project_tools.rule_source import inspect_target_rules
 
 def main() -> int:
     parser = cli_parser(
-        "读取单个 Target.cs 的静态规则事实。",
-        "Read static rule facts from one Target.cs file.",
+        "读取单个 Target.cs 声明的 TargetRules 设置变更和引用。",
+        "Read declared TargetRules mutations and references from one Target.cs file.",
     )
     parser.add_argument(
         "--target",

@@ -278,6 +278,117 @@ def _member_start(tokens: list[Token], lower: int, index: int) -> int:
     return lower
 
 
+_NON_DECLARATION_STARTS = {
+    "break",
+    "case",
+    "continue",
+    "default",
+    "goto",
+    "return",
+    "throw",
+    "yield",
+}
+
+
+def _declaration_name(
+    text: str, tokens: list[Token], start: int, end: int
+) -> str | None:
+    if start >= end or tokens[start].value in _NON_DECLARATION_STARTS:
+        return None
+    candidate = tokens[end - 1]
+    if candidate.kind != "identifier":
+        return None
+    prefix = text[tokens[start].start : candidate.start]
+    if (
+        not prefix
+        or not prefix[-1].isspace()
+        or not prefix.rstrip()
+        or prefix.rstrip().endswith((".", "::", "->", "]", ")"))
+    ):
+        return None
+    return candidate.value
+
+
+def _class_field_names(
+    text: str, tokens: list[Token], start: int, end: int
+) -> list[str]:
+    names: list[str] = []
+    statement_start = start
+    brace_depth = 0
+    paren_depth = 0
+    bracket_depth = 0
+    for cursor in range(start, end):
+        value = tokens[cursor].value
+        if value == "(":
+            paren_depth += 1
+        elif value == ")":
+            paren_depth = max(0, paren_depth - 1)
+        elif value == "[":
+            bracket_depth += 1
+        elif value == "]":
+            bracket_depth = max(0, bracket_depth - 1)
+        elif value == "{" and paren_depth == 0 and bracket_depth == 0:
+            brace_depth += 1
+        elif value == "}" and paren_depth == 0 and bracket_depth == 0:
+            brace_depth = max(0, brace_depth - 1)
+            if brace_depth == 0:
+                statement_start = cursor + 1
+        elif (
+            value == ";"
+            and brace_depth == 0
+            and paren_depth == 0
+            and bracket_depth == 0
+        ):
+            assignment = next(
+                (
+                    index
+                    for index in range(statement_start, cursor)
+                    if tokens[index].value in {"=", "+=", "-=", "*=", "/=", "??="}
+                ),
+                cursor,
+            )
+            name = _declaration_name(text, tokens, statement_start, assignment)
+            if name:
+                names.append(name)
+            statement_start = cursor + 1
+    return _ordered_union(names)
+
+
+def _local_declaration_names(
+    text: str, tokens: list[Token], start: int, end: int
+) -> list[str]:
+    names: list[str] = []
+    statement_start = start
+    paren_depth = 0
+    bracket_depth = 0
+    for cursor in range(start, end):
+        value = tokens[cursor].value
+        if value == "(":
+            paren_depth += 1
+        elif value == ")":
+            paren_depth = max(0, paren_depth - 1)
+        elif value == "[":
+            bracket_depth += 1
+        elif value == "]":
+            bracket_depth = max(0, bracket_depth - 1)
+        elif value in {"{", "}"} and paren_depth == 0 and bracket_depth == 0:
+            statement_start = cursor + 1
+        elif value == ";" and paren_depth == 0 and bracket_depth == 0:
+            assignment = next(
+                (
+                    index
+                    for index in range(statement_start, cursor)
+                    if tokens[index].value in {"=", "+=", "-=", "*=", "/=", "??="}
+                ),
+                cursor,
+            )
+            name = _declaration_name(text, tokens, statement_start, assignment)
+            if name:
+                names.append(name)
+            statement_start = cursor + 1
+    return _ordered_union(names)
+
+
 def parse_classes(text: str, tokens: list[Token]) -> tuple[list[dict[str, Any]], dict[int, int], dict[int, int]]:
     forward, reverse = token_pairs(tokens)
     classes: list[dict[str, Any]] = []
@@ -451,6 +562,7 @@ def condition_spans(tokens: list[Token], forward: dict[int, int], start: int, en
                     {
                         "start": then_start,
                         "end": then_end,
+                        "start_line": tokens[index].line,
                         "condition": {"kind": "if", "expression": expression, "branch": "then"},
                     }
                 )
@@ -461,6 +573,7 @@ def condition_spans(tokens: list[Token], forward: dict[int, int], start: int, en
                         {
                             "start": else_start,
                             "end": else_end,
+                            "start_line": tokens[index].line,
                             "condition": {"kind": "if", "expression": expression, "branch": "else"},
                         }
                     )
@@ -501,6 +614,8 @@ _CONTROL_REFERENCE_KEYWORDS = {
     "new",
     "null",
     "object",
+    "out",
+    "ref",
     "sbyte",
     "short",
     "string",
@@ -589,16 +704,22 @@ def control_spans(
         body_end: int,
         control_index: int,
         references: Iterable[str],
+        *,
+        expression: str = "",
+        branch: str = "",
     ) -> None:
-        spans.append(
-            {
-                "start": body_start,
-                "end": body_end,
-                "start_line": tokens[control_index].line,
-                "kind": kind,
-                "references": list(references),
-            }
-        )
+        span: dict[str, Any] = {
+            "start": body_start,
+            "end": body_end,
+            "start_line": tokens[control_index].line,
+            "kind": kind,
+            "references": list(references),
+        }
+        if expression:
+            span["expression"] = expression
+        if branch:
+            span["branch"] = branch
+        spans.append(span)
 
     def parse_if(
         index: int, upper: int, prior_references: Iterable[str] = ()
@@ -610,6 +731,7 @@ def control_spans(
         ):
             return index + 1
         condition_close = forward[index + 1]
+        expression = _raw_from_values(tokens[index + 2 : condition_close])
         condition_references = _ordered_union(
             prior_references,
             _control_references(tokens[index + 2 : condition_close]),
@@ -617,7 +739,15 @@ def control_spans(
         then_start, then_end, after_then = _statement_after(
             tokens, forward, condition_close + 1, upper
         )
-        append_span("if", then_start, then_end, index, condition_references)
+        append_span(
+            "if",
+            then_start,
+            then_end,
+            index,
+            condition_references,
+            expression=expression,
+            branch="then",
+        )
         walk(then_start, then_end)
         if after_then >= upper or tokens[after_then].value != "else":
             return max(after_then, condition_close + 1)
@@ -627,9 +757,69 @@ def control_spans(
         else_start, else_end, after_else = _statement_after(
             tokens, forward, branch_start, upper
         )
-        append_span("if", else_start, else_end, index, condition_references)
+        append_span(
+            "if",
+            else_start,
+            else_end,
+            index,
+            condition_references,
+            expression=expression,
+            branch="else",
+        )
         walk(else_start, else_end)
         return max(after_else, branch_start)
+
+    def append_switch_cases(lower: int, upper: int) -> None:
+        labels: list[tuple[int, int, str, list[str]]] = []
+        depth = 0
+        index = lower
+        while index < upper:
+            value = tokens[index].value
+            if value in {"(", "[", "{"}:
+                depth += 1
+            elif value in {")", "]", "}"}:
+                depth = max(0, depth - 1)
+            elif depth == 0 and value in {"case", "default"}:
+                colon = index + 1
+                nested = 0
+                while colon < upper:
+                    candidate = tokens[colon].value
+                    if candidate in {"(", "[", "{"}:
+                        nested += 1
+                    elif candidate in {")", "]", "}"}:
+                        nested = max(0, nested - 1)
+                    elif candidate == ":" and nested == 0:
+                        break
+                    colon += 1
+                expression_tokens = (
+                    tokens[index + 1 : colon] if value == "case" else []
+                )
+                labels.append(
+                    (
+                        index,
+                        colon,
+                        _raw_from_values(expression_tokens),
+                        _control_references(expression_tokens),
+                    )
+                )
+                index = colon
+            index += 1
+        for label_index, (control_index, colon, expression, references) in enumerate(
+            labels
+        ):
+            body_end = (
+                labels[label_index + 1][0]
+                if label_index + 1 < len(labels)
+                else upper
+            )
+            append_span(
+                "case",
+                colon + 1,
+                body_end,
+                control_index,
+                references,
+                expression=expression,
+            )
 
     def walk(lower: int, upper: int) -> None:
         index = lower
@@ -652,14 +842,25 @@ def control_spans(
                 references = _control_references(
                     header, _loop_local_names(value, header)
                 )
-                append_span(value, body_start, body_end, index, references)
+                append_span(
+                    value,
+                    body_start,
+                    body_end,
+                    index,
+                    references,
+                    expression=_raw_from_values(header),
+                )
+                if value == "switch":
+                    append_switch_cases(body_start, body_end)
                 walk(body_start, body_end)
                 index = max(after_body, header_close + 1)
                 continue
             if value == "catch":
                 cursor = index + 1
+                catch_tokens: list[Token] = []
                 filter_tokens: list[Token] = []
                 if cursor < upper and tokens[cursor].value == "(" and cursor in forward:
+                    catch_tokens = tokens[cursor + 1 : forward[cursor]]
                     cursor = forward[cursor] + 1
                 if (
                     cursor + 1 < upper
@@ -679,6 +880,7 @@ def control_spans(
                     body_end,
                     index,
                     _control_references(filter_tokens),
+                    expression=_raw_from_values(filter_tokens or catch_tokens),
                 )
                 walk(body_start, body_end)
                 index = max(after_body, cursor)
@@ -706,19 +908,19 @@ def _raw_from_values(tokens: Iterable[Token]) -> str:
     return rendered.strip()
 
 
-def preprocessor_conditions(text: str) -> dict[int, list[dict[str, str]]]:
-    active: list[dict[str, str]] = []
-    result: dict[int, list[dict[str, str]]] = {}
+def preprocessor_conditions(text: str) -> dict[int, list[dict[str, Any]]]:
+    active: list[dict[str, Any]] = []
+    result: dict[int, list[dict[str, Any]]] = {}
     for line_number, line in enumerate(text.splitlines(), start=1):
         stripped = line.strip()
         if stripped.startswith("#if "):
-            active.append({"kind": "preprocessor", "expression": stripped[4:].strip(), "branch": "then"})
+            active.append({"kind": "preprocessor", "expression": stripped[4:].strip(), "branch": "then", "start_line": line_number})
         elif stripped.startswith("#ifdef "):
-            active.append({"kind": "preprocessor", "expression": f"defined({stripped[7:].strip()})", "branch": "then"})
+            active.append({"kind": "preprocessor", "expression": f"defined({stripped[7:].strip()})", "branch": "then", "start_line": line_number})
         elif stripped.startswith("#ifndef "):
-            active.append({"kind": "preprocessor", "expression": f"!defined({stripped[8:].strip()})", "branch": "then"})
+            active.append({"kind": "preprocessor", "expression": f"!defined({stripped[8:].strip()})", "branch": "then", "start_line": line_number})
         elif stripped.startswith("#elif ") and active:
-            active[-1] = {"kind": "preprocessor", "expression": stripped[6:].strip(), "branch": "elif"}
+            active[-1] = {**active[-1], "expression": stripped[6:].strip(), "branch": "elif"}
         elif stripped.startswith("#else") and active:
             active[-1] = {**active[-1], "branch": "else"}
         elif stripped.startswith("#endif") and active:
@@ -772,6 +974,12 @@ def _member_chain_start(tokens: list[Token], reverse: dict[int, int], name_index
             if callee_name >= lower and tokens[callee_name].kind == "identifier":
                 start = _member_chain_start(tokens, reverse, callee_name, lower)
                 continue
+        if tokens[operand].value == "]" and operand in reverse:
+            open_index = reverse[operand]
+            indexed_name = open_index - 1
+            if indexed_name >= lower and tokens[indexed_name].kind == "identifier":
+                start = _member_chain_start(tokens, reverse, indexed_name, lower)
+                continue
         if tokens[operand].kind == "identifier":
             start = operand
             continue
@@ -783,15 +991,29 @@ def _conditions_for(
     token_index: int,
     token: Token,
     spans: list[dict[str, Any]],
-    preprocessor: dict[int, list[dict[str, str]]],
-) -> list[dict[str, str]]:
+    preprocessor: dict[int, list[dict[str, Any]]],
+) -> list[dict[str, Any]]:
     contextual = [
         span
         for span in spans
         if span["start"] <= token_index < span["end"]
     ]
-    contextual.sort(key=lambda span: (-(span["end"] - span["start"]), span["start"]))
-    return [*preprocessor.get(token.line, []), *[dict(span["condition"]) for span in contextual]]
+    controls = [dict(item) for item in preprocessor.get(token.line, [])]
+    controls.extend(
+        {
+            **dict(span["condition"]),
+            "start_line": span["start_line"],
+            "span_width": span["end"] - span["start"],
+        }
+        for span in contextual
+    )
+    controls.sort(
+        key=lambda item: (
+            int(item.get("start_line", 0)),
+            -int(item.get("span_width", 0)),
+        )
+    )
+    return controls
 
 
 def _control_metadata_for(
@@ -805,15 +1027,31 @@ def _control_metadata_for(
     ]
     contextual.extend(preprocessor.get(token.line, []))
     contextual.sort(key=lambda item: item["start_line"])
-    path = [str(item["kind"]) for item in contextual]
+    flattened = [item for item in contextual if item.get("kind") != "case"]
+    path = [str(item["kind"]) for item in flattened]
     references = _ordered_union(
-        *(item.get("references", []) for item in contextual)
+        *(item.get("references", []) for item in flattened)
     )
     result: dict[str, Any] = {
         "applicability": "conditional" if path else "direct"
     }
     if path:
         result["control_path"] = path
+        result["control_details"] = [
+            {
+                key: value
+                for key, value in item.items()
+                if key
+                in {
+                    "kind",
+                    "expression",
+                    "branch",
+                    "references",
+                    "start_line",
+                }
+            }
+            for item in contextual
+        ]
     if references:
         result["related_symbols"] = references
     return result
@@ -832,6 +1070,10 @@ def _merge_control_metadata(
         *(item.get("references", []) for item in items),
     )
     result = {**metadata, "applicability": "conditional", "control_path": path}
+    details = [*metadata.get("control_details", [])]
+    details.extend(dict(item) for item in items)
+    if details:
+        result["control_details"] = details
     if references:
         result["related_symbols"] = references
     return result
@@ -1030,6 +1272,8 @@ def _expression_gate_controls(
             {
                 "kind": "ternary" if value == "?" else "short_circuit",
                 "references": _control_references(tokens[start:index]),
+                "expression": _raw_from_values(tokens[start:index]),
+                "start_line": tokens[index].line,
             }
         )
     return controls
@@ -1378,14 +1622,11 @@ def _statement_operations(
             break
     if assignment_index is not None and assignment_index > start:
         target_start = start
-        if any(token.value in {"bool", "int", "string", "var", "auto"} for token in tokens[start:assignment_index]):
-            identifiers = [
-                index
-                for index in range(start, assignment_index)
-                if tokens[index].kind == "identifier"
-            ]
-            if identifiers:
-                target_start = identifiers[-1]
+        declaration_name = _declaration_name(
+            text, tokens, start, assignment_index
+        )
+        if declaration_name is not None:
+            target_start = assignment_index - 1
         value_tokens = tokens[assignment_index + 1 : end]
         operation: dict[str, Any] = {
             "kind": "assignment",
@@ -1397,6 +1638,8 @@ def _statement_operations(
             "conditions": _conditions_for(assignment_index, tokens[assignment_index], spans, pp_context),
             "location": _location(tokens[target_start], tokens[end - 1]),
         }
+        if declaration_name is not None:
+            operation["declared_name"] = declaration_name
         if include_control_metadata:
             operation.update(
                 _control_metadata_for(
@@ -1500,24 +1743,50 @@ def parse_rule_file(path: Path, required_base_type: str) -> dict[str, Any]:
     classes, forward, reverse = parse_classes(text, tokens)
     known_bases = {required_base_type}
     selected: list[dict[str, Any]] = []
+    base_resolution: dict[str, str] = {}
     pending = list(classes)
     while pending:
         changed = False
         for item in list(pending):
             if any(base.split("<", 1)[0] in known_bases for base in item["base_types"]):
                 selected.append(item)
+                base_resolution[item["name"]] = "confirmed"
                 known_bases.add(item["name"])
                 pending.remove(item)
                 changed = True
         if not changed:
             break
 
+    if required_base_type == "TargetRules" and resolved.name.casefold().endswith(
+        ".target.cs"
+    ):
+        expected_name = resolved.name[: -len(".Target.cs")] + "Target"
+        for item in list(pending):
+            has_target_constructor = any(
+                member["is_constructor"]
+                and re.search(r"\bTargetInfo\b", str(member["parameters"]))
+                for member in item["members"]
+            )
+            if item["name"].casefold() == expected_name.casefold() and has_target_constructor:
+                selected.append(item)
+                base_resolution[item["name"]] = "unresolved"
+                pending.remove(item)
+
+    selected.sort(key=lambda item: int(item["location"]["line"]))
+
     rules_classes: list[dict[str, Any]] = []
     for item in selected:
         methods: list[dict[str, Any]] = []
         for member in item["members"]:
             operation_items: list[dict[str, Any]] = []
+            declared_names: list[str] = []
             if member["body_range"]:
+                declared_names = _local_declaration_names(
+                    text,
+                    tokens,
+                    member["body_range"][0],
+                    member["body_range"][1],
+                )
                 operation_items = parse_operations(
                     text,
                     tokens,
@@ -1525,7 +1794,8 @@ def parse_rule_file(path: Path, required_base_type: str) -> dict[str, Any]:
                     reverse,
                     member["body_range"][0],
                     member["body_range"][1],
-                    include_control_metadata=required_base_type == "ModuleRules",
+                    include_control_metadata=required_base_type
+                    in {"ModuleRules", "TargetRules"},
                 )
                 if required_base_type == "ModuleRules":
                     for operation in operation_items:
@@ -1539,6 +1809,7 @@ def parse_rule_file(path: Path, required_base_type: str) -> dict[str, Any]:
                     "signature": member["signature"],
                     "is_constructor": member["is_constructor"],
                     "location": member["location"],
+                    "declared_names": declared_names,
                     "operations": operation_items,
                 }
             )
@@ -1565,7 +1836,14 @@ def parse_rule_file(path: Path, required_base_type: str) -> dict[str, Any]:
             {
                 "name": item["name"],
                 "base_types": item["base_types"],
+                "base_resolution": base_resolution[item["name"]],
                 "location": item["location"],
+                "declared_fields": _class_field_names(
+                    text,
+                    tokens,
+                    item["body_range"][0],
+                    item["body_range"][1],
+                ),
                 "methods": methods,
                 "same_file_calls": sorted(
                     unique_calls.values(),
