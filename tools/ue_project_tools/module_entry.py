@@ -9,88 +9,46 @@ from .common import normalized, result_document
 from .source_parser import parse_cpp_file, parse_operations, source_files
 
 
-_REGISTER_APIS = frozenset(
-    {
-        "Add",
-        "AddDynamic",
-        "AddLambda",
-        "AddRaw",
-        "AddSP",
-        "AddStatic",
-        "AddThreadSafeSP",
-        "AddUFunction",
-        "AddUnique",
-        "AddUniqueDynamic",
-        "AddUObject",
-        "AddWeakLambda",
-        "Bind",
-        "BindDynamic",
-        "BindLambda",
-        "BindRaw",
-        "BindSP",
-        "BindStatic",
-        "BindThreadSafeSP",
-        "BindUFunction",
-        "BindUObject",
-        "BindWeakLambda",
-        "RegisterStartupCallback",
-    }
-)
-_UNREGISTER_APIS = frozenset(
-    {
-        "Clear",
-        "Remove",
-        "RemoveAll",
-        "RemoveDynamic",
-        "Unbind",
-        "UnRegisterStartupCallback",
-        "UnregisterStartupCallback",
-    }
-)
+_REGISTER_APIS = {
+    "AddRaw",
+    "AddUObject",
+    "AddSP",
+    "AddStatic",
+    "AddLambda",
+    "AddWeakLambda",
+    "BindRaw",
+    "BindUObject",
+    "BindSP",
+    "BindStatic",
+    "BindLambda",
+    "RegisterStartupCallback",
+}
+_UNREGISTER_APIS = {
+    "Remove",
+    "RemoveAll",
+    "Unbind",
+    "Clear",
+    "UnRegisterStartupCallback",
+    "UnregisterStartupCallback",
+}
 
 
 def _with_path(location: dict[str, Any], path: str) -> dict[str, Any]:
     return {"path": path, **location}
 
 
-def _relative_path(path: str | Path, root: Path) -> str:
-    return Path(path).resolve().relative_to(root).as_posix()
-
-
-def _callee_parts(callee: str) -> tuple[str | None, str]:
-    matches = [
-        (callee.rfind(separator), separator)
-        for separator in (".", "::", "->")
-        if separator in callee
-    ]
-    if not matches:
-        return None, callee
-    index, separator = max(matches, key=lambda item: item[0])
-    return callee[:index], callee[index + len(separator) :]
-
-
 def _method_name_from_callee(callee: str) -> str:
-    return _callee_parts(callee)[1]
-
-
-def _self_method_name(callee: str, class_name: str) -> str | None:
-    receiver, method = _callee_parts(callee)
-    if receiver is None or receiver in {"this", "ThisClass", class_name}:
-        return method
-    return None
+    return callee.rsplit(".", 1)[-1].rsplit("::", 1)[-1]
 
 
 def _delegate_source(callee: str, api: str) -> str:
-    receiver, method = _callee_parts(callee)
-    return receiver if receiver is not None and method == api else callee
-
-
-def _delegate_action(api: str) -> str | None:
-    if api in _REGISTER_APIS:
-        return "register"
-    if api in _UNREGISTER_APIS:
-        return "unregister"
-    return None
+    suffix = "." + api
+    if callee.endswith(suffix):
+        return callee[: -len(suffix)]
+    suffix = "::" + api
+    if callee.endswith(suffix):
+        return callee[: -len(suffix)]
+    return callee
 
 
 def _callback_target(operation: dict[str, Any], class_name: str, method_names: set[str]) -> str | None:
@@ -111,102 +69,13 @@ def _callback_target(operation: dict[str, Any], class_name: str, method_names: s
     return None
 
 
-def _local_callback_method(
-    callback: str | None,
-    class_name: str,
-    method_names: set[str],
-) -> str | None:
-    if not callback or callback == "<lambda>":
-        return None
-    if "::" not in callback:
-        return callback if callback in method_names else None
-    owner, method = callback.rsplit("::", 1)
-    return method if owner == class_name and method in method_names else None
-
-
-def _source_looks_like_delegate(source: str) -> bool:
-    last = _callee_parts(source)[1]
-    return "Delegate" in source or "Callback" in source or bool(re.match(r"On[A-Z_]", last))
-
-
 def _looks_like_delegate(source: str, api: str, callback: str | None, known_sources: set[str]) -> bool:
+    if callback or api in {"RemoveAll", "Unbind", "RegisterStartupCallback", "UnRegisterStartupCallback", "UnregisterStartupCallback"}:
+        return True
     if source in known_sources:
         return True
-    if _source_looks_like_delegate(source):
-        return True
-    return callback is not None and api not in {"Add", "Remove", "Clear"}
-
-
-def _assigned_target(
-    method: dict[str, Any],
-    invocation: dict[str, Any],
-) -> str | None:
-    def contains(
-        assignment_location: dict[str, Any],
-        invocation_location: dict[str, Any],
-    ) -> bool:
-        return (
-            assignment_location.get("path") == invocation_location.get("path")
-            and int(assignment_location.get("line", 0))
-            <= int(invocation_location.get("line", 0))
-            and int(assignment_location.get("end_line", 0))
-            >= int(invocation_location.get("end_line", 0))
-        )
-
-    invocation_expression = str(invocation.get("expression", ""))
-    invocation_location = invocation.get("location", {})
-    candidates = [
-        str(operation.get("target", ""))
-        for operation in method["operations"]
-        if operation.get("kind") == "assignment"
-        and operation.get("operator") == "="
-        and contains(operation.get("location", {}), invocation_location)
-        and invocation_expression
-        and invocation_expression in str(operation.get("value_expression", ""))
-    ]
-    unique = sorted({candidate for candidate in candidates if candidate})
-    return unique[0] if len(unique) == 1 else None
-
-
-def _delegate_relationship(
-    first: dict[str, Any],
-    second: dict[str, Any],
-    handle_use_counts: dict[tuple[str, str], tuple[int, int]],
-) -> str:
-    register = first if first["action"] == "register" else second
-    unregister = second if register is first else first
-    register_arguments = register["_argument_expressions"]
-    unregister_arguments = unregister["_argument_expressions"]
-
-    if (
-        register["result_target"]
-        and unregister_arguments
-        and register["result_target"] == unregister_arguments[0]
-    ):
-        counts = handle_use_counts.get(
-            (register["delegate_source"], register["result_target"]),
-            (0, 0),
-        )
-        return "exact-handle" if counts == (1, 1) else "same-handle-candidate"
-    if (
-        unregister["binding_api"] == "RemoveDynamic"
-        and register_arguments
-        and unregister_arguments
-        and register_arguments[0] == unregister_arguments[0]
-        and register.get("callback_target")
-        and register.get("callback_target") == unregister.get("callback_target")
-    ):
-        return "callback-specific"
-    if (
-        unregister["binding_api"] == "RemoveAll"
-        and register_arguments
-        and unregister_arguments
-        and register_arguments[0] == unregister_arguments[0]
-    ):
-        return "object-wide"
-    if unregister["binding_api"] in {"Unbind", "Clear"}:
-        return "source-wide"
-    return "same-source-candidate"
+    last = source.rsplit(".", 1)[-1].rsplit("::", 1)[-1]
+    return "Delegate" in source or "Callback" in source or bool(re.match(r"On[A-Z_]", last))
 
 
 def _delegate_operations(
@@ -215,9 +84,7 @@ def _delegate_operations(
     class_name: str,
 ) -> list[dict[str, Any]]:
     method_names = set(methods)
-    preliminary: list[
-        tuple[str, dict[str, Any], str, str, str | None, str | None]
-    ] = []
+    preliminary: list[tuple[str, dict[str, Any], str, str, str | None]] = []
     known_sources: set[str] = set()
     for method_name in sorted(reachable):
         for operation in methods[method_name]["operations"]:
@@ -225,28 +92,17 @@ def _delegate_operations(
                 continue
             callee = str(operation.get("callee", ""))
             api = _method_name_from_callee(callee)
-            if _self_method_name(callee, class_name) in method_names:
-                continue
-            action = _delegate_action(api)
-            if action is None:
+            if api not in _REGISTER_APIS | _UNREGISTER_APIS:
                 continue
             source = _delegate_source(callee, api)
             callback = _callback_target(operation, class_name, method_names)
-            if action == "register" and (callback or _source_looks_like_delegate(source)):
+            action = "register" if api in _REGISTER_APIS else "unregister"
+            if action == "register" and callback:
                 known_sources.add(source)
-            preliminary.append(
-                (
-                    method_name,
-                    operation,
-                    action,
-                    source,
-                    callback,
-                    _assigned_target(methods[method_name], operation),
-                )
-            )
+            preliminary.append((method_name, operation, action, source, callback))
 
     results: list[dict[str, Any]] = []
-    for method_name, operation, action, source, callback, result_target in preliminary:
+    for method_name, operation, action, source, callback in preliminary:
         api = _method_name_from_callee(str(operation["callee"]))
         if not _looks_like_delegate(source, api, callback, known_sources):
             continue
@@ -256,56 +112,21 @@ def _delegate_operations(
                 "delegate_source": source,
                 "binding_api": api,
                 "callback_target": callback,
-                "result_target": result_target,
                 "method": method_name,
                 "roots": sorted(reachable[method_name]),
                 "expression": operation["expression"],
                 "conditions": operation["conditions"],
                 "location": operation["location"],
-                "_argument_expressions": [
-                    str(argument.get("expression", ""))
-                    for argument in operation.get("arguments", [])
-                ],
             }
         )
-    handle_counts: dict[tuple[str, str], list[int]] = defaultdict(lambda: [0, 0])
-    for operation in results:
-        if operation["action"] == "register" and operation["result_target"]:
-            handle_counts[
-                (operation["delegate_source"], operation["result_target"])
-            ][0] += 1
-        elif operation["action"] == "unregister" and operation[
-            "_argument_expressions"
-        ]:
-            handle_counts[
-                (
-                    operation["delegate_source"],
-                    operation["_argument_expressions"][0],
-                )
-            ][1] += 1
-    frozen_handle_counts = {
-        key: (counts[0], counts[1]) for key, counts in handle_counts.items()
-    }
-
     for index, item in enumerate(results):
-        item["related_operations"] = [
-            {
-                "action": other["action"],
-                "binding_api": other["binding_api"],
-                "relationship": _delegate_relationship(
-                    item,
-                    other,
-                    frozen_handle_counts,
-                ),
-                "location": other["location"],
-            }
+        item["matching_operation_locations"] = [
+            other["location"]
             for other_index, other in enumerate(results)
             if other_index != index
             and other["delegate_source"] == item["delegate_source"]
             and other["action"] != item["action"]
         ]
-    for item in results:
-        item.pop("_argument_expressions", None)
     return results
 
 
@@ -327,25 +148,11 @@ def _reachable(graph: dict[str, set[str]], roots: list[str], marker: str | None 
 
 def inspect_module_entry(rules_path: Path) -> dict[str, Any]:
     rules = rules_path.resolve()
-    if not rules.is_file():
-        raise ValueError(f"Module Build.cs is not a file: {rules}")
-    if not rules.name.casefold().endswith(".build.cs"):
-        raise ValueError(f"Expected a Module Build.cs file: {rules}")
-    module_name = rules.name[: -len(".Build.cs")]
-    if not module_name:
-        raise ValueError(f"Module Build.cs filename has no module name: {rules}")
+    module_name = rules.name[: -len(".Build.cs")] if rules.name.casefold().endswith(".build.cs") else rules.stem
     module_root = rules.parent
-    module_files = source_files(module_root)
-    parsed_files = [parse_cpp_file(path) for path in module_files]
-    relative_paths = {
-        parsed["path"]: _relative_path(parsed["path"], module_root)
-        for parsed in parsed_files
-    }
+    parsed_files = [parse_cpp_file(path) for path in source_files(module_root)]
     registrations = [
-        {
-            **macro,
-            "location": _with_path(macro["location"], relative_paths[parsed["path"]]),
-        }
+        {**macro, "location": _with_path(macro["location"], parsed["path"])}
         for parsed in parsed_files
         for macro in parsed["registration_macros"]
     ]
@@ -375,14 +182,13 @@ def inspect_module_entry(rules_path: Path) -> dict[str, Any]:
 
     class_parts: dict[str, dict[str, Any]] = {}
     for parsed in parsed_files:
-        relative_path = relative_paths[parsed["path"]]
         for class_item in parsed["classes"]:
             part = class_parts.setdefault(
                 class_item["name"],
                 {"base_types": set(), "declarations": [], "method_parts": []},
             )
             part["base_types"].update(class_item["base_types"])
-            part["declarations"].append(_with_path(class_item["location"], relative_path))
+            part["declarations"].append(_with_path(class_item["location"], parsed["path"]))
             for member in class_item["members"]:
                 operations: list[dict[str, Any]] = []
                 if member["body_range"]:
@@ -395,14 +201,14 @@ def inspect_module_entry(rules_path: Path) -> dict[str, Any]:
                         member["body_range"][1],
                     )
                     for operation in operations:
-                        operation["location"] = _with_path(operation["location"], relative_path)
+                        operation["location"] = _with_path(operation["location"], parsed["path"])
                 part["method_parts"].append(
                     {
                         "name": member["name"],
                         "parameters": member["parameters"],
                         "signature": member["signature"],
-                        "declaration": _with_path(member["location"], relative_path),
-                        "definition": _with_path(member["location"], relative_path) if member["has_body"] else None,
+                        "declaration": _with_path(member["location"], parsed["path"]),
+                        "definition": _with_path(member["location"], parsed["path"]) if member["has_body"] else None,
                         "operations": operations,
                     }
                 )
@@ -420,14 +226,14 @@ def inspect_module_entry(rules_path: Path) -> dict[str, Any]:
                 definition["body_range"][1],
             )
             for operation in operations:
-                operation["location"] = _with_path(operation["location"], relative_path)
+                operation["location"] = _with_path(operation["location"], parsed["path"])
             part["method_parts"].append(
                 {
                     "name": definition["name"],
                     "parameters": definition["parameters"],
                     "signature": definition["signature"],
                     "declaration": None,
-                    "definition": _with_path(definition["location"], relative_path),
+                    "definition": _with_path(definition["location"], parsed["path"]),
                     "operations": operations,
                 }
             )
@@ -442,9 +248,7 @@ def inspect_module_entry(rules_path: Path) -> dict[str, Any]:
         for name, part in class_parts.items()
         if any(base.endswith("ModuleInterface") or base.endswith("GameModuleImpl") for base in part["base_types"])
     }
-    module_class_names = sorted(
-        macro_class_names if matching_registrations else inferred_class_names
-    )
+    module_class_names = sorted(macro_class_names | inferred_class_names)
     output_classes: list[dict[str, Any]] = []
     for class_name in module_class_names:
         if class_name not in class_parts:
@@ -495,109 +299,43 @@ def inspect_module_entry(rules_path: Path) -> dict[str, Any]:
                     ),
                 ),
             }
-        ambiguous_methods = {
-            name
-            for name, method in methods.items()
-            if len(method["parameters"]) > 1 or len(method["definitions"]) > 1
-        }
-        unresolved_overload_uses: dict[str, list[dict[str, Any]]] = defaultdict(list)
         graph: dict[str, set[str]] = defaultdict(set)
         for method_name, method in methods.items():
             for operation in method["operations"]:
                 if operation.get("kind") != "invocation":
                     continue
-                callee_expression = str(operation.get("callee", ""))
-                callee = _self_method_name(callee_expression, class_name)
-                if callee not in methods or callee == method_name:
-                    continue
-                if callee in ambiguous_methods:
-                    unresolved_overload_uses[callee].append(
-                        {
-                            "kind": "call",
-                            "caller": method_name,
-                            "expression": operation["expression"],
-                            "location": operation["location"],
-                        }
-                    )
-                    continue
-                graph[method_name].add(callee)
-        lifecycle_roots: list[str] = []
-        for name in ("StartupModule", "ShutdownModule"):
-            if name not in methods:
-                continue
-            if name in ambiguous_methods:
-                unresolved_overload_uses[name].append({"kind": "lifecycle-root"})
-                continue
-            lifecycle_roots.append(name)
+                callee = _method_name_from_callee(str(operation.get("callee", "")))
+                if callee in methods and callee != method_name:
+                    graph[method_name].add(callee)
+        lifecycle_roots = [name for name in ("StartupModule", "ShutdownModule") if name in methods]
         reachable = _reachable(graph, lifecycle_roots)
-        followed_callbacks: set[str] = set()
-        while True:
-            delegate_operations = _delegate_operations(methods, reachable, class_name)
-            callback_methods: set[str] = set()
-            for item in delegate_operations:
-                if item["action"] != "register":
-                    continue
-                callback = _local_callback_method(
-                    item.get("callback_target"),
-                    class_name,
-                    set(methods),
-                )
-                if callback is None or callback in followed_callbacks:
-                    continue
-                if callback in ambiguous_methods:
-                    unresolved_overload_uses[callback].append(
-                        {
-                            "kind": "bound-callback",
-                            "expression": item["expression"],
-                            "location": item["location"],
-                        }
-                    )
-                    followed_callbacks.add(callback)
-                    continue
-                callback_methods.add(callback)
-            if not callback_methods:
-                break
-            followed_callbacks.update(callback_methods)
-            callback_reachable = _reachable(
-                graph,
-                sorted(callback_methods),
-                "bound-callback",
-            )
-            for method_name, roots in callback_reachable.items():
-                reachable[method_name].update(roots)
+        first_pass_delegate_operations = _delegate_operations(methods, reachable, class_name)
+        callback_methods = sorted(
+            {
+                callback.rsplit("::", 1)[-1]
+                for item in first_pass_delegate_operations
+                if item["action"] == "register"
+                and (callback := item.get("callback_target"))
+                and callback != "<lambda>"
+                and callback.rsplit("::", 1)[-1] in methods
+            }
+        )
+        callback_reachable = _reachable(graph, callback_methods, "bound-callback")
+        for method_name, roots in callback_reachable.items():
+            reachable[method_name].update(roots)
         delegate_operations = _delegate_operations(methods, reachable, class_name)
-        if unresolved_overload_uses:
-            problems.append(
-                {
-                    "severity": "warning",
-                    "code": "module-method-overload-unresolved",
-                    "module_class": class_name,
-                    "methods": [
-                        {
-                            "method": name,
-                            "parameters": methods[name]["parameters"],
-                            "signatures": methods[name]["signatures"],
-                            "uses": uses,
-                        }
-                        for name, uses in sorted(unresolved_overload_uses.items())
-                    ],
-                    "message": "Overloaded module methods were not followed because their call targets could not be resolved statically",
-                }
-            )
         output_classes.append(
             {
                 "name": class_name,
                 "base_types": sorted(part["base_types"]),
                 "declarations": part["declarations"],
                 "methods": [methods[name] for name in sorted(methods)],
-                "lifecycle": {
-                    "roots": lifecycle_roots,
-                    "reachability": [
-                        {"method": name, "roots": sorted(roots)}
-                        for name, roots in sorted(reachable.items())
-                    ],
-                },
-                "same_class_calls": [
+                "lifecycle_methods": lifecycle_roots,
+                "lifecycle_reachability": [
+                    {"method": name, "roots": sorted(roots)}
+                    for name, roots in sorted(reachable.items())
+                ],
+                "same_file_calls": [
                     {"caller": caller, "callee": callee}
                     for caller in sorted(graph)
                     for callee in sorted(graph[caller])
@@ -607,12 +345,12 @@ def inspect_module_entry(rules_path: Path) -> dict[str, Any]:
         )
 
     return result_document(
-        "ue-itps.module-entry-source.v6",
+        "ue-itps.module-entry-source.v1",
         {
             "module_name": module_name,
-            "build_rules_path": _relative_path(rules, module_root),
+            "build_rules_path": normalized(rules),
             "module_root": normalized(module_root),
-            "source_files": [_relative_path(path, module_root) for path in module_files],
+            "source_files": [normalized(path) for path in source_files(module_root)],
             "registration_macros": registrations,
             "module_classes": output_classes,
         },
