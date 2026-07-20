@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inspect static declarations in one Build.cs file."""
+"""Inspect declared setting mutations and references in one Build.cs file."""
 
 from pathlib import Path
 
@@ -9,8 +9,8 @@ from ue_project_tools.rule_source import inspect_module_rules
 
 def main() -> int:
     parser = cli_parser(
-        "读取单个 Build.cs 的静态规则事实。",
-        "Read static rule facts from one Build.cs file.",
+        "提取单个 Build.cs 声明的设置变更和引用关系。",
+        "Extract declared setting mutations and references from one Build.cs file.",
     )
     parser.add_argument(
         "--rules",

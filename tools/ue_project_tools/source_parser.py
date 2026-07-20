@@ -15,7 +15,6 @@ class Token:
     start: int
     end: int
     line: int
-    column: int
 
 
 _MULTI_OPERATORS = tuple(
@@ -34,6 +33,7 @@ _MULTI_OPERATORS = tuple(
             "*=",
             "/=",
             "??=",
+            "??",
             "=>",
             "++",
             "--",
@@ -51,21 +51,14 @@ def lex_source(text: str) -> list[Token]:
     tokens: list[Token] = []
     index = 0
     line = 1
-    column = 1
 
     def advance(raw: str) -> None:
-        nonlocal line, column
-        line_breaks = raw.count("\n")
-        if line_breaks:
-            line += line_breaks
-            column = len(raw.rsplit("\n", 1)[-1]) + 1
-        else:
-            column += len(raw)
+        nonlocal line
+        line += raw.count("\n")
 
     while index < len(text):
         start = index
         start_line = line
-        start_column = column
         if text[index].isspace():
             while index < len(text) and text[index].isspace():
                 index += 1
@@ -108,7 +101,7 @@ def lex_source(text: str) -> list[Token]:
                 else:
                     index += 1
             raw = text[start:index]
-            tokens.append(Token("string", raw, start, index, start_line, start_column))
+            tokens.append(Token("string", raw, start, index, start_line))
             advance(raw)
             continue
         if text[index] == "'":
@@ -122,7 +115,7 @@ def lex_source(text: str) -> list[Token]:
                 else:
                     index += 1
             raw = text[start:index]
-            tokens.append(Token("char", raw, start, index, start_line, start_column))
+            tokens.append(Token("char", raw, start, index, start_line))
             advance(raw)
             continue
         if text[index].isalpha() or text[index] == "_":
@@ -130,7 +123,7 @@ def lex_source(text: str) -> list[Token]:
             while index < len(text) and (text[index].isalnum() or text[index] == "_"):
                 index += 1
             raw = text[start:index]
-            tokens.append(Token("identifier", raw, start, index, start_line, start_column))
+            tokens.append(Token("identifier", raw, start, index, start_line))
             advance(raw)
             continue
         if text[index].isdigit():
@@ -138,7 +131,7 @@ def lex_source(text: str) -> list[Token]:
             while index < len(text) and (text[index].isalnum() or text[index] in "._"):
                 index += 1
             raw = text[start:index]
-            tokens.append(Token("number", raw, start, index, start_line, start_column))
+            tokens.append(Token("number", raw, start, index, start_line))
             advance(raw)
             continue
 
@@ -148,7 +141,7 @@ def lex_source(text: str) -> list[Token]:
         )
         raw = operator or text[index]
         index += len(raw)
-        tokens.append(Token("symbol", raw, start, index, start_line, start_column))
+        tokens.append(Token("symbol", raw, start, index, start_line))
         advance(raw)
     return tokens
 
@@ -183,9 +176,7 @@ def _location(first: Token, last: Token | None = None) -> dict[str, int]:
     final = last or first
     return {
         "line": first.line,
-        "column": first.column,
         "end_line": final.line,
-        "end_column": final.column + len(final.value),
     }
 
 
@@ -489,6 +480,220 @@ def condition_spans(tokens: list[Token], forward: dict[int, int], start: int, en
     return spans
 
 
+_CONTROL_REFERENCE_KEYWORDS = {
+    "as",
+    "bool",
+    "byte",
+    "catch",
+    "char",
+    "decimal",
+    "defined",
+    "double",
+    "false",
+    "float",
+    "for",
+    "foreach",
+    "if",
+    "in",
+    "int",
+    "is",
+    "long",
+    "new",
+    "null",
+    "object",
+    "sbyte",
+    "short",
+    "string",
+    "switch",
+    "true",
+    "uint",
+    "ulong",
+    "ushort",
+    "var",
+    "when",
+    "while",
+}
+
+
+def _ordered_union(*groups: Iterable[str]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for group in groups:
+        for item in group:
+            if item and item not in seen:
+                seen.add(item)
+                result.append(item)
+    return result
+
+
+def _control_references(
+    tokens: list[Token], excluded_roots: Iterable[str] = ()
+) -> list[str]:
+    excluded = set(excluded_roots)
+    references: list[str] = []
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        if token.kind != "identifier" or token.value in _CONTROL_REFERENCE_KEYWORDS:
+            index += 1
+            continue
+        if index > 0 and tokens[index - 1].value in {".", "::", "->"}:
+            index += 1
+            continue
+        parts = [token.value]
+        cursor = index + 1
+        while (
+            cursor + 1 < len(tokens)
+            and tokens[cursor].value in {".", "::", "->"}
+            and tokens[cursor + 1].kind == "identifier"
+        ):
+            parts.append(tokens[cursor + 1].value)
+            cursor += 2
+        if parts[0] not in excluded:
+            references.append(".".join(parts))
+        index = cursor
+    return _ordered_union(references)
+
+
+def _loop_local_names(kind: str, header: list[Token]) -> set[str]:
+    if kind == "foreach":
+        for index, token in enumerate(header):
+            if token.value == "in" and index > 0:
+                return {header[index - 1].value}
+        return set()
+    if kind != "for":
+        return set()
+    initializer_end = next(
+        (index for index, token in enumerate(header) if token.value == ";"),
+        len(header),
+    )
+    initializer = header[:initializer_end]
+    for index in range(1, len(initializer)):
+        if (
+            initializer[index].kind == "identifier"
+            and initializer[index - 1].kind == "identifier"
+        ):
+            return {initializer[index].value}
+    return set()
+
+
+def control_spans(
+    tokens: list[Token], forward: dict[int, int], start: int, end: int
+) -> list[dict[str, Any]]:
+    """Return flat enclosing control facts for ModuleRules relevance output."""
+    spans: list[dict[str, Any]] = []
+
+    def append_span(
+        kind: str,
+        body_start: int,
+        body_end: int,
+        control_index: int,
+        references: Iterable[str],
+    ) -> None:
+        spans.append(
+            {
+                "start": body_start,
+                "end": body_end,
+                "start_line": tokens[control_index].line,
+                "kind": kind,
+                "references": list(references),
+            }
+        )
+
+    def parse_if(
+        index: int, upper: int, prior_references: Iterable[str] = ()
+    ) -> int:
+        if (
+            index + 1 >= upper
+            or tokens[index + 1].value != "("
+            or index + 1 not in forward
+        ):
+            return index + 1
+        condition_close = forward[index + 1]
+        condition_references = _ordered_union(
+            prior_references,
+            _control_references(tokens[index + 2 : condition_close]),
+        )
+        then_start, then_end, after_then = _statement_after(
+            tokens, forward, condition_close + 1, upper
+        )
+        append_span("if", then_start, then_end, index, condition_references)
+        walk(then_start, then_end)
+        if after_then >= upper or tokens[after_then].value != "else":
+            return max(after_then, condition_close + 1)
+        branch_start = after_then + 1
+        if branch_start < upper and tokens[branch_start].value == "if":
+            return parse_if(branch_start, upper, condition_references)
+        else_start, else_end, after_else = _statement_after(
+            tokens, forward, branch_start, upper
+        )
+        append_span("if", else_start, else_end, index, condition_references)
+        walk(else_start, else_end)
+        return max(after_else, branch_start)
+
+    def walk(lower: int, upper: int) -> None:
+        index = lower
+        while index < upper:
+            value = tokens[index].value
+            if value == "if":
+                index = parse_if(index, upper)
+                continue
+            if (
+                value in {"for", "foreach", "while", "switch"}
+                and index + 1 < upper
+                and tokens[index + 1].value == "("
+                and index + 1 in forward
+            ):
+                header_close = forward[index + 1]
+                body_start, body_end, after_body = _statement_after(
+                    tokens, forward, header_close + 1, upper
+                )
+                header = tokens[index + 2 : header_close]
+                references = _control_references(
+                    header, _loop_local_names(value, header)
+                )
+                append_span(value, body_start, body_end, index, references)
+                walk(body_start, body_end)
+                index = max(after_body, header_close + 1)
+                continue
+            if value == "catch":
+                cursor = index + 1
+                filter_tokens: list[Token] = []
+                if cursor < upper and tokens[cursor].value == "(" and cursor in forward:
+                    cursor = forward[cursor] + 1
+                if (
+                    cursor + 1 < upper
+                    and tokens[cursor].value == "when"
+                    and tokens[cursor + 1].value == "("
+                    and cursor + 1 in forward
+                ):
+                    filter_close = forward[cursor + 1]
+                    filter_tokens = tokens[cursor + 2 : filter_close]
+                    cursor = filter_close + 1
+                body_start, body_end, after_body = _statement_after(
+                    tokens, forward, cursor, upper
+                )
+                append_span(
+                    "catch",
+                    body_start,
+                    body_end,
+                    index,
+                    _control_references(filter_tokens),
+                )
+                walk(body_start, body_end)
+                index = max(after_body, cursor)
+                continue
+            if value == "{" and index in forward:
+                close = min(forward[index], upper)
+                walk(index + 1, close)
+                index = close + 1
+                continue
+            index += 1
+
+    walk(start, end)
+    return spans
+
+
 def _raw_from_values(tokens: Iterable[Token]) -> str:
     values = [token.value for token in tokens]
     if not values:
@@ -516,6 +721,39 @@ def preprocessor_conditions(text: str) -> dict[int, list[dict[str, str]]]:
             active[-1] = {"kind": "preprocessor", "expression": stripped[6:].strip(), "branch": "elif"}
         elif stripped.startswith("#else") and active:
             active[-1] = {**active[-1], "branch": "else"}
+        elif stripped.startswith("#endif") and active:
+            active.pop()
+        result[line_number] = [dict(item) for item in active]
+    return result
+
+
+def preprocessor_control_contexts(text: str) -> dict[int, list[dict[str, Any]]]:
+    active: list[dict[str, Any]] = []
+    result: dict[int, list[dict[str, Any]]] = {}
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        expression = ""
+        if stripped.startswith("#if "):
+            expression = stripped[4:].strip()
+        elif stripped.startswith("#ifdef "):
+            expression = stripped[7:].strip()
+        elif stripped.startswith("#ifndef "):
+            expression = stripped[8:].strip()
+        if expression:
+            active.append(
+                {
+                    "start_line": line_number,
+                    "kind": "preprocessor",
+                    "references": _control_references(lex_source(expression)),
+                }
+            )
+        elif stripped.startswith("#elif ") and active:
+            references = _control_references(lex_source(stripped[6:].strip()))
+            active[-1]["references"] = _ordered_union(
+                active[-1]["references"], references
+            )
+        elif stripped.startswith("#else"):
+            pass
         elif stripped.startswith("#endif") and active:
             active.pop()
         result[line_number] = [dict(item) for item in active]
@@ -556,6 +794,474 @@ def _conditions_for(
     return [*preprocessor.get(token.line, []), *[dict(span["condition"]) for span in contextual]]
 
 
+def _control_metadata_for(
+    token_index: int,
+    token: Token,
+    spans: list[dict[str, Any]],
+    preprocessor: dict[int, list[dict[str, Any]]],
+) -> dict[str, Any]:
+    contextual = [
+        span for span in spans if span["start"] <= token_index < span["end"]
+    ]
+    contextual.extend(preprocessor.get(token.line, []))
+    contextual.sort(key=lambda item: item["start_line"])
+    path = [str(item["kind"]) for item in contextual]
+    references = _ordered_union(
+        *(item.get("references", []) for item in contextual)
+    )
+    result: dict[str, Any] = {
+        "applicability": "conditional" if path else "direct"
+    }
+    if path:
+        result["control_path"] = path
+    if references:
+        result["related_symbols"] = references
+    return result
+
+
+def _merge_control_metadata(
+    metadata: dict[str, Any], controls: Iterable[dict[str, Any]]
+) -> dict[str, Any]:
+    items = list(controls)
+    if not items:
+        return metadata
+    path = [*metadata.get("control_path", [])]
+    path.extend(str(item["kind"]) for item in items)
+    references = _ordered_union(
+        metadata.get("related_symbols", []),
+        *(item.get("references", []) for item in items),
+    )
+    result = {**metadata, "applicability": "conditional", "control_path": path}
+    if references:
+        result["related_symbols"] = references
+    return result
+
+
+def control_expression_ranges(
+    tokens: list[Token], forward: dict[int, int], start: int, end: int
+) -> list[dict[str, Any]]:
+    """Locate expressions evaluated by control constructs without treating bodies as headers."""
+    ranges: list[dict[str, Any]] = []
+
+    def add_range(
+        lower: int,
+        upper: int,
+        controls: Iterable[dict[str, Any]] = (),
+        excluded_targets: Iterable[str] = (),
+    ) -> None:
+        if lower < upper:
+            ranges.append(
+                {
+                    "start": lower,
+                    "end": upper,
+                    "controls": [dict(item) for item in controls],
+                    "excluded_targets": set(excluded_targets),
+                }
+            )
+
+    def split_for_header(lower: int, upper: int) -> list[tuple[int, int]]:
+        separators: list[int] = []
+        depth = 0
+        for index in range(lower, upper):
+            value = tokens[index].value
+            if value in {"(", "[", "{"}:
+                depth += 1
+            elif value in {")", "]", "}"}:
+                depth = max(0, depth - 1)
+            elif value == ";" and depth == 0:
+                separators.append(index)
+        boundaries = [lower, *separators, upper]
+        return [
+            (boundaries[index] + (1 if index else 0), boundaries[index + 1])
+            for index in range(len(boundaries) - 1)
+        ]
+
+    def parse_if(
+        index: int,
+        upper: int,
+        prior_references: Iterable[str] = (),
+        is_else_if: bool = False,
+    ) -> int:
+        if (
+            index + 1 >= upper
+            or tokens[index + 1].value != "("
+            or index + 1 not in forward
+        ):
+            return index + 1
+        condition_close = forward[index + 1]
+        prior = list(prior_references)
+        controls = (
+            [{"kind": "if", "references": prior}]
+            if is_else_if
+            else []
+        )
+        add_range(index + 2, condition_close, controls)
+        current_references = _ordered_union(
+            prior,
+            _control_references(tokens[index + 2 : condition_close]),
+        )
+        then_start, then_end, after_then = _statement_after(
+            tokens, forward, condition_close + 1, upper
+        )
+        walk(then_start, then_end)
+        if after_then >= upper or tokens[after_then].value != "else":
+            return max(after_then, condition_close + 1)
+        branch_start = after_then + 1
+        if branch_start < upper and tokens[branch_start].value == "if":
+            return parse_if(branch_start, upper, current_references, True)
+        else_start, else_end, after_else = _statement_after(
+            tokens, forward, branch_start, upper
+        )
+        walk(else_start, else_end)
+        return max(after_else, branch_start)
+
+    def walk(lower: int, upper: int) -> None:
+        index = lower
+        while index < upper:
+            value = tokens[index].value
+            if value == "if":
+                index = parse_if(index, upper)
+                continue
+            if (
+                value in {"for", "foreach", "while", "switch"}
+                and index + 1 < upper
+                and tokens[index + 1].value == "("
+                and index + 1 in forward
+            ):
+                header_close = forward[index + 1]
+                header_start = index + 2
+                header = tokens[header_start:header_close]
+                excluded = _loop_local_names(value, header)
+                if value == "for":
+                    segments = split_for_header(header_start, header_close)
+                    if segments:
+                        add_range(*segments[0], excluded_targets=excluded)
+                    if len(segments) > 1:
+                        add_range(*segments[1], excluded_targets=excluded)
+                    if len(segments) > 2:
+                        condition_references = _control_references(
+                            tokens[segments[1][0] : segments[1][1]], excluded
+                        )
+                        add_range(
+                            *segments[2],
+                            controls=[
+                                {
+                                    "kind": "for",
+                                    "references": condition_references,
+                                }
+                            ],
+                            excluded_targets=excluded,
+                        )
+                elif value == "foreach":
+                    in_index = next(
+                        (
+                            cursor
+                            for cursor in range(header_start, header_close)
+                            if tokens[cursor].value == "in"
+                        ),
+                        header_start - 1,
+                    )
+                    add_range(
+                        in_index + 1,
+                        header_close,
+                        excluded_targets=excluded,
+                    )
+                else:
+                    add_range(header_start, header_close)
+                body_start, body_end, after_body = _statement_after(
+                    tokens, forward, header_close + 1, upper
+                )
+                walk(body_start, body_end)
+                index = max(after_body, header_close + 1)
+                continue
+            if value == "catch":
+                cursor = index + 1
+                if cursor < upper and tokens[cursor].value == "(" and cursor in forward:
+                    cursor = forward[cursor] + 1
+                if (
+                    cursor + 1 < upper
+                    and tokens[cursor].value == "when"
+                    and tokens[cursor + 1].value == "("
+                    and cursor + 1 in forward
+                ):
+                    filter_close = forward[cursor + 1]
+                    add_range(
+                        cursor + 2,
+                        filter_close,
+                        controls=[{"kind": "catch", "references": []}],
+                    )
+                    cursor = filter_close + 1
+                body_start, body_end, after_body = _statement_after(
+                    tokens, forward, cursor, upper
+                )
+                walk(body_start, body_end)
+                index = max(after_body, cursor)
+                continue
+            if value == "{" and index in forward:
+                close = min(forward[index], upper)
+                walk(index + 1, close)
+                index = close + 1
+                continue
+            index += 1
+
+    walk(start, end)
+    return ranges
+
+
+def _expression_gate_controls(
+    tokens: list[Token],
+    forward: dict[int, int],
+    start: int,
+    operation_index: int,
+) -> list[dict[str, Any]]:
+    controls: list[dict[str, Any]] = []
+    for index in range(start, operation_index):
+        value = tokens[index].value
+        if value not in {"&&", "||", "??", "?"}:
+            continue
+        containing_closes = [
+            close
+            for open_index, close in forward.items()
+            if open_index < index < close
+        ]
+        if containing_closes and min(containing_closes) < operation_index:
+            continue
+        controls.append(
+            {
+                "kind": "ternary" if value == "?" else "short_circuit",
+                "references": _control_references(tokens[start:index]),
+            }
+        )
+    return controls
+
+
+def _assignment_value_end(
+    tokens: list[Token], start: int, assignment_index: int, end: int
+) -> int:
+    paren_depth = 0
+    bracket_depth = 0
+    brace_depth = 0
+    for index in range(start, assignment_index):
+        value = tokens[index].value
+        if value == "(":
+            paren_depth += 1
+        elif value == ")":
+            paren_depth = max(0, paren_depth - 1)
+        elif value == "[":
+            bracket_depth += 1
+        elif value == "]":
+            bracket_depth = max(0, bracket_depth - 1)
+        elif value == "{":
+            brace_depth += 1
+        elif value == "}":
+            brace_depth = max(0, brace_depth - 1)
+    initial = (paren_depth, bracket_depth, brace_depth)
+    for index in range(assignment_index + 1, end):
+        value = tokens[index].value
+        if value == ")" and paren_depth == initial[0] and initial[0] > 0:
+            return index
+        if value == "]" and bracket_depth == initial[1] and initial[1] > 0:
+            return index
+        if value == "}" and brace_depth == initial[2] and initial[2] > 0:
+            return index
+        if value in {";", ","} and (paren_depth, bracket_depth, brace_depth) == initial:
+            return index
+        if value == "(":
+            paren_depth += 1
+        elif value == ")":
+            paren_depth = max(0, paren_depth - 1)
+        elif value == "[":
+            bracket_depth += 1
+        elif value == "]":
+            bracket_depth = max(0, bracket_depth - 1)
+        elif value == "{":
+            brace_depth += 1
+        elif value == "}":
+            brace_depth = max(0, brace_depth - 1)
+    return end
+
+
+def _expression_operations(
+    text: str,
+    tokens: list[Token],
+    forward: dict[int, int],
+    reverse: dict[int, int],
+    expression_range: dict[str, Any],
+    spans: list[dict[str, Any]],
+    pp_context: dict[int, list[dict[str, str]]],
+    flow_spans: list[dict[str, Any]],
+    pp_flow: dict[int, list[dict[str, Any]]],
+) -> list[tuple[int, dict[str, Any]]]:
+    start = int(expression_range["start"])
+    end = int(expression_range["end"])
+    excluded_targets = set(expression_range.get("excluded_targets", set()))
+    base_controls = list(expression_range.get("controls", []))
+    results: list[tuple[int, dict[str, Any]]] = []
+
+    for assignment_index in range(start, end):
+        operator = tokens[assignment_index].value
+        if operator not in {"=", "+=", "-=", "*=", "/=", "??="}:
+            continue
+        name_index = assignment_index - 1
+        while name_index >= start and tokens[name_index].kind != "identifier":
+            name_index -= 1
+        if name_index < start:
+            continue
+        target_start = _member_chain_start(tokens, reverse, name_index, start)
+        target = _raw(text, tokens, target_start, assignment_index)
+        target_root = target.split(".", 1)[0]
+        if target_root in excluded_targets:
+            continue
+        value_end = _assignment_value_end(tokens, start, assignment_index, end)
+        if value_end <= assignment_index + 1:
+            continue
+        metadata = _control_metadata_for(
+            assignment_index,
+            tokens[assignment_index],
+            flow_spans,
+            pp_flow,
+        )
+        metadata = _merge_control_metadata(metadata, base_controls)
+        metadata = _merge_control_metadata(
+            metadata,
+            _expression_gate_controls(tokens, forward, start, target_start),
+        )
+        operation: dict[str, Any] = {
+            "kind": "assignment",
+            "target": target,
+            "operator": operator,
+            "value_expression": _raw(
+                text, tokens, assignment_index + 1, value_end
+            ),
+            "expression": _raw(text, tokens, target_start, value_end),
+            "evaluation": _evaluation(tokens[assignment_index + 1 : value_end]),
+            "conditions": _conditions_for(
+                assignment_index,
+                tokens[assignment_index],
+                spans,
+                pp_context,
+            ),
+            "location": _location(tokens[target_start], tokens[value_end - 1]),
+            **metadata,
+        }
+        results.append((assignment_index, operation))
+
+    for update_index in range(start, end):
+        operator = tokens[update_index].value
+        if operator not in {"++", "--"}:
+            continue
+        prefix = update_index + 1 < end and tokens[update_index + 1].kind == "identifier"
+        if prefix:
+            target_start = update_index + 1
+            target_end = target_start + 1
+            while (
+                target_end + 1 < end
+                and tokens[target_end].value in {".", "::", "->"}
+                and tokens[target_end + 1].kind == "identifier"
+            ):
+                target_end += 2
+            expression_start = update_index
+            expression_end = target_end
+        else:
+            name_index = update_index - 1
+            if name_index < start or tokens[name_index].kind != "identifier":
+                continue
+            target_start = _member_chain_start(tokens, reverse, name_index, start)
+            target_end = update_index
+            expression_start = target_start
+            expression_end = update_index + 1
+        target = _raw(text, tokens, target_start, target_end)
+        if target.split(".", 1)[0] in excluded_targets:
+            continue
+        metadata = _control_metadata_for(
+            update_index, tokens[update_index], flow_spans, pp_flow
+        )
+        metadata = _merge_control_metadata(metadata, base_controls)
+        metadata = _merge_control_metadata(
+            metadata,
+            _expression_gate_controls(tokens, forward, start, expression_start),
+        )
+        operation = {
+            "kind": "assignment",
+            "target": target,
+            "operator": operator,
+            "value_expression": operator,
+            "expression": _raw(text, tokens, expression_start, expression_end),
+            "evaluation": {"status": "unresolved", "literal_values": []},
+            "conditions": _conditions_for(
+                update_index, tokens[update_index], spans, pp_context
+            ),
+            "location": _location(
+                tokens[expression_start], tokens[expression_end - 1]
+            ),
+            **metadata,
+        }
+        results.append((update_index, operation))
+
+    excluded_calls = {
+        "alignof",
+        "catch",
+        "decltype",
+        "for",
+        "foreach",
+        "if",
+        "new",
+        "sizeof",
+        "switch",
+        "while",
+    }
+    for open_index in range(start, end):
+        if tokens[open_index].value != "(" or open_index not in forward:
+            continue
+        close = forward[open_index]
+        if close >= end or open_index == start:
+            continue
+        name_index = open_index - 1
+        if (
+            tokens[name_index].kind != "identifier"
+            or tokens[name_index].value in excluded_calls
+        ):
+            continue
+        callee_start = _member_chain_start(tokens, reverse, name_index, start)
+        if callee_start > start and tokens[callee_start - 1].value == "new":
+            continue
+        argument_ranges = _split_arguments(tokens, open_index + 1, close)
+        arguments = [
+            {
+                "expression": _raw(text, tokens, argument_start, argument_end),
+                "evaluation": _evaluation(tokens[argument_start:argument_end]),
+            }
+            for argument_start, argument_end in argument_ranges
+        ]
+        evaluation_tokens = [
+            token
+            for argument_start, argument_end in argument_ranges
+            for token in tokens[argument_start:argument_end]
+        ]
+        metadata = _control_metadata_for(
+            name_index, tokens[name_index], flow_spans, pp_flow
+        )
+        metadata = _merge_control_metadata(metadata, base_controls)
+        metadata = _merge_control_metadata(
+            metadata,
+            _expression_gate_controls(tokens, forward, start, callee_start),
+        )
+        operation = {
+            "kind": "invocation",
+            "callee": _raw_from_values(tokens[callee_start:open_index]),
+            "arguments": arguments,
+            "expression": _raw(text, tokens, callee_start, close + 1),
+            "evaluation": _evaluation(evaluation_tokens),
+            "conditions": _conditions_for(
+                name_index, tokens[name_index], spans, pp_context
+            ),
+            "location": _location(tokens[callee_start], tokens[close]),
+            **metadata,
+        }
+        results.append((open_index, operation))
+    return results
+
+
 def parse_operations(
     text: str,
     tokens: list[Token],
@@ -563,10 +1269,30 @@ def parse_operations(
     reverse: dict[int, int],
     start: int,
     end: int,
+    include_control_metadata: bool = False,
 ) -> list[dict[str, Any]]:
     spans = condition_spans(tokens, forward, start, end)
     pp_context = preprocessor_conditions(text)
+    flow_spans = control_spans(tokens, forward, start, end) if include_control_metadata else []
+    pp_flow = preprocessor_control_contexts(text) if include_control_metadata else {}
     operations: list[tuple[int, dict[str, Any]]] = []
+    if include_control_metadata:
+        for expression_range in control_expression_ranges(
+            tokens, forward, start, end
+        ):
+            operations.extend(
+                _expression_operations(
+                    text,
+                    tokens,
+                    forward,
+                    reverse,
+                    expression_range,
+                    spans,
+                    pp_context,
+                    flow_spans,
+                    pp_flow,
+                )
+            )
     statement_start = start
     brace_depth = 0
     paren_depth = 0
@@ -587,7 +1313,15 @@ def parse_operations(
         elif value == "}" and paren_depth == 0 and bracket_depth == 0:
             brace_depth = max(0, brace_depth - 1)
             statement_start = cursor + 1
-        elif value == ";":
+        elif (
+            value == ":"
+            and paren_depth == 0
+            and bracket_depth == 0
+            and statement_start < cursor
+            and tokens[statement_start].value in {"case", "default"}
+        ):
+            statement_start = cursor + 1
+        elif value == ";" and paren_depth == 0 and bracket_depth == 0:
             segment_start = statement_start
             while segment_start < cursor and tokens[segment_start].value in {"else"}:
                 segment_start += 1
@@ -603,6 +1337,9 @@ def parse_operations(
                     cursor,
                     spans,
                     pp_context,
+                    flow_spans,
+                    pp_flow,
+                    include_control_metadata,
                 )
             )
             statement_start = cursor + 1
@@ -618,6 +1355,9 @@ def _statement_operations(
     end: int,
     spans: list[dict[str, Any]],
     pp_context: dict[int, list[dict[str, str]]],
+    flow_spans: list[dict[str, Any]],
+    pp_flow: dict[int, list[dict[str, Any]]],
+    include_control_metadata: bool,
 ) -> list[tuple[int, dict[str, Any]]]:
     if start >= end:
         return []
@@ -657,6 +1397,15 @@ def _statement_operations(
             "conditions": _conditions_for(assignment_index, tokens[assignment_index], spans, pp_context),
             "location": _location(tokens[target_start], tokens[end - 1]),
         }
+        if include_control_metadata:
+            operation.update(
+                _control_metadata_for(
+                    assignment_index,
+                    tokens[assignment_index],
+                    flow_spans,
+                    pp_flow,
+                )
+            )
         results.append((assignment_index, operation))
 
     excluded = {"if", "for", "foreach", "while", "switch", "catch", "sizeof", "decltype", "alignof", "new", "base"}
@@ -693,6 +1442,10 @@ def _statement_operations(
             "conditions": _conditions_for(name_index, tokens[name_index], spans, pp_context),
             "location": _location(tokens[callee_start], tokens[close]),
         }
+        if include_control_metadata:
+            operation.update(
+                _control_metadata_for(name_index, tokens[name_index], flow_spans, pp_flow)
+            )
         results.append((open_index, operation))
     return results
 
@@ -714,7 +1467,11 @@ _MODULE_RULE_KINDS = {
 def _rule_annotation(operation: dict[str, Any]) -> dict[str, str] | None:
     if operation["kind"] == "invocation":
         callee = str(operation.get("callee", ""))
-        match = re.search(r"(?:^|[.>])(?P<member>[A-Za-z_]\w*)\.(?P<action>AddRange|Add|Remove|RemoveAll)$", callee)
+        match = re.search(
+            r"(?:^|[.>])(?P<member>[A-Za-z_]\w*)\."
+            r"(?P<action>AddRange|Add|Remove|RemoveAll)$",
+            callee,
+        )
         if match and match.group("member") in _MODULE_RULE_KINDS:
             return {
                 "kind": _MODULE_RULE_KINDS[match.group("member")],
@@ -723,6 +1480,12 @@ def _rule_annotation(operation: dict[str, Any]) -> dict[str, str] | None:
             }
     else:
         target = str(operation.get("target", "")).split(".")[-1]
+        if target in _MODULE_RULE_KINDS:
+            return {
+                "kind": _MODULE_RULE_KINDS[target],
+                "member": target,
+                "action": "assign",
+            }
         if target in {"PCHUsage", "PrivatePCHHeaderFile", "SharedPCHHeaderFile"}:
             return {"kind": "pch", "member": target, "action": "assign"}
         if target in {"bEnforceIWYU", "IWYUSupport", "bLegacyPublicIncludePaths"}:
@@ -762,6 +1525,7 @@ def parse_rule_file(path: Path, required_base_type: str) -> dict[str, Any]:
                     reverse,
                     member["body_range"][0],
                     member["body_range"][1],
+                    include_control_metadata=required_base_type == "ModuleRules",
                 )
                 if required_base_type == "ModuleRules":
                     for operation in operation_items:
@@ -794,7 +1558,7 @@ def parse_rule_file(path: Path, required_base_type: str) -> dict[str, Any]:
                         }
                     )
         unique_calls = {
-            (call["caller"], call["callee"], call["location"]["line"], call["location"]["column"]): call
+            (call["caller"], call["callee"], call["location"]["line"]): call
             for call in calls
         }
         rules_classes.append(
@@ -833,18 +1597,6 @@ def registration_macros(text: str, tokens: list[Token]) -> list[dict[str, Any]]:
             }
         )
     return results
-
-
-def find_registration_macros(module_dir: Path) -> list[dict[str, Any]]:
-    results: list[dict[str, Any]] = []
-    for path in iter_files(module_dir, ".cpp"):
-        try:
-            text = path.read_text(encoding="utf-8-sig", errors="replace")
-        except OSError:
-            continue
-        for item in registration_macros(text, lex_source(text)):
-            results.append({"path": normalized(path), **item})
-    return sorted(results, key=lambda item: (item["path"].casefold(), item["location"]["line"]))
 
 
 def parse_cpp_file(path: Path) -> dict[str, Any]:

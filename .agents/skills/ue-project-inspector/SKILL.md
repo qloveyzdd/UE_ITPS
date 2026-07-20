@@ -25,8 +25,7 @@ If the scripts are missing, report that this repository does not contain the exp
 | Locate direct `.uproject` Plugin references | `ue_resolve_plugins.py` |
 | Classify project-root paths with explicit descriptor evidence | `ue_classify_project_paths.py` |
 | Read one explicitly selected `.uplugin` | `ue_read_plugin_descriptor.py` |
-| Locate one plugin's declared Build.cs and module entrypoints | `ue_inspect_plugin_modules.py` |
-| Read static rules from one Build.cs | `ue_inspect_module_rules.py` |
+| Read declared setting mutations and references from one Build.cs | `ue_inspect_module_rules.py` |
 | Read static rules from one Target.cs | `ue_inspect_target_rules.py` |
 | Inspect one module's registration, lifecycle, delegates, and bound callbacks | `ue_inspect_module_entry.py` |
 
@@ -50,8 +49,7 @@ When the user needs to modify or understand one plugin, drill down instead of me
 1. Read the `.uproject` declaration with `ue_read_project_descriptor.py`.
 2. Locate its direct plugin descriptors with `ue_resolve_plugins.py`.
 3. Select one resolved `.uplugin` and read it with `ue_read_plugin_descriptor.py`.
-4. If module entrypoint paths are needed, run `ue_inspect_plugin_modules.py` for that same descriptor.
-5. Select one returned Build.cs path and run only the source tool needed next: `ue_inspect_module_rules.py` for UBT declarations or `ue_inspect_module_entry.py` for C++ module lifecycle evidence.
+4. Select one resolved Build.cs path from the descriptor result and run only the source tool needed next: `ue_inspect_module_rules.py` for UBT declarations or `ue_inspect_module_entry.py` for C++ module registration and lifecycle evidence.
 
 Do not embed or reinterpret later source-tool results as fields of the earlier `.uproject` result. Each tool keeps its own schema, validation, and limits.
 
@@ -73,7 +71,6 @@ Replace `<plugin>`, `<rules>`, and `<target>` with one explicit file selected fr
 
 ```powershell
 python tools/ue_read_plugin_descriptor.py --plugin <plugin>
-python tools/ue_inspect_plugin_modules.py --plugin <plugin>
 python tools/ue_inspect_module_rules.py --rules <rules>
 python tools/ue_inspect_target_rules.py --target <target>
 python tools/ue_inspect_module_entry.py --rules <rules>
@@ -109,14 +106,30 @@ Treat `ue-itps.project-descriptor.v1` as a compact projection of the original `.
 
 For a simple enabled/disabled question, stop after `ue_read_project_descriptor.py`. If the user asks for exact values of one extended declaration, read only the original `.uproject` object identified by its `descriptor_pointer`. Resolve Engine and run `ue_resolve_plugins.py` only when the question also needs Plugin location, origin, `.uplugin` evidence, or Profile applicability.
 
+## Interpret Module rule relations v1
+
+Treat `ue-itps.module-rule-relations.v1` as a relevance projection, not a C# syntax tree or effective UBT result:
+
+- `declared_mutations` contains recognized ModuleRules setting mutations from constructors and statically reachable same-file helpers.
+- `operand.kind` is `literal`, `symbol`, or `expression`; an expression is preserved without recursively expanding nested code.
+- `unclassified_mutations` contains mutation-shaped source candidates that are not confirmed ModuleRules members.
+- `unresolved_effect_calls` records external or inherited calls that may change rules without inferring their effects.
+- Empty `AddRange` declarations are omitted because they do not add references.
+- Arrays are in deterministic source order, not runtime execution order.
+- `operation` uses normalized change semantics such as `set`, `add`, `remove`, `increment`, or `decrement`; source API distinctions such as `Add` versus `AddRange` are not exposed.
+- `applicability.kind` is `direct` or `conditional`; `direct` means no recognized enclosing control, not guaranteed runtime execution.
+- Conditional applicability owns its outer-to-inner `control_path` and referenced `related_symbols`; symbols are not classified as inputs versus constants, and condition expressions are not returned.
+- `line` is the source evidence within the selected Build.cs; the containing method is not exposed.
+- Explicit assignments, updates, and calls inside control expressions are also scanned. An `if`, `while`, or `switch` expression does not inherit its own body control; short-circuit/ternary branches, `for` iterators, and `catch when` filters remain conditional.
+- Control paths are local to each reported mutation; caller controls are not propagated into reachable helpers.
+
 ## Interpretation boundaries
 
 - `EngineAssociation` is an association key. Use resolved `Build.version` for the actual engine version.
 - `.uproject` declares Modules and direct Plugin references, but descriptor v1 intentionally does not repeat their full arrays. It does not declare `Target.cs` or a complete dependency graph.
 - Direct Plugin resolution is not the effective `.uplugin` dependency closure.
 - The single-plugin descriptor tool reports direct Plugin dependency declarations without locating or traversing their descriptors; it recursively reconciles declared Modules with Build.cs files under the selected plugin's Source and Platforms directories.
-- Plugin module navigation reuses Build.cs reconciliation and adds entrypoint evidence for the selected plugin; it does not expand source facts.
-- Build.cs and Target.cs operations are static declarations with preserved conditions and unresolved expressions, not effective UBT results.
+- Build.cs setting mutations use flattened applicability facts, while Target.cs operations preserve source conditions; neither is an effective UBT result.
 - Module entry inspection follows lifecycle helpers and actually bound same-module callbacks only; it is not a general C++ class or call graph.
 - Path v1 derives the project root from the selected `.uproject` and reports conventional path roles, filesystem state (`missing | file | directory | other`), and unclassified root directories.
 - Path v1 records the absolute `project_root` once; path items and validation problems use only `project_relative_path`.

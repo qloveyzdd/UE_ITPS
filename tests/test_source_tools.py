@@ -14,7 +14,6 @@ sys.path.insert(0, str(TOOLS_ROOT))
 
 from ue_project_tools.module_entry import inspect_module_entry
 from ue_project_tools.plugin_descriptor import read_plugin_descriptor
-from ue_project_tools.plugin_modules import inspect_plugin_modules
 from ue_project_tools.rule_source import inspect_module_rules, inspect_target_rules
 
 
@@ -93,7 +92,7 @@ public class FixtureTarget : TargetRules
             )
         )
 
-    def test_module_rules_classify_declared_operations_without_effective_results(self) -> None:
+    def test_module_rules_emit_relevant_mutations_from_reachable_methods(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             rules = Path(temporary_directory) / "Fixture.Build.cs"
             rules.write_text(
@@ -106,12 +105,18 @@ public class Fixture : ModuleRules
         bEnforceIWYU = true;
         PublicDependencyModuleNames.AddRange(new[] { "Core", "Engine" });
         ConfigureEditor(Target);
+        SetupExternalSupport(Target);
     }
 
     void ConfigureEditor(ReadOnlyTargetRules Target)
     {
         if (Target.bBuildEditor)
             PrivateDependencyModuleNames.Add(EditorModuleName);
+    }
+
+    void Unused()
+    {
+        PublicDefinitions.Add("UNUSED=1");
     }
 }
 """,
@@ -120,36 +125,441 @@ public class Fixture : ModuleRules
 
             result = inspect_module_rules(rules)
 
-        self.assertEqual(result["schema_version"], "ue-itps.module-rules-source.v1")
+        self.assertEqual(
+            result["schema_version"], "ue-itps.module-rule-relations.v1"
+        )
         rules_class = result["rules_classes"][0]
-        operations = [
-            operation
-            for method in rules_class["methods"]
-            for operation in method["operations"]
-        ]
+        self.assertEqual(
+            list(rules_class),
+            [
+                "name",
+                "declared_mutations",
+                "unclassified_mutations",
+                "unresolved_effect_calls",
+            ],
+        )
+        mutations = rules_class["declared_mutations"]
         public_dependencies = next(
-            operation
-            for operation in operations
-            if operation.get("rule", {}).get("kind") == "public_dependency"
+            mutation
+            for mutation in mutations
+            if mutation["setting"] == "PublicDependencyModuleNames"
         )
         self.assertEqual(
-            public_dependencies["evaluation"],
-            {"status": "literal", "literal_values": ["Core", "Engine"]},
+            public_dependencies["operand"],
+            {
+                "kind": "literal",
+                "reference_kind": "module",
+                "references": ["Core", "Engine"],
+            },
         )
+        self.assertEqual(public_dependencies["operation"], "add")
         private_dependencies = next(
-            operation
-            for operation in operations
-            if operation.get("rule", {}).get("kind") == "private_dependency"
+            mutation
+            for mutation in mutations
+            if mutation["setting"] == "PrivateDependencyModuleNames"
         )
-        self.assertEqual(private_dependencies["evaluation"]["status"], "unresolved")
         self.assertEqual(
-            private_dependencies["conditions"][0]["expression"],
-            "Target.bBuildEditor",
+            private_dependencies["operand"],
+            {"kind": "expression", "expression": "EditorModuleName"},
+        )
+        self.assertEqual(
+            private_dependencies["applicability"],
+            {
+                "kind": "conditional",
+                "control_path": ["if"],
+                "related_symbols": ["Target.bBuildEditor"],
+            },
+        )
+        pch = next(mutation for mutation in mutations if mutation["setting"] == "PCHUsage")
+        self.assertEqual(pch["operation"], "set")
+        self.assertEqual(
+            pch["operand"],
+            {
+                "kind": "symbol",
+                "references": ["PCHUsageMode.UseExplicitOrSharedPCHs"],
+            },
+        )
+        iwyu = next(
+            mutation for mutation in mutations if mutation["setting"] == "bEnforceIWYU"
+        )
+        self.assertEqual(iwyu["operand"], {"kind": "literal", "values": [True]})
+        self.assertNotIn("UNUSED=1", json.dumps(result))
+        self.assertEqual(
+            rules_class["unresolved_effect_calls"],
+            [
+                {
+                    "callee": "SetupExternalSupport",
+                    "arguments": ["Target"],
+                    "applicability": {"kind": "direct"},
+                    "line": 10,
+                }
+            ],
         )
         self.assertIn(
             "Static declarations are not effective UBT build results.",
             result["limits"]["boundaries"],
         )
+        serialized = json.dumps(result)
+        for removed_field in ('"methods"', '"operations"', '"evaluation"', '"literal_values"'):
+            self.assertNotIn(removed_field, serialized)
+
+    def test_module_rules_fail_closed_for_empty_complex_and_unknown_mutations(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            rules = Path(temporary_directory) / "Fixture.Build.cs"
+            rules.write_text(
+                """
+public class Fixture : ModuleRules
+{
+    public Fixture(ReadOnlyTargetRules Target) : base(Target)
+    {
+        PublicIncludePaths.AddRange(new string[] { });
+        DynamicallyLoadedModuleNames.AddRange(new string[] { });
+        PublicIncludePaths.Add(Path.Combine(ModuleDirectory, "Private"));
+        SomeNewSetting = FeatureValue;
+        CustomEntries.Add("Value");
+        SetupFeature(Target);
+    }
+}
+""",
+                encoding="utf-8",
+            )
+
+            result = inspect_module_rules(rules)
+
+        rules_class = result["rules_classes"][0]
+        self.assertEqual(len(rules_class["declared_mutations"]), 1)
+        include_path = rules_class["declared_mutations"][0]
+        self.assertEqual(include_path["setting"], "PublicIncludePaths")
+        self.assertEqual(
+            include_path["operand"],
+            {
+                "kind": "expression",
+                "expression": 'Path.Combine(ModuleDirectory, "Private")',
+            },
+        )
+        self.assertEqual(
+            rules_class["unclassified_mutations"],
+            [
+                {
+                    "target": "SomeNewSetting",
+                    "operation": "set",
+                    "expression": "FeatureValue",
+                    "applicability": {"kind": "direct"},
+                    "line": 9,
+                },
+                {
+                    "target": "CustomEntries",
+                    "operation": "add",
+                    "expression": '"Value"',
+                    "applicability": {"kind": "direct"},
+                    "line": 10,
+                },
+            ],
+        )
+        self.assertEqual(
+            rules_class["unresolved_effect_calls"],
+            [
+                {
+                    "callee": "SetupFeature",
+                    "arguments": ["Target"],
+                    "applicability": {"kind": "direct"},
+                    "line": 11,
+                }
+            ],
+        )
+        serialized = json.dumps(result)
+        self.assertNotIn("DynamicallyLoadedModuleNames", serialized)
+        self.assertNotIn("Path.Combine", json.dumps(rules_class["unresolved_effect_calls"]))
+
+    def test_module_rules_flatten_nested_control_relevance(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            rules = Path(temporary_directory) / "Fixture.Build.cs"
+            rules.write_text(
+                """
+public class Fixture : ModuleRules
+{
+    public Fixture(ReadOnlyTargetRules Target) : base(Target)
+    {
+#if WITH_OPTIONAL_FEATURE
+        foreach (string ModuleName in OptionalModules)
+        {
+            if (Target.bBuildEditor)
+            {
+                if (Target.Platform == UnrealTargetPlatform.Win64)
+                {
+                    switch (Target.Configuration)
+                    {
+                        case UnrealTargetConfiguration.Debug:
+                            PublicDependencyModuleNames.Add(ModuleName);
+                            break;
+                    }
+                }
+            }
+        }
+#endif
+
+        try
+        {
+            ConfigureExternal();
+        }
+        catch (BuildException)
+        {
+            PublicDefinitions.Add("WITH_FALLBACK=1");
+        }
+
+        if (Target.bBuildEditor)
+            PublicDefinitions.Add("EDITOR=1");
+        else if (Target.bCompileAgainstEngine)
+            PublicDefinitions.Add("ENGINE=1");
+
+        for (int Index = 0; Index < OptionalModules.Count; ++Index)
+        {
+            while (Target.bBuildEditor)
+            {
+                PrivateDefinitions.Add("LOOP=1");
+                break;
+            }
+        }
+    }
+}
+""",
+                encoding="utf-8",
+            )
+
+            result = inspect_module_rules(rules)
+
+        mutations = result["rules_classes"][0]["declared_mutations"]
+        dependency = next(
+            item for item in mutations if item["setting"] == "PublicDependencyModuleNames"
+        )
+        self.assertEqual(
+            dependency["applicability"],
+            {
+                "kind": "conditional",
+                "control_path": ["preprocessor", "foreach", "if", "if", "switch"],
+                "related_symbols": [
+                    "WITH_OPTIONAL_FEATURE",
+                    "OptionalModules",
+                    "Target.bBuildEditor",
+                    "Target.Platform",
+                    "UnrealTargetPlatform.Win64",
+                    "Target.Configuration",
+                ],
+            },
+        )
+
+        fallback = next(
+            item
+            for item in mutations
+            if item.get("operand", {}).get("references") == ["WITH_FALLBACK=1"]
+        )
+        self.assertEqual(
+            fallback["applicability"],
+            {"kind": "conditional", "control_path": ["catch"]},
+        )
+
+        engine = next(
+            item
+            for item in mutations
+            if item.get("operand", {}).get("references") == ["ENGINE=1"]
+        )
+        self.assertEqual(
+            engine["applicability"],
+            {
+                "kind": "conditional",
+                "control_path": ["if"],
+                "related_symbols": [
+                    "Target.bBuildEditor",
+                    "Target.bCompileAgainstEngine",
+                ],
+            },
+        )
+
+        loop = next(
+            item
+            for item in mutations
+            if item.get("operand", {}).get("references") == ["LOOP=1"]
+        )
+        self.assertEqual(
+            loop["applicability"],
+            {
+                "kind": "conditional",
+                "control_path": ["for", "while"],
+                "related_symbols": [
+                    "OptionalModules.Count",
+                    "Target.bBuildEditor",
+                ],
+            },
+        )
+
+    def test_module_rules_extract_mutations_from_control_expressions(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            rules = Path(temporary_directory) / "Fixture.Build.cs"
+            rules.write_text(
+                """
+public class Fixture : ModuleRules
+{
+    public Fixture(ReadOnlyTargetRules Target) : base(Target)
+    {
+        if ((PCHUsage = ResolvePCHUsage(Target)) == PCHUsageMode.NoPCHs)
+        {
+        }
+
+        foreach (string ModuleName in OptionalModules)
+        {
+            if ((PCHUsage = ResolvePCHUsage(Target)) == PCHUsageMode.NoPCHs)
+            {
+            }
+        }
+
+        if (Target.bBuildEditor && (bEnforceIWYU = ResolveIWYU(Target)))
+        {
+        }
+
+        if (Target.bBuildEditor)
+        {
+        }
+        else if ((bEnforceIWYU = ResolveIWYU(Target)))
+        {
+        }
+
+        for (PublicDefinitions.Add("INIT=1"); KeepGoing(Target); PublicDefinitions.Add("ITER=1"))
+        {
+        }
+
+        while ((PCHUsage = ResolvePCHUsage(Target)) == PCHUsageMode.NoPCHs)
+        {
+            break;
+        }
+
+        if (Target.bCompileAgainstEngine
+            ? (bLegacyPublicIncludePaths = UseLegacy(Target))
+            : false)
+        {
+        }
+
+        switch (PCHUsage = ResolvePCHUsage(Target))
+        {
+            default:
+                break;
+        }
+
+        try
+        {
+        }
+        catch (BuildException) when ((bLegacyPublicIncludePaths = UseLegacy(Target)))
+        {
+        }
+
+        if (ConfigureRules(Target))
+        {
+        }
+
+        if (++CustomCounter > 0)
+        {
+        }
+    }
+
+    bool ConfigureRules(ReadOnlyTargetRules Target)
+    {
+        PublicDefinitions.Add("HELPER=1");
+        return true;
+    }
+}
+""",
+                encoding="utf-8",
+            )
+
+            result = inspect_module_rules(rules)
+
+        rules_class = result["rules_classes"][0]
+        mutations = rules_class["declared_mutations"]
+        pch_mutations = [
+            item for item in mutations if item["setting"] == "PCHUsage"
+        ]
+        self.assertEqual(len(pch_mutations), 4)
+        self.assertEqual(
+            [item["applicability"]["kind"] for item in pch_mutations],
+            ["direct", "conditional", "direct", "direct"],
+        )
+        self.assertEqual(pch_mutations[0]["applicability"], {"kind": "direct"})
+        self.assertEqual(
+            pch_mutations[1]["applicability"]["control_path"], ["foreach"]
+        )
+        self.assertEqual(pch_mutations[2]["applicability"], {"kind": "direct"})
+        self.assertEqual(pch_mutations[3]["applicability"], {"kind": "direct"})
+
+        iwyu_mutations = [
+            item for item in mutations if item["setting"] == "bEnforceIWYU"
+        ]
+        self.assertEqual(
+            iwyu_mutations[0]["applicability"]["control_path"], ["short_circuit"]
+        )
+        self.assertEqual(
+            iwyu_mutations[0]["applicability"]["related_symbols"],
+            ["Target.bBuildEditor"],
+        )
+        self.assertEqual(iwyu_mutations[1]["applicability"]["control_path"], ["if"])
+        self.assertEqual(
+            iwyu_mutations[1]["applicability"]["related_symbols"],
+            ["Target.bBuildEditor"],
+        )
+
+        initializer = next(
+            item
+            for item in mutations
+            if item.get("operand", {}).get("references") == ["INIT=1"]
+        )
+        iterator = next(
+            item
+            for item in mutations
+            if item.get("operand", {}).get("references") == ["ITER=1"]
+        )
+        self.assertEqual(initializer["applicability"], {"kind": "direct"})
+        self.assertEqual(iterator["applicability"]["control_path"], ["for"])
+        self.assertEqual(
+            iterator["applicability"]["related_symbols"], ["KeepGoing", "Target"]
+        )
+
+        legacy_mutations = [
+            item
+            for item in mutations
+            if item["setting"] == "bLegacyPublicIncludePaths"
+        ]
+        self.assertEqual(
+            legacy_mutations[0]["applicability"]["control_path"], ["ternary"]
+        )
+        self.assertEqual(
+            legacy_mutations[0]["applicability"]["related_symbols"],
+            ["Target.bCompileAgainstEngine"],
+        )
+        self.assertEqual(
+            legacy_mutations[1]["applicability"]["control_path"], ["catch"]
+        )
+
+        helper = next(
+            item
+            for item in mutations
+            if item.get("operand", {}).get("references") == ["HELPER=1"]
+        )
+        self.assertEqual(helper["applicability"], {"kind": "direct"})
+        self.assertEqual(
+            rules_class["unresolved_effect_calls"],
+            [
+                {
+                    "callee": "KeepGoing",
+                    "arguments": ["Target"],
+                    "applicability": {"kind": "direct"},
+                    "line": 28,
+                }
+            ],
+        )
+        self.assertEqual(len(rules_class["unclassified_mutations"]), 1)
+        counter = rules_class["unclassified_mutations"][0]
+        self.assertEqual(counter["target"], "CustomCounter")
+        self.assertEqual(counter["operation"], "increment")
+        self.assertEqual(counter["expression"], "++CustomCounter")
+        self.assertEqual(counter["applicability"], {"kind": "direct"})
 
     def test_plugin_descriptor_is_read_one_file_at_a_time(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -441,42 +851,6 @@ public class Fixture : ModuleRules
                 return_codes.append(completed.returncode)
 
         self.assertEqual(return_codes, [0, 1, 2])
-
-    def test_plugin_module_navigation_does_not_expand_source_facts(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            root = Path(temporary_directory)
-            plugin = root / "Fixture.uplugin"
-            plugin.write_text(
-                json.dumps(
-                    {
-                        "FileVersion": 3,
-                        "Modules": [{"Name": "FixtureRuntime", "Type": "Runtime"}],
-                    }
-                ),
-                encoding="utf-8",
-            )
-            module_root = root / "Source" / "FixtureRuntime"
-            module_root.mkdir(parents=True)
-            rules = module_root / "FixtureRuntime.Build.cs"
-            rules.write_text("public class FixtureRuntime : ModuleRules {}", encoding="utf-8")
-            entry = module_root / "Private" / "FixtureRuntimeModule.cpp"
-            entry.parent.mkdir()
-            entry.write_text(
-                "IMPLEMENT_MODULE(FFixtureRuntimeModule, FixtureRuntime)",
-                encoding="utf-8",
-            )
-
-            result = inspect_plugin_modules(plugin)
-
-        self.assertEqual(result["schema_version"], "ue-itps.plugin-modules.v1")
-        self.assertEqual(result["validation"]["status"], "ok")
-        item = result["items"][0]
-        self.assertEqual(item["build_rules"]["status"], "resolved")
-        self.assertEqual(item["build_rules"]["candidates"][0]["path"], rules.resolve().as_posix())
-        self.assertEqual(item["entrypoints"]["status"], "resolved")
-        self.assertEqual(item["entrypoints"]["candidates"][0]["path"], entry.resolve().as_posix())
-        self.assertNotIn("source_facts", json.dumps(result))
-        self.assertNotIn("rules_classes", json.dumps(result))
 
     def test_module_entry_follows_only_lifecycle_helpers_and_bound_callbacks(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

@@ -291,7 +291,13 @@ def inspect_module_entry(rules_path: Path) -> dict[str, Any]:
                 "signatures": sorted(method["signatures"]),
                 "declarations": method["declarations"],
                 "definitions": method["definitions"],
-                "operations": sorted(method["operations"], key=lambda item: (item["location"]["path"], item["location"]["line"], item["location"]["column"])),
+                "operations": sorted(
+                    method["operations"],
+                    key=lambda item: (
+                        item["location"]["path"],
+                        item["location"]["line"],
+                    ),
+                ),
             }
         graph: dict[str, set[str]] = defaultdict(set)
         for method_name, method in methods.items():
