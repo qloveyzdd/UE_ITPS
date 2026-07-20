@@ -1157,6 +1157,40 @@ public class Fixture : ModuleRules
 
         self.assertEqual(return_codes, [0, 1, 2])
 
+    def test_module_entry_rejects_invalid_rules_input(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            missing = root / "Missing.Build.cs"
+            wrong_suffix = root / "Fixture.cs"
+            wrong_suffix.write_text("", encoding="utf-8")
+            unnamed = root / ".Build.cs"
+            unnamed.write_text("", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "is not a file"):
+                inspect_module_entry(missing)
+            with self.assertRaisesRegex(ValueError, "Expected a Module Build.cs file"):
+                inspect_module_entry(wrong_suffix)
+            with self.assertRaisesRegex(ValueError, "has no module name"):
+                inspect_module_entry(unnamed)
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(TOOLS_ROOT / "ue_inspect_module_entry.py"),
+                    "--rules",
+                    str(missing),
+                ],
+                cwd=REPOSITORY_ROOT,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=False,
+            )
+
+        self.assertEqual(completed.returncode, 2)
+        self.assertEqual(completed.stdout, "")
+        self.assertIn("Module Build.cs is not a file", completed.stderr)
+
     def test_module_entry_follows_only_lifecycle_helpers_and_bound_callbacks(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -1172,6 +1206,9 @@ public:
     virtual void ShutdownModule() override;
     void BindEditorDelegates();
     void OnBeginPIE(bool bSimulating);
+    void OnEndPIE(bool bSimulating);
+    void NestedHelper();
+    void ExternalOnly();
     void UnrelatedMethod();
 };
 """,
@@ -1183,22 +1220,45 @@ public:
 void FFixtureModule::StartupModule()
 {
     BindEditorDelegates();
+    OtherObject->ExternalOnly();
 }
 
 void FFixtureModule::BindEditorDelegates()
 {
     if (!IsRunningGame())
-        FEditorDelegates::BeginPIE.AddRaw(this, &FFixtureModule::OnBeginPIE);
+        EditorDelegatePtr->AddThreadSafeSP(this, &FFixtureModule::OnBeginPIE);
+    LocalCallback.BindWeakLambda(this, [this]() {});
+    FixtureHandle =
+        HandleDelegate.AddUObject(this, &FFixtureModule::OnEndPIE);
+    DynamicDelegate.AddDynamic(this, &FFixtureModule::OnEndPIE);
+    Items.Add(this);
+    Items.Remove(this);
 }
 
 void FFixtureModule::OnBeginPIE(bool bSimulating)
 {
-    ExperienceManager->OnPlayInEditorBegun();
+    FEditorDelegates::EndPIE.AddRaw(this, &FFixtureModule::OnEndPIE);
+}
+
+void FFixtureModule::OnEndPIE(bool bSimulating)
+{
+    this->NestedHelper();
+}
+
+void FFixtureModule::NestedHelper()
+{
+}
+
+void FFixtureModule::ExternalOnly()
+{
 }
 
 void FFixtureModule::ShutdownModule()
 {
-    FEditorDelegates::BeginPIE.RemoveAll(this);
+    EditorDelegatePtr->RemoveAll(this);
+    LocalCallback.Unbind();
+    HandleDelegate.Remove(FixtureHandle);
+    DynamicDelegate.RemoveDynamic(this, &FFixtureModule::OnEndPIE);
 }
 
 void FFixtureModule::UnrelatedMethod()
@@ -1213,33 +1273,279 @@ IMPLEMENT_MODULE(FFixtureModule, Fixture)
 
             result = inspect_module_entry(rules)
 
-        self.assertEqual(result["schema_version"], "ue-itps.module-entry-source.v1")
+        self.assertEqual(result["schema_version"], "ue-itps.module-entry-source.v6")
         self.assertEqual(result["validation"]["status"], "ok")
+        self.assertEqual(result["module_root"], root.resolve().as_posix())
+        self.assertEqual(result["build_rules_path"], "Fixture.Build.cs")
+        self.assertEqual(
+            result["source_files"],
+            ["FixtureModule.cpp", "FixtureModule.h"],
+        )
+
+        def collect_paths(value: object) -> list[str]:
+            if isinstance(value, dict):
+                paths = [str(value["path"])] if "path" in value else []
+                return paths + [
+                    path
+                    for item in value.values()
+                    for path in collect_paths(item)
+                ]
+            if isinstance(value, list):
+                return [path for item in value for path in collect_paths(item)]
+            return []
+
+        evidence_paths = collect_paths(result)
+        self.assertTrue(evidence_paths)
+        self.assertTrue(
+            all(not Path(path).is_absolute() and "\\" not in path for path in evidence_paths)
+        )
         module_class = result["module_classes"][0]
         self.assertEqual(module_class["name"], "FFixtureModule")
+        self.assertEqual(
+            module_class["lifecycle"]["roots"],
+            ["StartupModule", "ShutdownModule"],
+        )
+        self.assertNotIn("lifecycle_methods", module_class)
+        self.assertNotIn("lifecycle_reachability", module_class)
         phases = {
             item["method"]: item["roots"]
-            for item in module_class["lifecycle_reachability"]
+            for item in module_class["lifecycle"]["reachability"]
         }
         self.assertEqual(phases["BindEditorDelegates"], ["StartupModule"])
         self.assertEqual(phases["OnBeginPIE"], ["bound-callback"])
+        self.assertEqual(phases["OnEndPIE"], ["bound-callback"])
+        self.assertEqual(phases["NestedHelper"], ["bound-callback"])
+        self.assertNotIn("ExternalOnly", phases)
         self.assertNotIn("UnrelatedMethod", phases)
+        self.assertNotIn("same_file_calls", module_class)
+        self.assertIn(
+            {"caller": "StartupModule", "callee": "BindEditorDelegates"},
+            module_class["same_class_calls"],
+        )
+        self.assertNotIn(
+            {"caller": "StartupModule", "callee": "ExternalOnly"},
+            module_class["same_class_calls"],
+        )
         registrations = [
             operation
             for operation in module_class["delegate_operations"]
             if operation["action"] == "register"
         ]
-        self.assertEqual(len(registrations), 1)
-        self.assertEqual(registrations[0]["delegate_source"], "FEditorDelegates::BeginPIE")
-        self.assertEqual(registrations[0]["binding_api"], "AddRaw")
-        self.assertEqual(registrations[0]["callback_target"], "FFixtureModule::OnBeginPIE")
-        self.assertEqual(registrations[0]["conditions"][0]["expression"], "!IsRunningGame()")
-        unregister = next(
+        self.assertEqual(len(registrations), 5)
+        by_api = {operation["binding_api"]: operation for operation in registrations}
+        self.assertNotIn("BindEditorDelegates", by_api)
+        self.assertEqual(by_api["AddThreadSafeSP"]["delegate_source"], "EditorDelegatePtr")
+        self.assertEqual(
+            by_api["AddThreadSafeSP"]["callback_target"],
+            "FFixtureModule::OnBeginPIE",
+        )
+        self.assertEqual(
+            by_api["AddThreadSafeSP"]["conditions"][0]["expression"],
+            "!IsRunningGame()",
+        )
+        self.assertEqual(by_api["BindWeakLambda"]["callback_target"], "<lambda>")
+        self.assertEqual(
+            by_api["BindWeakLambda"]["related_operations"][0]["relationship"],
+            "source-wide",
+        )
+        self.assertEqual(by_api["AddUObject"]["result_target"], "FixtureHandle")
+        self.assertEqual(
+            by_api["AddUObject"]["related_operations"][0]["relationship"],
+            "exact-handle",
+        )
+        self.assertEqual(
+            by_api["AddDynamic"]["related_operations"][0]["relationship"],
+            "callback-specific",
+        )
+        self.assertEqual(
+            by_api["AddRaw"]["callback_target"],
+            "FFixtureModule::OnEndPIE",
+        )
+        self.assertEqual(by_api["AddRaw"]["related_operations"], [])
+        self.assertEqual(
+            by_api["AddThreadSafeSP"]["related_operations"][0]["relationship"],
+            "object-wide",
+        )
+        self.assertTrue(
+            all(
+                "matching_operation_locations" not in operation
+                for operation in module_class["delegate_operations"]
+            )
+        )
+        unregister_operations = [
             operation
             for operation in module_class["delegate_operations"]
             if operation["action"] == "unregister"
+        ]
+        self.assertEqual(len(unregister_operations), 4)
+        self.assertEqual(
+            {operation["binding_api"] for operation in unregister_operations},
+            {"RemoveAll", "Unbind", "Remove", "RemoveDynamic"},
         )
-        self.assertEqual(unregister["binding_api"], "RemoveAll")
+
+    def test_module_entry_prefers_registered_class_and_falls_back_to_inheritance(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            rules = root / "Fixture.Build.cs"
+            rules.write_text("public class Fixture : ModuleRules {}", encoding="utf-8")
+            (root / "FixtureModule.cpp").write_text(
+                """
+class FRegisteredModule : public IModuleInterface
+{
+public:
+    virtual void StartupModule() override {}
+};
+
+class FUnregisteredModule : public IModuleInterface
+{
+public:
+    virtual void StartupModule() override {}
+};
+
+IMPLEMENT_MODULE(FRegisteredModule, Fixture)
+""",
+                encoding="utf-8",
+            )
+
+            registered_result = inspect_module_entry(rules)
+
+            fallback_root = root / "Fallback"
+            fallback_root.mkdir()
+            fallback_rules = fallback_root / "Fallback.Build.cs"
+            fallback_rules.write_text(
+                "public class Fallback : ModuleRules {}",
+                encoding="utf-8",
+            )
+            (fallback_root / "FallbackModule.cpp").write_text(
+                """
+class FFallbackModule : public IModuleInterface
+{
+public:
+    virtual void StartupModule() override {}
+};
+""",
+                encoding="utf-8",
+            )
+
+            fallback_result = inspect_module_entry(fallback_rules)
+
+        self.assertEqual(
+            [item["name"] for item in registered_result["module_classes"]],
+            ["FRegisteredModule"],
+        )
+        self.assertEqual(registered_result["validation"]["status"], "ok")
+        self.assertEqual(
+            [item["name"] for item in fallback_result["module_classes"]],
+            ["FFallbackModule"],
+        )
+        self.assertEqual(fallback_result["validation"]["status"], "warning")
+        self.assertEqual(
+            fallback_result["validation"]["problems"][0]["code"],
+            "module-registration-not-found",
+        )
+
+    def test_module_entry_marks_reused_handle_as_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            rules = root / "Fixture.Build.cs"
+            rules.write_text("public class Fixture : ModuleRules {}", encoding="utf-8")
+            (root / "FixtureModule.cpp").write_text(
+                """
+class FFixtureModule : public IModuleInterface
+{
+public:
+    virtual void StartupModule() override
+    {
+        SharedHandle = SharedDelegate.AddUObject(this, &FFixtureModule::OnFirst);
+        SharedHandle = SharedDelegate.AddUObject(this, &FFixtureModule::OnSecond);
+    }
+
+    virtual void ShutdownModule() override
+    {
+        SharedDelegate.Remove(SharedHandle);
+    }
+
+    void OnFirst() {}
+    void OnSecond() {}
+};
+
+IMPLEMENT_MODULE(FFixtureModule, Fixture)
+""",
+                encoding="utf-8",
+            )
+
+            result = inspect_module_entry(rules)
+
+        operations = result["module_classes"][0]["delegate_operations"]
+        register_operations = [
+            operation for operation in operations if operation["action"] == "register"
+        ]
+        unregister = next(
+            operation for operation in operations if operation["action"] == "unregister"
+        )
+        self.assertEqual(len(register_operations), 2)
+        self.assertTrue(
+            all(operation["result_target"] == "SharedHandle" for operation in register_operations)
+        )
+        self.assertTrue(
+            all(
+                operation["related_operations"][0]["relationship"]
+                == "same-handle-candidate"
+                for operation in register_operations
+            )
+        )
+        self.assertEqual(
+            {
+                relation["relationship"]
+                for relation in unregister["related_operations"]
+            },
+            {"same-handle-candidate"},
+        )
+
+    def test_module_entry_does_not_follow_ambiguous_overloads(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            rules = root / "Fixture.Build.cs"
+            rules.write_text("public class Fixture : ModuleRules {}", encoding="utf-8")
+            (root / "FixtureModule.cpp").write_text(
+                """
+class FFixtureModule : public IModuleInterface
+{
+public:
+    virtual void StartupModule() override
+    {
+        Configure(1);
+    }
+
+    void Configure()
+    {
+    }
+
+    void Configure(int Value)
+    {
+    }
+};
+
+IMPLEMENT_MODULE(FFixtureModule, Fixture)
+""",
+                encoding="utf-8",
+            )
+
+            result = inspect_module_entry(rules)
+
+        self.assertEqual(result["validation"]["status"], "warning")
+        problem = next(
+            problem
+            for problem in result["validation"]["problems"]
+            if problem["code"] == "module-method-overload-unresolved"
+        )
+        self.assertEqual(problem["methods"][0]["method"], "Configure")
+        module_class = result["module_classes"][0]
+        reachable = {
+            item["method"] for item in module_class["lifecycle"]["reachability"]
+        }
+        self.assertEqual(reachable, {"StartupModule"})
+        self.assertEqual(module_class["same_class_calls"], [])
 
 
 if __name__ == "__main__":
