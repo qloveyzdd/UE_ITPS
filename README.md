@@ -18,7 +18,7 @@
 - [L0/L1 运行证据捕获规范](.planning/codebase/RUNTIME-EVIDENCE.md)
 - [最小运行边界](.planning/codebase/MINIMAL-RUNTIME.md)
 
-当前已完成 UE 5.6.1 本机编译，冻结 9,656 个权威文件的 SHA-256 清单，并归档 Engine/Lyra 来源、Target、Module、Plugin、目录职责、核心 Asset Registry 关系，以及 PIE 启动、Frontend、Session/Travel、四种网络模式、Hard/Seamless 对象存续、失败恢复、Experience、PlayerState、Pawn、ASC、InitState 和输入的静态主链。十一个检查 CLI 的公共契约、严格校验、双语帮助、UTF-8 输出和 64 项单元测试已经稳定；原始日志不可覆盖复制与 SHA-256 manifest 工具也已就绪。
+当前已完成 UE 5.6.1 本机编译，冻结 9,656 个权威文件的 SHA-256 清单，并归档 Engine/Lyra 来源、Target、Module、Plugin、目录职责、核心 Asset Registry 关系，以及 PIE 启动、Frontend、Session/Travel、四种网络模式、Hard/Seamless 对象存续、失败恢复、Experience、PlayerState、Pawn、ASC、InitState 和输入的静态主链。十一个检查 CLI 的公共契约、严格校验、双语帮助、UTF-8 输出和 65 项单元测试已经稳定；原始日志不可覆盖复制与 SHA-256 manifest 工具也已就绪。
 
 当前本地 Lyra 工程壳可追溯到 Epic UnrealEngine 历史提交，但不是 `5.6.1-release` 标签的逐字节副本。L0 曾在本机观察通过，但原始运行日志已被 UE 日志轮转清理，必须重跑并受控留存后才能恢复为可审计权威证据；完整边界见基线文档。当前仍不执行 L1，也不修改或删减 Lyra。
 
@@ -35,6 +35,8 @@ UE_ITPS/
 ```
 
 工具的实现边界、数据流、已知缺口和优化建议见 [程序设计说明](docs/PROGRAM-DESIGN.md)。
+
+`tools/ue_project_tools` 保留 `source_parser.py` 与 `module_entry.py` 作为稳定入口；词法、声明、控制流、操作、回调和状态模型分别由同名前缀的内部模块实现。
 
 ## 在 Codex 中使用
 

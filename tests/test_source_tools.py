@@ -12,12 +12,41 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 TOOLS_ROOT = REPOSITORY_ROOT / "tools"
 sys.path.insert(0, str(TOOLS_ROOT))
 
+from ue_project_tools import source_parser
 from ue_project_tools.module_entry import inspect_module_entry
 from ue_project_tools.plugin_descriptor import read_plugin_descriptor
 from ue_project_tools.rule_source import inspect_module_rules, inspect_target_rules
 
 
 class SourceToolsTests(unittest.TestCase):
+    def test_source_parser_facade_preserves_existing_exports(self) -> None:
+        expected_exports = {
+            "Token",
+            "condition_spans",
+            "control_expression_ranges",
+            "control_spans",
+            "delimiter_problems",
+            "lex_source",
+            "parse_classes",
+            "parse_cpp_file",
+            "parse_external_definitions",
+            "parse_free_functions",
+            "parse_operations",
+            "parse_rule_file",
+            "preprocessor_conditions",
+            "preprocessor_control_contexts",
+            "registration_macros",
+            "source_files",
+            "token_pairs",
+        }
+
+        self.assertEqual(
+            [],
+            sorted(
+                name for name in expected_exports if not hasattr(source_parser, name)
+            ),
+        )
+
     def test_target_rules_project_reachable_setting_mutations(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             target = Path(temporary_directory) / "Fixture.Target.cs"
