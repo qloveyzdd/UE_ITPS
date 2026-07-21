@@ -523,6 +523,79 @@ def parse_external_definitions(
     return results
 
 
+def parse_free_functions(
+    text: str,
+    tokens: list[Token],
+    forward: dict[int, int],
+) -> list[dict[str, Any]]:
+    """Read top-level function definitions without building a general C++ AST."""
+    excluded = {
+        "alignof",
+        "catch",
+        "decltype",
+        "for",
+        "foreach",
+        "if",
+        "new",
+        "sizeof",
+        "switch",
+        "while",
+    }
+    results: list[dict[str, Any]] = []
+    brace_depth = 0
+    index = 0
+    while index < len(tokens):
+        value = tokens[index].value
+        if value == "{":
+            brace_depth += 1
+            index += 1
+            continue
+        if value == "}":
+            brace_depth = max(0, brace_depth - 1)
+            index += 1
+            continue
+        if value != "(" or brace_depth or index not in forward or index == 0:
+            index += 1
+            continue
+
+        name_index = index - 1
+        if (
+            tokens[name_index].kind != "identifier"
+            or tokens[name_index].value in excluded
+            or (name_index > 0 and tokens[name_index - 1].value == "::")
+            or (name_index > 0 and tokens[name_index - 1].value in {":", ","})
+        ):
+            index = forward[index] + 1
+            continue
+
+        declaration_start = _member_start(tokens, 0, name_index)
+        if any(
+            token.value in {"=", "return"}
+            for token in tokens[declaration_start:index]
+        ):
+            index = forward[index] + 1
+            continue
+
+        close = forward[index]
+        cursor = close + 1
+        if cursor >= len(tokens) or tokens[cursor].value != "{" or cursor not in forward:
+            index = close + 1
+            continue
+
+        body_end = forward[cursor]
+        results.append(
+            {
+                "name": tokens[name_index].value,
+                "parameters": _raw(text, tokens, index + 1, close),
+                "signature": _raw(text, tokens, declaration_start, cursor),
+                "location": _location(tokens[declaration_start], tokens[body_end]),
+                "body_range": (cursor + 1, body_end),
+            }
+        )
+        index = body_end + 1
+    return results
+
+
 def _statement_after(tokens: list[Token], forward: dict[int, int], start: int, end: int) -> tuple[int, int, int]:
     if start >= end:
         return start, start, start
@@ -1883,6 +1956,7 @@ def parse_cpp_file(path: Path) -> dict[str, Any]:
     tokens = lex_source(text)
     classes, forward, reverse = parse_classes(text, tokens)
     external = parse_external_definitions(text, tokens, forward)
+    free_functions = parse_free_functions(text, tokens, forward)
     return {
         "path": normalized(resolved),
         "text": text,
@@ -1891,6 +1965,7 @@ def parse_cpp_file(path: Path) -> dict[str, Any]:
         "reverse": reverse,
         "classes": classes,
         "external_definitions": external,
+        "free_functions": free_functions,
         "registration_macros": registration_macros(text, tokens),
     }
 

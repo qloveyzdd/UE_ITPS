@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inspect one module's registration and lifecycle entry source."""
+"""Inspect state transitions caused by one module's lifecycle entry source."""
 
 from pathlib import Path
 
@@ -9,8 +9,8 @@ from ue_project_tools.module_entry import inspect_module_entry
 
 def main() -> int:
     parser = cli_parser(
-        "读取单个模块的注册宏、生命周期和委托操作。",
-        "Read registration macros, lifecycle methods, and delegate operations for one module.",
+        "读取单个模块生命周期和绑定回调造成的状态变化。",
+        "Read state transitions caused by one module's lifecycle and bound callbacks.",
     )
     parser.add_argument(
         "--rules",

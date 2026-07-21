@@ -1157,7 +1157,7 @@ public class Fixture : ModuleRules
 
         self.assertEqual(return_codes, [0, 1, 2])
 
-    def test_module_entry_follows_only_lifecycle_helpers_and_bound_callbacks(self) -> None:
+    def test_module_entry_compresses_state_and_propagates_callback_conditions(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             rules = root / "Fixture.Build.cs"
@@ -1180,15 +1180,28 @@ public:
             source = root / "FixtureModule.cpp"
             source.write_text(
                 """
+static FString GetPath()
+{
+    FString Path = TEXT("DefaultPath");
+    if (HasOverride())
+    {
+        Path = TEXT("OverridePath");
+    }
+    return Path;
+}
+
 void FFixtureModule::StartupModule()
 {
-    BindEditorDelegates();
+    if (!IsRunningGame())
+    {
+        BindEditorDelegates();
+    }
 }
 
 void FFixtureModule::BindEditorDelegates()
 {
-    if (!IsRunningGame())
-        FEditorDelegates::BeginPIE.AddRaw(this, &FFixtureModule::OnBeginPIE);
+    BeginPIEDelegate.BindRaw(this, &FFixtureModule::OnBeginPIE);
+    PathDelegate.BindStatic(&GetPath);
 }
 
 void FFixtureModule::OnBeginPIE(bool bSimulating)
@@ -1198,7 +1211,8 @@ void FFixtureModule::OnBeginPIE(bool bSimulating)
 
 void FFixtureModule::ShutdownModule()
 {
-    FEditorDelegates::BeginPIE.RemoveAll(this);
+    BeginPIEDelegate.Unbind();
+    PathDelegate.Unbind();
 }
 
 void FFixtureModule::UnrelatedMethod()
@@ -1213,33 +1227,119 @@ IMPLEMENT_MODULE(FFixtureModule, Fixture)
 
             result = inspect_module_entry(rules)
 
-        self.assertEqual(result["schema_version"], "ue-itps.module-entry-source.v1")
+        self.assertEqual(result["schema_version"], "ue-itps.module-entry-state.v7")
         self.assertEqual(result["validation"]["status"], "ok")
-        module_class = result["module_classes"][0]
-        self.assertEqual(module_class["name"], "FFixtureModule")
-        phases = {
-            item["method"]: item["roots"]
-            for item in module_class["lifecycle_reachability"]
-        }
-        self.assertEqual(phases["BindEditorDelegates"], ["StartupModule"])
-        self.assertEqual(phases["OnBeginPIE"], ["bound-callback"])
-        self.assertNotIn("UnrelatedMethod", phases)
-        registrations = [
-            operation
-            for operation in module_class["delegate_operations"]
-            if operation["action"] == "register"
-        ]
-        self.assertEqual(len(registrations), 1)
-        self.assertEqual(registrations[0]["delegate_source"], "FEditorDelegates::BeginPIE")
-        self.assertEqual(registrations[0]["binding_api"], "AddRaw")
-        self.assertEqual(registrations[0]["callback_target"], "FFixtureModule::OnBeginPIE")
-        self.assertEqual(registrations[0]["conditions"][0]["expression"], "!IsRunningGame()")
-        unregister = next(
-            operation
-            for operation in module_class["delegate_operations"]
-            if operation["action"] == "unregister"
+        self.assertEqual(result["module"]["class"], "FFixtureModule")
+        self.assertNotIn("module_classes", result)
+        self.assertNotIn("source_files", result)
+        delegate_model = next(
+            model
+            for model in result["state_models"]
+            if model["subject"]["kind"] == "delegate_group"
         )
-        self.assertEqual(unregister["binding_api"], "RemoveAll")
+        self.assertEqual(delegate_model["summary"], ["default", "bound", "unbound"])
+        self.assertEqual(delegate_model["closure"]["status"], "closed")
+        self.assertEqual(
+            {member["name"] for member in delegate_model["subject"]["members"]},
+            {"BeginPIEDelegate", "PathDelegate"},
+        )
+        bound = next(
+            transition
+            for transition in delegate_model["transitions"]
+            if transition["sets_state"] == "bound"
+        )
+        self.assertEqual(bound["via"], ["StartupModule", "BindEditorDelegates"])
+        self.assertEqual(bound["when"], [["!IsRunningGame()"]])
+        override = result["conditional_overrides"][0]
+        self.assertEqual(override["summary"], ["default", "overridden"])
+        self.assertEqual(
+            override["when"],
+            [["!IsRunningGame()", "HasOverride()"]],
+        )
+        encoded = json.dumps(result, ensure_ascii=False)
+        self.assertNotIn("DefaultPath", encoded)
+        self.assertNotIn("OverridePath", encoded)
+        self.assertNotIn("UnrelatedMethod", encoded)
+        self.assertEqual(
+            result["unresolved_effects"][0]["call"],
+            "ExperienceManager->OnPlayInEditorBegun",
+        )
+
+    def test_module_entry_reports_conditional_cleanup_and_lifecycle_pairs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            rules = root / "Fixture.Build.cs"
+            rules.write_text("public class Fixture : ModuleRules {}", encoding="utf-8")
+            (root / "FixtureModule.cpp").write_text(
+                """
+static void RegisterMenus()
+{
+    UToolMenus::Get()->ExtendMenu("Fixture.Menu");
+}
+
+class FFixtureModule : public IModuleInterface
+{
+public:
+    virtual void StartupModule() override
+    {
+        FFixtureStyle::Initialize();
+        if (FSlateApplication::IsInitialized())
+        {
+            MenuHandle = UToolMenus::RegisterStartupCallback(
+                FSimpleMulticastDelegate::FDelegate::CreateStatic(&RegisterMenus));
+        }
+        AssetTools.RegisterAssetTypeActions(AssetAction);
+    }
+
+    virtual void ShutdownModule() override
+    {
+        if (UObjectInitialized() && MenuHandle.IsValid())
+        {
+            UToolMenus::UnRegisterStartupCallback(MenuHandle);
+        }
+        if (AssetToolsModule && AssetAction)
+        {
+            AssetToolsModule->Get().UnregisterAssetTypeActions(AssetAction.ToSharedRef());
+        }
+        FFixtureStyle::Shutdown();
+    }
+};
+
+IMPLEMENT_MODULE(FFixtureModule, Fixture)
+""",
+                encoding="utf-8",
+            )
+
+            result = inspect_module_entry(rules)
+
+        by_label = {
+            model["subject"]["label"]: model for model in result["state_models"]
+        }
+        self.assertEqual(by_label["FFixtureStyle"]["closure"]["status"], "closed")
+        self.assertEqual(by_label["Asset Type Actions"]["closure"]["status"], "conditional")
+        self.assertEqual(
+            by_label["UToolMenus startup callback"]["closure"]["status"],
+            "conditional",
+        )
+        self.assertEqual(by_label["editor menu"]["closure"]["status"], "open")
+        menu_transition = by_label["editor menu"]["transitions"][0]
+        self.assertEqual(menu_transition["via"], ["RegisterMenus"])
+        self.assertEqual(
+            menu_transition["when"],
+            [["FSlateApplication::IsInitialized()"]],
+        )
+
+    def test_module_entry_rejects_invalid_rules_input(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            missing = root / "Missing.Build.cs"
+            wrong_suffix = root / "Fixture.cs"
+            wrong_suffix.write_text("", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "is not a file"):
+                inspect_module_entry(missing)
+            with self.assertRaisesRegex(ValueError, "Expected a Module Build.cs file"):
+                inspect_module_entry(wrong_suffix)
 
 
 if __name__ == "__main__":

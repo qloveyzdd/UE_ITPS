@@ -27,7 +27,7 @@ If the scripts are missing, report that this repository does not contain the exp
 | Read one explicitly selected `.uplugin` | `ue_read_plugin_descriptor.py` |
 | Read declared setting mutations and references from one Build.cs | `ue_inspect_module_rules.py` |
 | Read static rules from one Target.cs | `ue_inspect_target_rules.py` |
-| Inspect one module's registration, lifecycle, delegates, and bound callbacks | `ue_inspect_module_entry.py` |
+| Inspect one module's registration and lifecycle state transitions | `ue_inspect_module_entry.py` |
 
 When the user explicitly requests all categories, run the relevant focused tools independently, validate each result, and summarize them without inventing a merged schema. For every other request, use only the smallest tool that answers the question.
 
@@ -138,6 +138,16 @@ Treat `ue-itps.target-rule-relations.v1` as a TargetRules relevance projection, 
 - Declared local variables, class fields, and mutations rooted at them are excluded from Target setting mutations.
 - Caller conditions are not propagated into mutations inside reachable helpers.
 
+## Interpret module entry state v7
+
+- `state_models` is the public conclusion surface. It intentionally omits full methods, parameters, calls, assignment operands, and changed values.
+- `summary` is a semantic path such as `default -> bound -> unbound`; `default` means the state before this module's first observed mutation.
+- `transitions[].via` contains only the internal callable names needed to explain how the transition is reached.
+- `when` is disjunctive normal form: each inner array is an AND branch and the outer array is OR. An empty array means no source condition was observed.
+- `closure.status` is `closed`, `conditional`, `open`, or `unresolved`. It is a conservative static pairing conclusion, not runtime proof.
+- `conditional_overrides` reports when an observable result or output stops using its source default; the default and replacement values are deliberately absent.
+- `unresolved_effects` retains state-looking external calls whose callee bodies are outside the selected module evidence boundary.
+
 ## Interpretation boundaries
 
 - `EngineAssociation` is an association key. Use resolved `Build.version` for the actual engine version.
@@ -145,7 +155,8 @@ Treat `ue-itps.target-rule-relations.v1` as a TargetRules relevance projection, 
 - Direct Plugin resolution is not the effective `.uplugin` dependency closure.
 - The single-plugin descriptor tool reports direct Plugin dependency declarations without locating or traversing their descriptors; it recursively reconciles declared Modules with Build.cs files under the selected plugin's Source and Platforms directories.
 - Build.cs setting mutations use flattened applicability facts, while Target.cs operations preserve source conditions; neither is an effective UBT result.
-- Module entry inspection follows lifecycle helpers and actually bound same-module callbacks only; it is not a general C++ class or call graph.
+- Module entry v7 reports compressed state models, conditional default overrides, and unresolved stateful calls. Internal helpers appear only as names in `via`; changed values, RHS expressions, full methods, and general call graphs are intentionally omitted.
+- Module entry conditions are propagated through reachable local helpers and actually bound same-module callbacks. `default` means the state before the selected module's first observed mutation, not a proven UE constructor value.
 - Path v1 derives the project root from the selected `.uproject` and reports conventional path roles, filesystem state (`missing | file | directory | other`), and unclassified root directories.
 - Path v1 records the absolute `project_root` once; path items and validation problems use only `project_relative_path`.
 - Path v1 reads explicit descriptor fields only to emit validation problems: declared Modules without AdditionalRootDirectories require the conventional Source directory. It does not add requiredness fields to path items.
