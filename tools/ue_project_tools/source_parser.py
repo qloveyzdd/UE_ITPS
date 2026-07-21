@@ -78,7 +78,7 @@ def lex_source(text: str) -> list[Token]:
         string_prefix = next(
             (
                 prefix
-                for prefix in ('$@"', '@$"', '@"', '$"', 'TEXT("', 'L"', 'u8"', 'u"', 'U"', '"')
+                for prefix in ('$@"', '@$"', '@"', '$"', 'L"', 'u8"', 'u"', 'U"', '"')
                 if text.startswith(prefix, index)
             ),
             None,
@@ -93,8 +93,6 @@ def lex_source(text: str) -> list[Token]:
                     continue
                 if text[index] == '"':
                     index += 1
-                    if string_prefix == 'TEXT("' and index < len(text) and text[index] == ")":
-                        index += 1
                     break
                 if not verbatim and text[index] == "\\":
                     index = min(len(text), index + 2)
@@ -164,6 +162,61 @@ def token_pairs(tokens: list[Token]) -> tuple[dict[int, int], dict[int, int]]:
                     reverse[index] = open_index
                     break
     return forward, reverse
+
+
+def delimiter_problems(tokens: list[Token]) -> list[dict[str, Any]]:
+    opening = {"(": ")", "[": "]", "{": "}"}
+    closing = {value: key for key, value in opening.items()}
+    stack: list[Token] = []
+    problems: list[dict[str, Any]] = []
+    for token in tokens:
+        if token.value in opening:
+            stack.append(token)
+            continue
+        if token.value not in closing:
+            continue
+        if not stack:
+            problems.append(
+                {
+                    "severity": "error",
+                    "code": "source-delimiter-unexpected-closing",
+                    "line": token.line,
+                    "delimiter": token.value,
+                    "message": f"Unexpected closing delimiter {token.value}",
+                }
+            )
+            continue
+        if stack[-1].value == closing[token.value]:
+            stack.pop()
+            continue
+        current = stack.pop()
+        problems.append(
+            {
+                "severity": "error",
+                "code": "source-delimiter-mismatch",
+                "line": token.line,
+                "delimiter": token.value,
+                "opening_delimiter": current.value,
+                "opening_line": current.line,
+                "expected": opening[current.value],
+                "message": (
+                    f"Closing delimiter {token.value} does not match "
+                    f"{current.value} opened on line {current.line}"
+                ),
+            }
+        )
+    for token in stack:
+        problems.append(
+            {
+                "severity": "error",
+                "code": "source-delimiter-unmatched-opening",
+                "line": token.line,
+                "delimiter": token.value,
+                "expected": opening[token.value],
+                "message": f"Opening delimiter {token.value} is not closed",
+            }
+        )
+    return problems
 
 
 def _raw(text: str, tokens: list[Token], start: int, end: int) -> str:
@@ -780,6 +833,7 @@ def control_spans(
         *,
         expression: str = "",
         branch: str = "",
+        guard: str = "",
     ) -> None:
         span: dict[str, Any] = {
             "start": body_start,
@@ -792,6 +846,8 @@ def control_spans(
             span["expression"] = expression
         if branch:
             span["branch"] = branch
+        if guard:
+            span["guard"] = guard
         spans.append(span)
 
     def parse_if(
@@ -842,7 +898,7 @@ def control_spans(
         walk(else_start, else_end)
         return max(after_else, branch_start)
 
-    def append_switch_cases(lower: int, upper: int) -> None:
+    def append_switch_cases(lower: int, upper: int, selector: str) -> None:
         labels: list[tuple[int, int, str, list[str]]] = []
         depth = 0
         index = lower
@@ -892,7 +948,26 @@ def control_spans(
                 control_index,
                 references,
                 expression=expression,
+                guard=(
+                    f"switch({selector}) == {expression}"
+                    if expression
+                    else f"switch({selector}): default"
+                ),
             )
+
+    def for_guard(header: list[Token]) -> str:
+        separators: list[int] = []
+        depth = 0
+        for index, token in enumerate(header):
+            if token.value in {"(", "[", "{"}:
+                depth += 1
+            elif token.value in {")", "]", "}"}:
+                depth = max(0, depth - 1)
+            elif token.value == ";" and depth == 0:
+                separators.append(index)
+        if len(separators) < 2:
+            return ""
+        return _raw_from_values(header[separators[0] + 1 : separators[1]])
 
     def walk(lower: int, upper: int) -> None:
         index = lower
@@ -901,6 +976,33 @@ def control_spans(
             if value == "if":
                 index = parse_if(index, upper)
                 continue
+            if value == "do":
+                body_start, body_end, after_body = _statement_after(
+                    tokens, forward, index + 1, upper
+                )
+                cursor = after_body
+                if (
+                    cursor + 1 < upper
+                    and tokens[cursor].value == "while"
+                    and tokens[cursor + 1].value == "("
+                    and cursor + 1 in forward
+                ):
+                    condition_close = forward[cursor + 1]
+                    condition_tokens = tokens[cursor + 2 : condition_close]
+                    expression = _raw_from_values(condition_tokens)
+                    append_span(
+                        "do",
+                        body_start,
+                        body_end,
+                        index,
+                        _control_references(condition_tokens),
+                        expression=expression,
+                    )
+                    walk(body_start, body_end)
+                    index = condition_close + 1
+                    if index < upper and tokens[index].value == ";":
+                        index += 1
+                    continue
             if (
                 value in {"for", "foreach", "while", "switch"}
                 and index + 1 < upper
@@ -922,9 +1024,24 @@ def control_spans(
                     index,
                     references,
                     expression=_raw_from_values(header),
+                    guard=(
+                        for_guard(header)
+                        if value == "for"
+                        else (
+                            f"foreach: {_raw_from_values(header)}"
+                            if value == "foreach"
+                            else (
+                                _raw_from_values(header)
+                                if value == "while"
+                                else ""
+                            )
+                        )
+                    ),
                 )
                 if value == "switch":
-                    append_switch_cases(body_start, body_end)
+                    append_switch_cases(
+                        body_start, body_end, _raw_from_values(header)
+                    )
                 walk(body_start, body_end)
                 index = max(after_body, header_close + 1)
                 continue
@@ -976,6 +1093,9 @@ def _raw_from_values(tokens: Iterable[Token]) -> str:
     rendered = " ".join(values)
     rendered = re.sub(r"\s*([.(),\[\]{}])\s*", r"\1", rendered)
     rendered = re.sub(r"\s*(::|->)\s*", r"\1", rendered)
+    rendered = re.sub(
+        r"\s*(&&|\|\||\?\?|==|!=|<=|>=)\s*", r" \1 ", rendered
+    )
     rendered = re.sub(r"([!~])\s+", r"\1", rendered)
     rendered = re.sub(r"\s+", " ", rendered)
     return rendered.strip()
@@ -999,6 +1119,109 @@ def preprocessor_conditions(text: str) -> dict[int, list[dict[str, Any]]]:
         elif stripped.startswith("#endif") and active:
             active.pop()
         result[line_number] = [dict(item) for item in active]
+    return result
+
+
+def _preprocessor_literal_value(expression: str) -> bool | None:
+    value = "".join(expression.split())
+    while value.startswith("(") and value.endswith(")"):
+        value = value[1:-1]
+    negated = False
+    while value.startswith("!"):
+        negated = not negated
+        value = value[1:]
+    literals = {"0": False, "1": True, "false": False, "true": True}
+    result = literals.get(value.casefold())
+    return None if result is None else result != negated
+
+
+def _registration_preprocessor_contexts(
+    text: str,
+) -> dict[int, list[dict[str, Any]]]:
+    stack: list[dict[str, Any]] = []
+    result: dict[int, list[dict[str, Any]]] = {}
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        expression = ""
+        branch = ""
+        if stripped.startswith("#if "):
+            expression = stripped[4:].strip()
+            branch = "if"
+        elif stripped.startswith("#ifdef "):
+            expression = f"defined({stripped[7:].strip()})"
+            branch = "ifdef"
+        elif stripped.startswith("#ifndef "):
+            expression = f"!defined({stripped[8:].strip()})"
+            branch = "ifndef"
+
+        if branch:
+            condition_value = _preprocessor_literal_value(expression)
+            stack.append(
+                {
+                    "group_line": line_number,
+                    "arm": 0,
+                    "branch": branch,
+                    "expression": expression,
+                    "condition_value": condition_value,
+                    "previous_values": [],
+                    "active": condition_value,
+                }
+            )
+        elif stripped.startswith("#elif ") and stack:
+            frame = stack[-1]
+            previous_values = [
+                *frame["previous_values"],
+                frame["condition_value"],
+            ]
+            condition_value = _preprocessor_literal_value(stripped[6:].strip())
+            if condition_value is False or any(value is True for value in previous_values):
+                active: bool | None = False
+            elif all(value is False for value in previous_values):
+                active = condition_value
+            else:
+                active = None
+            frame.update(
+                {
+                    "arm": int(frame["arm"]) + 1,
+                    "branch": "elif",
+                    "expression": stripped[6:].strip(),
+                    "condition_value": condition_value,
+                    "previous_values": previous_values,
+                    "active": active,
+                }
+            )
+        elif stripped.startswith("#else") and stack:
+            frame = stack[-1]
+            previous_values = [
+                *frame["previous_values"],
+                frame["condition_value"],
+            ]
+            if any(value is True for value in previous_values):
+                active = False
+            elif all(value is False for value in previous_values):
+                active = True
+            else:
+                active = None
+            frame.update(
+                {
+                    "arm": int(frame["arm"]) + 1,
+                    "branch": "else",
+                    "expression": "",
+                    "condition_value": True,
+                    "previous_values": previous_values,
+                    "active": active,
+                }
+            )
+        elif stripped.startswith("#endif") and stack:
+            stack.pop()
+
+        result[line_number] = [
+            {
+                key: frame[key]
+                for key in ("group_line", "arm", "branch", "expression", "active")
+            }
+            for frame in stack
+        ]
     return result
 
 
@@ -1119,6 +1342,7 @@ def _control_metadata_for(
                     "kind",
                     "expression",
                     "branch",
+                    "guard",
                     "references",
                     "start_line",
                 }
@@ -1237,6 +1461,24 @@ def control_expression_ranges(
             if value == "if":
                 index = parse_if(index, upper)
                 continue
+            if value == "do":
+                body_start, body_end, after_body = _statement_after(
+                    tokens, forward, index + 1, upper
+                )
+                cursor = after_body
+                if (
+                    cursor + 1 < upper
+                    and tokens[cursor].value == "while"
+                    and tokens[cursor + 1].value == "("
+                    and cursor + 1 in forward
+                ):
+                    condition_close = forward[cursor + 1]
+                    walk(body_start, body_end)
+                    add_range(cursor + 2, condition_close)
+                    index = condition_close + 1
+                    if index < upper and tokens[index].value == ";":
+                        index += 1
+                    continue
             if (
                 value in {"for", "foreach", "while", "switch"}
                 and index + 1 < upper
@@ -1328,28 +1570,136 @@ def _expression_gate_controls(
     forward: dict[int, int],
     start: int,
     operation_index: int,
+    end: int,
 ) -> list[dict[str, Any]]:
-    controls: list[dict[str, Any]] = []
-    for index in range(start, operation_index):
-        value = tokens[index].value
-        if value not in {"&&", "||", "??", "?"}:
-            continue
-        containing_closes = [
-            close
-            for open_index, close in forward.items()
-            if open_index < index < close
-        ]
-        if containing_closes and min(containing_closes) < operation_index:
-            continue
-        controls.append(
-            {
-                "kind": "ternary" if value == "?" else "short_circuit",
-                "references": _control_references(tokens[start:index]),
-                "expression": _raw_from_values(tokens[start:index]),
-                "start_line": tokens[index].line,
-            }
+    def top_level_indices(
+        lower: int, upper: int, values: set[str]
+    ) -> list[int]:
+        result: list[int] = []
+        depth = 0
+        for cursor in range(lower, upper):
+            value = tokens[cursor].value
+            if value in {"(", "[", "{"}:
+                depth += 1
+            elif value in {")", "]", "}"}:
+                depth = max(0, depth - 1)
+            elif depth == 0 and value in values:
+                result.append(cursor)
+        return result
+
+    def rendered(lower: int, upper: int) -> str:
+        expression = _raw_from_values(tokens[lower:upper])
+        return re.sub(
+            r"\s*(&&|\|\||\?\?)\s*", r" \1 ", expression
+        ).strip()
+
+    def control(
+        kind: str, operator_index: int, lower: int, guard: str
+    ) -> dict[str, Any]:
+        return {
+            "kind": kind,
+            "references": _control_references(tokens[lower:operator_index]),
+            "expression": rendered(lower, operator_index),
+            "guard": guard,
+            "start_line": tokens[operator_index].line,
+        }
+
+    def matching_ternary_colon(
+        question_index: int, upper: int
+    ) -> int | None:
+        nested = 0
+        for cursor in top_level_indices(
+            question_index + 1, upper, {"?", ":"}
+        ):
+            if tokens[cursor].value == "?":
+                nested += 1
+            elif nested:
+                nested -= 1
+            else:
+                return cursor
+        return None
+
+    def visit(lower: int, upper: int) -> list[dict[str, Any]]:
+        while (
+            lower < upper
+            and tokens[lower].value in {"(", "[", "{"}
+            and forward.get(lower) == upper - 1
+        ):
+            lower += 1
+            upper -= 1
+        if not (lower <= operation_index < upper):
+            return []
+        if tokens[lower].value in {"return", "co_return"}:
+            lower += 1
+
+        commas = top_level_indices(lower, upper, {","})
+        if commas:
+            boundaries = [lower, *(index + 1 for index in commas), upper]
+            for index in range(len(boundaries) - 1):
+                segment_start = boundaries[index]
+                segment_end = (
+                    commas[index] if index < len(commas) else boundaries[index + 1]
+                )
+                if segment_start <= operation_index < segment_end:
+                    return visit(segment_start, segment_end)
+
+        assignments = top_level_indices(
+            lower, upper, {"=", "+=", "-=", "*=", "/=", "??="}
         )
-    return controls
+        if assignments:
+            assignment = assignments[-1]
+            return visit(
+                assignment + 1 if operation_index > assignment else lower,
+                upper if operation_index > assignment else assignment,
+            )
+
+        questions = top_level_indices(lower, upper, {"?"})
+        if questions:
+            question = questions[0]
+            colon = matching_ternary_colon(question, upper)
+            if colon is not None:
+                condition = rendered(lower, question)
+                if operation_index < question:
+                    return visit(lower, question)
+                if operation_index < colon:
+                    return [
+                        control("ternary", question, lower, condition),
+                        *visit(question + 1, colon),
+                    ]
+                return [
+                    control("ternary", question, lower, f"!({condition})"),
+                    *visit(colon + 1, upper),
+                ]
+
+        for operator in ("??", "||", "&&"):
+            operators = top_level_indices(lower, upper, {operator})
+            if not operators:
+                continue
+            operator_index = operators[0] if operator == "??" else operators[-1]
+            if operation_index < operator_index:
+                return visit(lower, operator_index)
+            expression = rendered(lower, operator_index)
+            guard = {
+                "&&": expression,
+                "||": f"!({expression})",
+                "??": f"({expression}) == null",
+            }[operator]
+            return [
+                control("short_circuit", operator_index, lower, guard),
+                *visit(operator_index + 1, upper),
+            ]
+
+        containing = [
+            (open_index, close_index)
+            for open_index, close_index in forward.items()
+            if lower <= open_index < operation_index < close_index < upper
+        ]
+        if containing:
+            open_index, close_index = max(containing)
+            return visit(open_index + 1, close_index)
+        return []
+
+    return visit(start, end)
 
 
 def _assignment_value_end(
@@ -1441,7 +1791,7 @@ def _expression_operations(
         metadata = _merge_control_metadata(metadata, base_controls)
         metadata = _merge_control_metadata(
             metadata,
-            _expression_gate_controls(tokens, forward, start, target_start),
+            _expression_gate_controls(tokens, forward, start, target_start, end),
         )
         operation: dict[str, Any] = {
             "kind": "assignment",
@@ -1496,7 +1846,7 @@ def _expression_operations(
         metadata = _merge_control_metadata(metadata, base_controls)
         metadata = _merge_control_metadata(
             metadata,
-            _expression_gate_controls(tokens, forward, start, expression_start),
+            _expression_gate_controls(tokens, forward, start, expression_start, end),
         )
         operation = {
             "kind": "assignment",
@@ -1561,7 +1911,7 @@ def _expression_operations(
         metadata = _merge_control_metadata(metadata, base_controls)
         metadata = _merge_control_metadata(
             metadata,
-            _expression_gate_controls(tokens, forward, start, callee_start),
+            _expression_gate_controls(tokens, forward, start, callee_start, end),
         )
         operation = {
             "kind": "invocation",
@@ -1579,6 +1929,36 @@ def _expression_operations(
     return results
 
 
+def _lambda_body_openings(
+    tokens: list[Token],
+    forward: dict[int, int],
+    reverse: dict[int, int],
+    start: int,
+    end: int,
+) -> set[int]:
+    openings: set[int] = set()
+    for capture_close in range(start, end):
+        if tokens[capture_close].value != "]" or capture_close not in reverse:
+            continue
+        capture_open = reverse[capture_close]
+        if capture_open < start:
+            continue
+        if capture_open > start:
+            before = tokens[capture_open - 1]
+            if before.kind in {"identifier", "number", "string"} or before.value in {
+                ")",
+                "]",
+            }:
+                continue
+        for cursor in range(capture_close + 1, end):
+            if tokens[cursor].value == ";":
+                break
+            if tokens[cursor].value == "{" and cursor in forward:
+                openings.add(cursor)
+                break
+    return openings
+
+
 def parse_operations(
     text: str,
     tokens: list[Token],
@@ -1593,6 +1973,11 @@ def parse_operations(
     flow_spans = control_spans(tokens, forward, start, end) if include_control_metadata else []
     pp_flow = preprocessor_control_contexts(text) if include_control_metadata else {}
     operations: list[tuple[int, dict[str, Any]]] = []
+    lambda_openings = _lambda_body_openings(
+        tokens, forward, reverse, start, end
+    )
+    lambda_closings = {forward[index] for index in lambda_openings}
+    lambda_ranges = [(index, forward[index]) for index in lambda_openings]
     if include_control_metadata:
         for expression_range in control_expression_ranges(
             tokens, forward, start, end
@@ -1624,6 +2009,10 @@ def parse_operations(
             bracket_depth += 1
         elif value == "]":
             bracket_depth = max(0, bracket_depth - 1)
+        elif value == "{" and cursor in lambda_openings:
+            brace_depth += 1
+        elif value == "}" and cursor in lambda_closings:
+            brace_depth = max(0, brace_depth - 1)
         elif value == "{" and paren_depth == 0 and bracket_depth == 0:
             brace_depth += 1
             statement_start = cursor + 1
@@ -1660,7 +2049,11 @@ def parse_operations(
                 )
             )
             statement_start = cursor + 1
-    return [item for _, item in sorted(operations, key=lambda pair: pair[0])]
+    return [
+        item
+        for index, item in sorted(operations, key=lambda pair: pair[0])
+        if not any(open_index < index < close_index for open_index, close_index in lambda_ranges)
+    ]
 
 
 def _statement_operations(
@@ -1714,14 +2107,19 @@ def _statement_operations(
         if declaration_name is not None:
             operation["declared_name"] = declaration_name
         if include_control_metadata:
-            operation.update(
-                _control_metadata_for(
-                    assignment_index,
-                    tokens[assignment_index],
-                    flow_spans,
-                    pp_flow,
-                )
+            metadata = _control_metadata_for(
+                assignment_index,
+                tokens[assignment_index],
+                flow_spans,
+                pp_flow,
             )
+            metadata = _merge_control_metadata(
+                metadata,
+                _expression_gate_controls(
+                    tokens, forward, start, target_start, end
+                ),
+            )
+            operation.update(metadata)
         results.append((assignment_index, operation))
 
     excluded = {"if", "for", "foreach", "while", "switch", "catch", "sizeof", "decltype", "alignof", "new", "base"}
@@ -1759,9 +2157,16 @@ def _statement_operations(
             "location": _location(tokens[callee_start], tokens[close]),
         }
         if include_control_metadata:
-            operation.update(
-                _control_metadata_for(name_index, tokens[name_index], flow_spans, pp_flow)
+            metadata = _control_metadata_for(
+                name_index, tokens[name_index], flow_spans, pp_flow
             )
+            metadata = _merge_control_metadata(
+                metadata,
+                _expression_gate_controls(
+                    tokens, forward, start, callee_start, end
+                ),
+            )
+            operation.update(metadata)
         results.append((open_index, operation))
     return results
 
@@ -1929,24 +2334,35 @@ def parse_rule_file(path: Path, required_base_type: str) -> dict[str, Any]:
 
 def registration_macros(text: str, tokens: list[Token]) -> list[dict[str, Any]]:
     forward, _ = token_pairs(tokens)
+    preprocessor = _registration_preprocessor_contexts(text)
     results: list[dict[str, Any]] = []
     for index, token in enumerate(tokens):
         if not token.value.startswith("IMPLEMENT_") or not token.value.endswith("MODULE"):
             continue
         if index + 1 >= len(tokens) or tokens[index + 1].value != "(" or index + 1 not in forward:
             continue
+        conditions = preprocessor.get(token.line, [])
+        if any(condition["active"] is False for condition in conditions):
+            continue
         close = forward[index + 1]
         ranges = _split_arguments(tokens, index + 2, close)
         arguments = [_raw(text, tokens, start, end) for start, end in ranges]
-        results.append(
-            {
-                "macro": token.value,
-                "module_class": arguments[0] if arguments else None,
-                "module_name": arguments[1] if len(arguments) > 1 else None,
-                "arguments": arguments,
-                "location": _location(token, tokens[close]),
-            }
-        )
+        item: dict[str, Any] = {
+            "macro": token.value,
+            "module_class": arguments[0] if arguments else None,
+            "module_name": arguments[1] if len(arguments) > 1 else None,
+            "arguments": arguments,
+            "location": _location(token, tokens[close]),
+        }
+        if conditions:
+            item["preprocessor_conditions"] = [
+                {
+                    key: condition[key]
+                    for key in ("group_line", "arm", "branch", "expression")
+                }
+                for condition in conditions
+            ]
+        results.append(item)
     return results
 
 
@@ -1967,6 +2383,7 @@ def parse_cpp_file(path: Path) -> dict[str, Any]:
         "external_definitions": external,
         "free_functions": free_functions,
         "registration_macros": registration_macros(text, tokens),
+        "problems": delimiter_problems(tokens),
     }
 
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inspect state transitions caused by one module's lifecycle entry source."""
+"""Inspect callback bindings and state transitions in one module entry source."""
 
 from pathlib import Path
 
@@ -9,8 +9,8 @@ from ue_project_tools.module_entry import inspect_module_entry
 
 def main() -> int:
     parser = cli_parser(
-        "读取单个模块生命周期和绑定回调造成的状态变化。",
-        "Read state transitions caused by one module's lifecycle and bound callbacks.",
+        "读取单个模块入口的回调绑定和生命周期状态变化。",
+        "Read callback bindings and lifecycle state transitions for one module entry.",
     )
     parser.add_argument(
         "--rules",

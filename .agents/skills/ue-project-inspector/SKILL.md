@@ -138,15 +138,28 @@ Treat `ue-itps.target-rule-relations.v1` as a TargetRules relevance projection, 
 - Declared local variables, class fields, and mutations rooted at them are excluded from Target setting mutations.
 - Caller conditions are not propagated into mutations inside reachable helpers.
 
-## Interpret module entry state v7
+## Interpret module entry state v12
 
-- `state_models` is the public conclusion surface. It intentionally omits full methods, parameters, calls, assignment operands, and changed values.
-- `summary` is a semantic path such as `default -> bound -> unbound`; `default` means the state before this module's first observed mutation.
-- `transitions[].via` contains only the internal callable names needed to explain how the transition is reached.
-- `when` is disjunctive normal form: each inner array is an AND branch and the outer array is OR. An empty array means no source condition was observed.
+- `callback_bindings` reports one source binding statement per item: delegate source, callback kind and target, binding and unbind APIs, containing callable names, propagated conditions, and source lines. A source declaration is included only when the selected module proves one.
+- `registration.module_class` preserves the class named by the registration macro, including built-in defaults. `module.class` is null when no local class body is available for lifecycle analysis.
+- Supported callback kinds are `function`, `lambda`, and `ufunction`. Function callbacks may enter the same-module callback graph; Lambda and UFunction bodies are not followed.
+- A callback binding requires a recognized binding API and a supported callback target. Address-of expressions alone are not classified as bindings.
+- Nested factories such as `CreateStatic` and `CreateLambda` are reported as `bind.factory` on their owning binding instead of producing duplicate items.
+- Each item owns one default `path`; callback or unbind entries include a path only when their source file differs. An empty `unbind` array means no supported cleanup could be matched by delegate source plus object, callback, or handle identity.
+- `unmatched_cleanups` reports reachable supported cleanup statements that could not be paired with any callback binding. It is cleanup evidence, not proof that the source is invalid at runtime.
+- Bound top-level `static` callback bodies are not followed. Their declarations are embedded in the corresponding callback binding; directly invoked static helpers remain analyzable.
+- A bind or unbind inside a non-virtual helper owns `virtual_targets`. Each item names a virtual root and reports the line of the call made inside that virtual function, not its declaration line. Distinct paths are not deduplicated, cross-file targets override `path`, and no reachable virtual root is an empty array.
+- `virtual_targets` is omitted when the bind or unbind is already inside a `virtual`, `override`, or `final` method. Callback registration is not treated as an ordinary call edge, so entering a callback resets virtual-target tracing.
+- `state_models` contains only non-callback lifecycle conclusions. It intentionally omits full methods, parameters, calls, assignment operands, and changed values.
+- A state model owns `path` when all transition evidence uses one source file. A transition uses `line` for one common-path location, `lines` for several, and falls back to explicit `evidence` for cross-file locations.
+- `transitions[].state` is the resulting semantic state and `on` is its lifecycle or callback trigger. `via` is present only for additional internal callables after that trigger.
+- State-model `when` is always present. Each string is one AND branch and multiple strings are OR branches; an empty array means no source condition was observed.
+- Module-entry guards propagate through reachable local calls for `if/else`, preprocessors, `for/foreach/while`, `switch/case/default`, short-circuit operators, and ternary branches. A `do-while` tail condition is not a body guard because the body executes once before it is evaluated. Switch fallthrough is not inferred.
+- Confirmed transitions omit `certainty`; non-default certainty such as `inferred` remains explicit.
 - `closure.status` is `closed`, `conditional`, `open`, or `unresolved`. It is a conservative static pairing conclusion, not runtime proof.
+- `closure` exposes only `status` and `reason`; transition summaries and pairing mechanisms are omitted because they duplicate other facts.
 - `conditional_overrides` reports when an observable result or output stops using its source default; the default and replacement values are deliberately absent.
-- `unresolved_effects` retains state-looking external calls whose callee bodies are outside the selected module evidence boundary.
+- `unresolved_effects` retains state-looking external calls whose callee bodies are outside the selected module evidence boundary. Explicit conservative matches currently include `UGameplayTagsManager::Get().AddTagIniSearchPath`, `PreLoadingScreen->Init`, and `PreLoadingScreen.Reset`; these report possible effects without inferring concrete state, and same-named methods on other receivers are not included by this whitelist.
 
 ## Interpretation boundaries
 
@@ -155,8 +168,9 @@ Treat `ue-itps.target-rule-relations.v1` as a TargetRules relevance projection, 
 - Direct Plugin resolution is not the effective `.uplugin` dependency closure.
 - The single-plugin descriptor tool reports direct Plugin dependency declarations without locating or traversing their descriptors; it recursively reconciles declared Modules with Build.cs files under the selected plugin's Source and Platforms directories.
 - Build.cs setting mutations use flattened applicability facts, while Target.cs operations preserve source conditions; neither is an effective UBT result.
-- Module entry v7 reports compressed state models, conditional default overrides, and unresolved stateful calls. Internal helpers appear only as names in `via`; changed values, RHS expressions, full methods, and general call graphs are intentionally omitted.
-- Module entry conditions are propagated through reachable local helpers and actually bound same-module callbacks. `default` means the state before the selected module's first observed mutation, not a proven UE constructor value.
+- Module entry v12 reports flat callback binding facts, unmatched cleanup evidence, compact non-callback state models, conditional default overrides, and unresolved stateful calls. Changed values, RHS expressions, full methods, and general call graphs are intentionally omitted.
+- Module entry conditions are propagated through reachable local helpers and actually bound same-module member callbacks. Virtual targets follow only ordinary same-module calls; callback registration is not reinterpreted as a synchronous caller. Bound top-level `static` callbacks report declarations without body traversal. A conditional override's `default` means the value before the selected module's first observed override, not a proven UE constructor value.
+- Unbalanced, unexpected, or mismatched `()[]{}` in module source is an error-level validation problem. Partial facts may still be returned for recovery, and the module-entry CLI exits with status 1.
 - Path v1 derives the project root from the selected `.uproject` and reports conventional path roles, filesystem state (`missing | file | directory | other`), and unclassified root directories.
 - Path v1 records the absolute `project_root` once; path items and validation problems use only `project_relative_path`.
 - Path v1 reads explicit descriptor fields only to emit validation problems: declared Modules without AdditionalRootDirectories require the conventional Source directory. It does not add requiredness fields to path items.

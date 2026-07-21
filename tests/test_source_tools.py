@@ -1157,7 +1157,7 @@ public class Fixture : ModuleRules
 
         self.assertEqual(return_codes, [0, 1, 2])
 
-    def test_module_entry_compresses_state_and_propagates_callback_conditions(self) -> None:
+    def test_module_entry_reports_flat_callback_bindings_without_following_static_bodies(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             rules = root / "Fixture.Build.cs"
@@ -1190,8 +1190,15 @@ static FString GetPath()
     return Path;
 }
 
+static void InitializeStyle()
+{
+    FFixtureStyle::Initialize();
+}
+
 void FFixtureModule::StartupModule()
 {
+    InitializeStyle();
+    auto CallbackPointer = &FFixtureModule::OnBeginPIE;
     if (!IsRunningGame())
     {
         BindEditorDelegates();
@@ -1200,7 +1207,7 @@ void FFixtureModule::StartupModule()
 
 void FFixtureModule::BindEditorDelegates()
 {
-    BeginPIEDelegate.BindRaw(this, &FFixtureModule::OnBeginPIE);
+    BeginPIEDelegate.AddRaw(this, &FFixtureModule::OnBeginPIE);
     PathDelegate.BindStatic(&GetPath);
 }
 
@@ -1211,8 +1218,9 @@ void FFixtureModule::OnBeginPIE(bool bSimulating)
 
 void FFixtureModule::ShutdownModule()
 {
-    BeginPIEDelegate.Unbind();
+    BeginPIEDelegate.RemoveAll(this);
     PathDelegate.Unbind();
+    FFixtureStyle::Shutdown();
 }
 
 void FFixtureModule::UnrelatedMethod()
@@ -1227,38 +1235,92 @@ IMPLEMENT_MODULE(FFixtureModule, Fixture)
 
             result = inspect_module_entry(rules)
 
-        self.assertEqual(result["schema_version"], "ue-itps.module-entry-state.v7")
+        self.assertEqual(result["schema_version"], "ue-itps.module-entry-state.v12")
         self.assertEqual(result["validation"]["status"], "ok")
         self.assertEqual(result["module"]["class"], "FFixtureModule")
         self.assertNotIn("module_classes", result)
         self.assertNotIn("source_files", result)
-        delegate_model = next(
-            model
-            for model in result["state_models"]
-            if model["subject"]["kind"] == "delegate_group"
-        )
-        self.assertEqual(delegate_model["summary"], ["default", "bound", "unbound"])
-        self.assertEqual(delegate_model["closure"]["status"], "closed")
+        bindings = {
+            binding["delegate"]: binding for binding in result["callback_bindings"]
+        }
         self.assertEqual(
-            {member["name"] for member in delegate_model["subject"]["members"]},
+            set(bindings),
             {"BeginPIEDelegate", "PathDelegate"},
         )
-        bound = next(
-            transition
-            for transition in delegate_model["transitions"]
-            if transition["sets_state"] == "bound"
-        )
-        self.assertEqual(bound["via"], ["StartupModule", "BindEditorDelegates"])
-        self.assertEqual(bound["when"], [["!IsRunningGame()"]])
-        override = result["conditional_overrides"][0]
-        self.assertEqual(override["summary"], ["default", "overridden"])
+        begin_pie = bindings["BeginPIEDelegate"]
         self.assertEqual(
-            override["when"],
-            [["!IsRunningGame()", "HasOverride()"]],
+            begin_pie["callback"]["declaration"],
+            "void FFixtureModule::OnBeginPIE(bool bSimulating);",
+        )
+        self.assertEqual(begin_pie["path"], "FixtureModule.cpp")
+        self.assertEqual(begin_pie["callback"]["path"], "FixtureModule.h")
+        self.assertEqual(begin_pie["bind"]["api"], "AddRaw")
+        self.assertEqual(begin_pie["bind"]["in"], "BindEditorDelegates")
+        self.assertEqual(begin_pie["bind"]["when"], [["!IsRunningGame()"]])
+        self.assertEqual(
+            begin_pie["bind"]["virtual_targets"],
+            [{"name": "StartupModule", "line": 23}],
+        )
+        self.assertEqual(begin_pie["unbind"][0]["api"], "RemoveAll")
+        self.assertNotIn("virtual_targets", begin_pie["unbind"][0])
+        self.assertNotIn("pairing", begin_pie)
+        path_binding = bindings["PathDelegate"]
+        self.assertEqual(
+            path_binding["callback"],
+            {
+                "kind": "function",
+                "target": "GetPath",
+                "declaration": "static FString GetPath();",
+                "line": 2,
+            },
+        )
+        self.assertEqual(
+            path_binding["bind"]["virtual_targets"],
+            [{"name": "StartupModule", "line": 23}],
+        )
+        self.assertNotIn("static_callback_declarations", result)
+        self.assertEqual(result["unmatched_cleanups"], [])
+        self.assertEqual(result["conditional_overrides"], [])
+        self.assertFalse(
+            any(
+                model["subject"]["kind"].startswith("delegate")
+                for model in result["state_models"]
+            )
+        )
+        style_model = next(
+            model
+            for model in result["state_models"]
+            if model["subject"]["label"] == "FFixtureStyle"
+        )
+        self.assertNotIn("summary", style_model)
+        self.assertEqual(style_model["path"], "FixtureModule.cpp")
+        self.assertEqual(
+            style_model["closure"],
+            {
+                "status": "closed",
+                "reason": "cleanup-covers-activation",
+            },
+        )
+        initialized = next(
+            transition
+            for transition in style_model["transitions"]
+            if transition["state"] == "initialized"
+        )
+        self.assertEqual(
+            initialized,
+            {
+                "state": "initialized",
+                "on": "StartupModule",
+                "via": ["InitializeStyle"],
+                "when": [],
+                "certainty": "inferred",
+                "line": 14,
+            },
         )
         encoded = json.dumps(result, ensure_ascii=False)
         self.assertNotIn("DefaultPath", encoded)
         self.assertNotIn("OverridePath", encoded)
+        self.assertNotIn("HasOverride", encoded)
         self.assertNotIn("UnrelatedMethod", encoded)
         self.assertEqual(
             result["unresolved_effects"][0]["call"],
@@ -1315,19 +1377,746 @@ IMPLEMENT_MODULE(FFixtureModule, Fixture)
         by_label = {
             model["subject"]["label"]: model for model in result["state_models"]
         }
-        self.assertEqual(by_label["FFixtureStyle"]["closure"]["status"], "closed")
-        self.assertEqual(by_label["Asset Type Actions"]["closure"]["status"], "conditional")
         self.assertEqual(
-            by_label["UToolMenus startup callback"]["closure"]["status"],
-            "conditional",
+            by_label["FFixtureStyle"]["closure"],
+            {
+                "status": "closed",
+                "reason": "cleanup-covers-activation",
+            },
         )
-        self.assertEqual(by_label["editor menu"]["closure"]["status"], "open")
-        menu_transition = by_label["editor menu"]["transitions"][0]
-        self.assertEqual(menu_transition["via"], ["RegisterMenus"])
+        asset_actions = by_label["Asset Type Actions"]
         self.assertEqual(
-            menu_transition["when"],
-            [["FSlateApplication::IsInitialized()"]],
+            asset_actions,
+            {
+                "subject": {
+                    "kind": "registration",
+                    "label": "Asset Type Actions",
+                },
+                "path": "FixtureModule.cpp",
+                "transitions": [
+                    {
+                        "state": "registered",
+                        "on": "StartupModule",
+                        "when": [],
+                        "line": 18,
+                    },
+                    {
+                        "state": "unregistered",
+                        "on": "ShutdownModule",
+                        "when": ["AssetToolsModule && AssetAction"],
+                        "line": 29,
+                    },
+                ],
+                "closure": {
+                    "status": "conditional",
+                    "reason": "cleanup-condition-differs",
+                },
+            },
         )
+        self.assertNotIn("UToolMenus startup callback", by_label)
+        self.assertNotIn("editor menu", by_label)
+        self.assertEqual(len(result["callback_bindings"]), 1)
+        menu_binding = result["callback_bindings"][0]
+        self.assertEqual(menu_binding["delegate"], "UToolMenus startup callback")
+        self.assertEqual(
+            menu_binding["callback"],
+            {
+                "kind": "function",
+                "target": "RegisterMenus",
+                "declaration": "static void RegisterMenus();",
+                "line": 2,
+            },
+        )
+        self.assertEqual(menu_binding["bind"]["api"], "RegisterStartupCallback")
+        self.assertEqual(menu_binding["bind"]["factory"], "CreateStatic")
+        self.assertNotIn("handle", menu_binding["bind"])
+        self.assertEqual(menu_binding["unbind"][0]["api"], "UnRegisterStartupCallback")
+        self.assertNotIn("pairing", menu_binding)
+
+    def test_module_entry_requires_binding_api_and_reports_unmatched_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            rules = root / "Fixture.Build.cs"
+            rules.write_text("public class Fixture : ModuleRules {}", encoding="utf-8")
+            (root / "FixtureModule.cpp").write_text(
+                """
+class FFixtureModule : public IModuleInterface
+{
+public:
+    virtual void StartupModule() override
+    {
+        auto PlainAddress = &FFixtureModule::OnEvent;
+        EventDelegate.AddRaw(this, &FFixtureModule::OnEvent);
+    }
+
+    void OnEvent() {}
+};
+
+IMPLEMENT_MODULE(FFixtureModule, Fixture)
+""",
+                encoding="utf-8",
+            )
+
+            result = inspect_module_entry(rules)
+
+        self.assertEqual(len(result["callback_bindings"]), 1)
+        binding = result["callback_bindings"][0]
+        self.assertEqual(
+            binding["callback"]["declaration"],
+            "void FFixtureModule::OnEvent();",
+        )
+        self.assertEqual(binding["bind"]["api"], "AddRaw")
+        self.assertNotIn("virtual_targets", binding["bind"])
+        self.assertEqual(binding["unbind"], [])
+        self.assertNotIn("pairing", binding)
+
+    def test_module_entry_reports_virtual_call_sites_without_deduplication(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            rules = root / "Fixture.Build.cs"
+            rules.write_text("public class Fixture : ModuleRules {}", encoding="utf-8")
+            (root / "FixtureModule.cpp").write_text(
+                """
+static FString GetPath()
+{
+    return TEXT("Fixture");
+}
+
+class FFixtureModule : public IModuleInterface
+{
+public:
+    virtual void StartupModule() override
+    {
+        BindDelegates();
+        BindDelegates();
+        EventDelegate.AddRaw(this, &FFixtureModule::OnEvent);
+    }
+
+    void BindDelegates()
+    {
+        DirectPathDelegate.BindStatic(&GetPath);
+    }
+
+    void OnEvent()
+    {
+        BindFromCallback();
+    }
+
+    void BindFromCallback()
+    {
+        CallbackPathDelegate.BindStatic(&GetPath);
+    }
+};
+
+IMPLEMENT_MODULE(FFixtureModule, Fixture)
+""",
+                encoding="utf-8",
+            )
+
+            result = inspect_module_entry(rules)
+
+        bindings = {
+            binding["delegate"]: binding for binding in result["callback_bindings"]
+        }
+        self.assertEqual(
+            bindings["DirectPathDelegate"]["bind"]["virtual_targets"],
+            [
+                {"name": "StartupModule", "line": 12},
+                {"name": "StartupModule", "line": 13},
+            ],
+        )
+        self.assertEqual(
+            bindings["CallbackPathDelegate"]["bind"]["virtual_targets"],
+            [],
+        )
+        self.assertNotIn(
+            "virtual_targets",
+            bindings["EventDelegate"]["bind"],
+        )
+
+    def test_module_entry_keeps_explicit_evidence_for_cross_file_state_models(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            rules = root / "Fixture.Build.cs"
+            rules.write_text("public class Fixture : ModuleRules {}", encoding="utf-8")
+            (root / "FixtureModule.h").write_text(
+                """
+class FFixtureModule : public IModuleInterface
+{
+public:
+    virtual void StartupModule() override;
+    virtual void ShutdownModule() override;
+};
+""",
+                encoding="utf-8",
+            )
+            (root / "FixtureStartup.cpp").write_text(
+                """
+void FFixtureModule::StartupModule()
+{
+    FFixtureStyle::Initialize();
+}
+
+IMPLEMENT_MODULE(FFixtureModule, Fixture)
+""",
+                encoding="utf-8",
+            )
+            (root / "FixtureShutdown.cpp").write_text(
+                """
+void FFixtureModule::ShutdownModule()
+{
+    FFixtureStyle::Shutdown();
+}
+""",
+                encoding="utf-8",
+            )
+
+            result = inspect_module_entry(rules)
+
+        style_model = result["state_models"][0]
+        self.assertNotIn("path", style_model)
+        self.assertEqual(
+            style_model["transitions"],
+            [
+                {
+                    "state": "initialized",
+                    "on": "StartupModule",
+                    "when": [],
+                    "certainty": "inferred",
+                    "evidence": [{"path": "FixtureStartup.cpp", "line": 4}],
+                },
+                {
+                    "state": "shutdown",
+                    "on": "ShutdownModule",
+                    "when": [],
+                    "certainty": "inferred",
+                    "evidence": [{"path": "FixtureShutdown.cpp", "line": 4}],
+                },
+            ],
+        )
+
+    def test_module_entry_pairs_cleanup_with_multiline_assigned_handle(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            rules = root / "Fixture.Build.cs"
+            rules.write_text("public class Fixture : ModuleRules {}", encoding="utf-8")
+            (root / "FixtureModule.cpp").write_text(
+                """
+static void RegisterMenus() {}
+
+class FFixtureModule : public IModuleInterface
+{
+public:
+    virtual void StartupModule() override
+    {
+        MenuHandle =
+            UToolMenus::RegisterStartupCallback(
+                FSimpleMulticastDelegate::FDelegate::CreateStatic(&RegisterMenus));
+    }
+
+    virtual void ShutdownModule() override
+    {
+        UToolMenus::UnRegisterStartupCallback(MenuHandle);
+    }
+};
+
+IMPLEMENT_MODULE(FFixtureModule, Fixture)
+""",
+                encoding="utf-8",
+            )
+
+            result = inspect_module_entry(rules)
+
+        self.assertEqual(len(result["callback_bindings"]), 1)
+        binding = result["callback_bindings"][0]
+        self.assertEqual(binding["bind"]["api"], "RegisterStartupCallback")
+        self.assertEqual(
+            [cleanup["api"] for cleanup in binding["unbind"]],
+            ["UnRegisterStartupCallback"],
+        )
+
+    def test_module_entry_ignores_parameter_names_when_pairing_declarations(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            rules = root / "Fixture.Build.cs"
+            rules.write_text("public class Fixture : ModuleRules {}", encoding="utf-8")
+            (root / "FixtureModule.cpp").write_text(
+                """
+class FFixtureModule : public IModuleInterface
+{
+public:
+    virtual void StartupModule() override
+    {
+        BindDelegates(1);
+    }
+
+    void BindDelegates(int DeclaredValue);
+    void OnEvent() {}
+};
+
+void FFixtureModule::BindDelegates(int DefinedValue)
+{
+    EventDelegate.AddRaw(this, &FFixtureModule::OnEvent);
+}
+
+IMPLEMENT_MODULE(FFixtureModule, Fixture)
+""",
+                encoding="utf-8",
+            )
+
+            result = inspect_module_entry(rules)
+
+        problem_codes = {
+            problem["code"] for problem in result["validation"]["problems"]
+        }
+        self.assertNotIn("module-call-target-overload-unresolved", problem_codes)
+        self.assertEqual(
+            [binding["delegate"] for binding in result["callback_bindings"]],
+            ["EventDelegate"],
+        )
+
+    def test_module_entry_ignores_registration_in_if_zero_branch(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            rules = root / "Fixture.Build.cs"
+            rules.write_text("public class Fixture : ModuleRules {}", encoding="utf-8")
+            (root / "FixtureModule.cpp").write_text(
+                """
+class FFixtureModule : public IModuleInterface
+{
+public:
+    virtual void StartupModule() override {}
+};
+
+#if 0
+IMPLEMENT_MODULE(FDisabledModule, Fixture)
+#endif
+IMPLEMENT_MODULE(FFixtureModule, Fixture)
+""",
+                encoding="utf-8",
+            )
+
+            result = inspect_module_entry(rules)
+
+        self.assertEqual(result["validation"]["status"], "ok")
+        self.assertEqual(result["module"]["class"], "FFixtureModule")
+        self.assertEqual(result["registration"]["macro"], "IMPLEMENT_MODULE")
+
+    def test_module_entry_classifies_exclusive_registration_variants(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            rules = root / "Fixture.Build.cs"
+            rules.write_text("public class Fixture : ModuleRules {}", encoding="utf-8")
+            (root / "FixtureModule.cpp").write_text(
+                """
+class FEditorFixtureModule : public IModuleInterface {};
+class FRuntimeFixtureModule : public IModuleInterface {};
+
+#if WITH_EDITOR
+IMPLEMENT_MODULE(FEditorFixtureModule, Fixture)
+#else
+IMPLEMENT_MODULE(FRuntimeFixtureModule, Fixture)
+#endif
+""",
+                encoding="utf-8",
+            )
+
+            result = inspect_module_entry(rules)
+
+        problem_codes = {
+            problem["code"] for problem in result["validation"]["problems"]
+        }
+        self.assertIn("module-registration-conditional-variants", problem_codes)
+        self.assertNotIn("module-registration-ambiguous", problem_codes)
+        self.assertNotIn("module-class-ambiguous", problem_codes)
+        self.assertIsNone(result["module"]["class"])
+
+    def test_module_entry_reports_lambda_ufunction_and_unmatched_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            rules = root / "Fixture.Build.cs"
+            rules.write_text("public class Fixture : ModuleRules {}", encoding="utf-8")
+            (root / "FixtureModule.cpp").write_text(
+                """
+class FFixtureModule : public IModuleInterface
+{
+public:
+    virtual void StartupModule() override
+    {
+        LambdaDelegate.AddLambda([this]() { OnLambdaInvoked(); });
+        WeakLambdaDelegate.AddWeakLambda(
+            this, [this]() { OnLambdaInvoked(); });
+        FactoryDelegate.Bind(
+            FSimpleDelegate::CreateLambda([this]() { OnLambdaInvoked(); }));
+        UFunctionDelegate.BindUFunction(this, FName(TEXT("OnUFunction")));
+    }
+
+    virtual void ShutdownModule() override
+    {
+        WeakLambdaDelegate.RemoveAll(this);
+        UFunctionDelegate.Unbind();
+        OrphanDelegate.RemoveAll(this);
+    }
+
+    void OnLambdaInvoked()
+    {
+        LambdaService.Initialize();
+    }
+
+    void OnUFunction()
+    {
+        UFunctionService.Initialize();
+    }
+};
+
+IMPLEMENT_MODULE(FFixtureModule, Fixture)
+""",
+                encoding="utf-8",
+            )
+
+            result = inspect_module_entry(rules)
+
+        bindings = {
+            binding["delegate"]: binding for binding in result["callback_bindings"]
+        }
+        self.assertEqual(
+            set(bindings),
+            {
+                "FactoryDelegate",
+                "LambdaDelegate",
+                "UFunctionDelegate",
+                "WeakLambdaDelegate",
+            },
+        )
+        self.assertEqual(bindings["LambdaDelegate"]["callback"]["kind"], "lambda")
+        self.assertEqual(
+            bindings["LambdaDelegate"]["callback"]["target"], "<lambda>"
+        )
+        self.assertEqual(
+            bindings["FactoryDelegate"]["bind"]["factory"], "CreateLambda"
+        )
+        self.assertEqual(
+            bindings["UFunctionDelegate"]["callback"],
+            {
+                "kind": "ufunction",
+                "target": "OnUFunction",
+                "line": 12,
+            },
+        )
+        self.assertEqual(
+            [item["api"] for item in bindings["WeakLambdaDelegate"]["unbind"]],
+            ["RemoveAll"],
+        )
+        self.assertEqual(
+            [item["api"] for item in bindings["UFunctionDelegate"]["unbind"]],
+            ["Unbind"],
+        )
+        self.assertEqual(len(result["unmatched_cleanups"]), 1)
+        unmatched = result["unmatched_cleanups"][0]
+        self.assertEqual(unmatched["delegate"], "OrphanDelegate")
+        self.assertEqual(unmatched["cleanup"]["api"], "RemoveAll")
+        self.assertEqual(unmatched["reason"], "matching-binding-not-found")
+        self.assertFalse(
+            any(
+                model["subject"]["label"]
+                in {"LambdaService", "UFunctionService"}
+                for model in result["state_models"]
+            )
+        )
+
+    def test_module_entry_accepts_text_stringization_and_preserves_default_class(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            rules = root / "Fixture.Build.cs"
+            rules.write_text("public class Fixture : ModuleRules {}", encoding="utf-8")
+            (root / "FixtureModule.cpp").write_text(
+                """
+#define LOG_FUNCTION(FunctionName) \\
+{ \\
+    Log(TEXT("%s: " #FunctionName " failed")); \\
+}
+
+IMPLEMENT_MODULE(FDefaultModuleImpl, Fixture)
+""",
+                encoding="utf-8",
+            )
+
+            result = inspect_module_entry(rules)
+
+        self.assertEqual(result["schema_version"], "ue-itps.module-entry-state.v12")
+        self.assertEqual(result["validation"]["status"], "ok")
+        self.assertIsNone(result["module"]["class"])
+        self.assertEqual(
+            result["registration"],
+            {
+                "macro": "IMPLEMENT_MODULE",
+                "module_class": "FDefaultModuleImpl",
+                "evidence": {"path": "FixtureModule.cpp", "line": 7},
+            },
+        )
+
+    def test_module_entry_normalizes_callback_declaration_and_condition_spacing(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            rules = root / "Fixture.Build.cs"
+            rules.write_text("public class Fixture : ModuleRules {}", encoding="utf-8")
+            (root / "FixtureModule.cpp").write_text(
+                """
+class FFixtureModule : public IModuleInterface
+{
+public:
+    virtual void StartupModule() override
+    {
+        if (!GIsEditor && FApp::CanEverRender() && Manager::Get())
+        {
+            EventDelegate.AddRaw(this, &FFixtureModule::OnEvent);
+        }
+    }
+
+private:
+    void OnEvent();
+};
+
+void FFixtureModule::OnEvent() {}
+
+IMPLEMENT_MODULE(FFixtureModule, Fixture)
+""",
+                encoding="utf-8",
+            )
+
+            result = inspect_module_entry(rules)
+
+        binding = result["callback_bindings"][0]
+        self.assertEqual(
+            binding["callback"]["declaration"],
+            "void FFixtureModule::OnEvent();",
+        )
+        self.assertEqual(
+            binding["bind"]["when"],
+            [["!GIsEditor && FApp::CanEverRender() && Manager::Get()"]],
+        )
+
+    def test_module_entry_reports_only_whitelisted_opaque_effects(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            rules = root / "Fixture.Build.cs"
+            rules.write_text("public class Fixture : ModuleRules {}", encoding="utf-8")
+            (root / "FixtureModule.cpp").write_text(
+                """
+class FFixtureModule : public IModuleInterface
+{
+public:
+    virtual void StartupModule() override
+    {
+        UGameplayTagsManager::Get().AddTagIniSearchPath(ConfigPath);
+        PreLoadingScreen->Init();
+        UnrelatedObject->Init();
+    }
+
+    virtual void ShutdownModule() override
+    {
+        PreLoadingScreen.Reset();
+        UnrelatedObject.Reset();
+    }
+};
+
+IMPLEMENT_MODULE(FFixtureModule, Fixture)
+""",
+                encoding="utf-8",
+            )
+
+            result = inspect_module_entry(rules)
+
+        self.assertEqual(
+            [
+                (item["trigger"]["name"], item["call"])
+                for item in result["unresolved_effects"]
+            ],
+            [
+                (
+                    "StartupModule",
+                    "UGameplayTagsManager::Get().AddTagIniSearchPath",
+                ),
+                ("StartupModule", "PreLoadingScreen->Init"),
+                ("ShutdownModule", "PreLoadingScreen.Reset"),
+            ],
+        )
+        self.assertTrue(
+            all(
+                item["reason"] == "callee-state-not-visible"
+                for item in result["unresolved_effects"]
+            )
+        )
+
+    def test_module_entry_propagates_loop_switch_and_expression_guards(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            rules = root / "Fixture.Build.cs"
+            rules.write_text("public class Fixture : ModuleRules {}", encoding="utf-8")
+            (root / "FixtureModule.cpp").write_text(
+                """
+class FFixtureModule : public IModuleInterface
+{
+public:
+    virtual void StartupModule() override
+    {
+        while (CanRun())
+        {
+            BindWhile();
+        }
+        for (int32 Index = 0; ShouldRun(Index); ++Index)
+        {
+            ForDelegate.AddRaw(this, &FFixtureModule::OnEvent);
+        }
+        foreach (const auto& Item in Items)
+        {
+            ForeachDelegate.AddRaw(this, &FFixtureModule::OnEvent);
+        }
+        switch (Mode)
+        {
+        case EMode::Primary:
+            CaseDelegate.AddRaw(this, &FFixtureModule::OnEvent);
+            break;
+        default:
+            DefaultDelegate.AddRaw(this, &FFixtureModule::OnEvent);
+            break;
+        }
+        Ready() && AndDelegate.AddRaw(this, &FFixtureModule::OnEvent);
+        Ready() || OrDelegate.AddRaw(this, &FFixtureModule::OnEvent);
+        First() && Second() || CompoundOrDelegate.AddRaw(this, &FFixtureModule::OnEvent);
+        First() || Second() && NestedAndDelegate.AddRaw(this, &FFixtureModule::OnEvent);
+        Ready()
+            ? ThenDelegate.AddRaw(this, &FFixtureModule::OnEvent)
+            : ElseDelegate.AddRaw(this, &FFixtureModule::OnEvent);
+        First() || Second()
+            ? CompoundThenDelegate.AddRaw(this, &FFixtureModule::OnEvent)
+            : CompoundElseDelegate.AddRaw(this, &FFixtureModule::OnEvent);
+        do
+        {
+            DoDelegate.AddRaw(this, &FFixtureModule::OnEvent);
+        }
+        while (Repeat());
+    }
+
+    void BindWhile()
+    {
+        WhileDelegate.AddRaw(this, &FFixtureModule::OnEvent);
+    }
+
+    void OnEvent() {}
+};
+
+IMPLEMENT_MODULE(FFixtureModule, Fixture)
+""",
+                encoding="utf-8",
+            )
+
+            result = inspect_module_entry(rules)
+
+        bindings = {
+            binding["delegate"]: binding["bind"]["when"]
+            for binding in result["callback_bindings"]
+        }
+        self.assertEqual(bindings["WhileDelegate"], [["CanRun()"]])
+        self.assertEqual(bindings["ForDelegate"], [["ShouldRun(Index)"]])
+        self.assertEqual(
+            bindings["ForeachDelegate"],
+            [["foreach: const auto & Item in Items"]],
+        )
+        self.assertEqual(
+            bindings["CaseDelegate"],
+            [["switch(Mode) == EMode::Primary"]],
+        )
+        self.assertEqual(
+            bindings["DefaultDelegate"],
+            [["switch(Mode): default"]],
+        )
+        self.assertEqual(bindings["AndDelegate"], [["Ready()"]])
+        self.assertEqual(bindings["OrDelegate"], [["!(Ready())"]])
+        self.assertEqual(
+            bindings["CompoundOrDelegate"],
+            [["!(First() && Second())"]],
+        )
+        self.assertEqual(
+            bindings["NestedAndDelegate"],
+            [["!(First())", "Second()"]],
+        )
+        self.assertEqual(bindings["ThenDelegate"], [["Ready()"]])
+        self.assertEqual(bindings["ElseDelegate"], [["!(Ready())"]])
+        self.assertEqual(
+            bindings["CompoundThenDelegate"],
+            [["First() || Second()"]],
+        )
+        self.assertEqual(
+            bindings["CompoundElseDelegate"],
+            [["!(First() || Second())"]],
+        )
+        self.assertEqual(bindings["DoDelegate"], [])
+
+    def test_module_entry_reports_delimiter_errors_and_cli_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            rules = root / "Fixture.Build.cs"
+            rules.write_text("public class Fixture : ModuleRules {}", encoding="utf-8")
+            (root / "FixtureModule.cpp").write_text(
+                """
+class FFixtureModule : public IModuleInterface
+{
+public:
+    virtual void StartupModule() override {}
+};
+IMPLEMENT_MODULE(FFixtureModule, Fixture)
+""",
+                encoding="utf-8",
+            )
+            (root / "Unmatched.cpp").write_text(
+                "void Unmatched() { if (Ready()) {\n",
+                encoding="utf-8",
+            )
+            (root / "Unexpected.cpp").write_text(
+                "void Unexpected() {} }\n",
+                encoding="utf-8",
+            )
+            (root / "Mismatch.cpp").write_text(
+                "void Mismatch() { Invoke([)]); }\n",
+                encoding="utf-8",
+            )
+
+            result = inspect_module_entry(rules)
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(TOOLS_ROOT / "ue_inspect_module_entry.py"),
+                    "--rules",
+                    str(rules),
+                ],
+                cwd=REPOSITORY_ROOT,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=False,
+            )
+
+        self.assertEqual(result["validation"]["status"], "error")
+        problems = result["validation"]["problems"]
+        codes = {problem["code"] for problem in problems}
+        self.assertTrue(
+            {
+                "source-delimiter-unmatched-opening",
+                "source-delimiter-unexpected-closing",
+                "source-delimiter-mismatch",
+            }.issubset(codes)
+        )
+        self.assertTrue(
+            all(
+                problem["severity"] == "error"
+                for problem in problems
+                if problem["code"].startswith("source-delimiter-")
+            )
+        )
+        self.assertEqual(result["module"]["class"], "FFixtureModule")
+        self.assertEqual(result["registration"]["macro"], "IMPLEMENT_MODULE")
+        self.assertEqual(completed.returncode, 1)
 
     def test_module_entry_rejects_invalid_rules_input(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
