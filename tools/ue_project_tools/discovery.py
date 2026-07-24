@@ -19,6 +19,34 @@ def discover_uprojects(root: Path) -> list[Path]:
     return sorted(matches, key=lambda item: normalized(item).casefold())
 
 
+def find_nearest_uproject(source: Path) -> Path:
+    """Find the unique .uproject at the nearest ancestor of a source file."""
+    source_path = source.resolve()
+    for directory in (source_path.parent, *source_path.parents[1:]):
+        candidates = sorted(
+            (
+                path.resolve()
+                for path in directory.iterdir()
+                if path.is_file() and path.suffix.casefold() == ".uproject"
+            ),
+            key=lambda item: normalized(item).casefold(),
+        )
+        if len(candidates) == 1:
+            return candidates[0]
+        if len(candidates) > 1:
+            formatted = "\n".join(
+                f"  - {normalized(path)}" for path in candidates
+            )
+            raise ValueError(
+                "Multiple .uproject files found at the nearest source ancestor "
+                f"{normalized(directory)}:\n{formatted}"
+            )
+    raise ValueError(
+        "No .uproject file found in the source file's ancestor directories: "
+        f"{normalized(source_path)}"
+    )
+
+
 def select_uproject(project: str | None, search_root: str) -> tuple[Path, list[Path]]:
     search_input = Path(project or search_root).expanduser()
     candidates = discover_uprojects(search_input)

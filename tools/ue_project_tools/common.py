@@ -110,6 +110,32 @@ def result_document(
     }
 
 
+def cli_error_document(
+    schema_version: str,
+    *,
+    code: str,
+    message: str,
+    responsibility: str,
+) -> dict[str, Any]:
+    """Return a machine-readable input/read failure for focused CLIs."""
+    return result_document(
+        schema_version,
+        {"request": {"status": "failed"}},
+        [
+            {
+                "severity": "error",
+                "code": code,
+                "message": message,
+            }
+        ],
+        responsibility=responsibility,
+        boundaries=[
+            "The requested scan did not start because its input or source context could not be read.",
+            "Command-line syntax errors still use argparse usage text and exit code 2.",
+        ],
+    )
+
+
 def utc_now() -> str:
     return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
 

@@ -1,6 +1,6 @@
 ---
 name: ue-project-inspector
-description: Inspect Unreal Engine projects and explicitly selected source entry files through the repository's deterministic, read-only tools. Use when Codex needs to find or read .uproject files; resolve Engine identity; locate direct Plugin references; inspect one .uplugin; navigate one plugin's declared modules; read one Build.cs or Target.cs; inspect one module's lifecycle entry source; classify project directories; or summarize focused results. Do not use for runtime behavior, asset reachability, general class/call graphs, code generation, builds, tests, or project modification.
+description: Inspect Unreal Engine projects and explicitly selected source entry files through the repository's deterministic, read-only tools. Use when Codex needs to find or read .uproject files; resolve Engine identity; locate direct Plugin references; inspect one .uplugin; navigate one plugin's declared modules; read one Build.cs or Target.cs; inspect one module's lifecycle entry source; list includes, types, variables, or functions from one selected .cpp; inspect one selected function body; classify project directories; or summarize focused results. Do not use for runtime behavior, asset reachability, general class/call graphs, code generation, builds, tests, or project modification.
 ---
 
 # UE Project Inspector
@@ -28,6 +28,11 @@ If the scripts are missing, report that this repository does not contain the exp
 | Read declared setting mutations and references from one Build.cs | `ue_inspect_module_rules.py` |
 | Read static rules from one Target.cs | `ue_inspect_target_rules.py` |
 | Inspect one module's registration and lifecycle state transitions | `ue_inspect_module_entry.py` |
+| List direct include provenance from one selected `.cpp` | `ue_list_source_includes.py` |
+| List type and member-name facts from one selected `.cpp` | `ue_list_source_types.py` |
+| List variable declarations and scopes from one selected `.cpp` | `ue_list_source_variables.py` |
+| List callable signatures and declaration-definition relations | `ue_list_source_functions.py` |
+| Inspect operations in one explicitly selected function definition | `ue_inspect_source_function.py` |
 
 When the user explicitly requests all categories, run the relevant focused tools independently, validate each result, and summarize them without inventing a merged schema. For every other request, use only the smallest tool that answers the question.
 
@@ -50,6 +55,10 @@ When the user needs to modify or understand one plugin, drill down instead of me
 2. Locate its direct plugin descriptors with `ue_resolve_plugins.py`.
 3. Select one resolved `.uplugin` and read it with `ue_read_plugin_descriptor.py`.
 4. Select one resolved Build.cs path from the descriptor result and run only the source tool needed next: `ue_inspect_module_rules.py` for UBT declarations or `ue_inspect_module_entry.py` for C++ module registration and lifecycle evidence.
+
+When the user or model explicitly selects one `.cpp`, run only the smallest source fact tool that answers the request. Pass only that source; every source tool discovers the nearest unique `.uproject` from the source's ancestor directories. Report missing or ambiguous project discovery instead of choosing for the model. Supply `--header` only when the companion header is already explicit. Otherwise let the tool select a header only from unique direct-include evidence.
+
+Use `ue_list_source_functions.py` before function-body inspection. The model must explicitly choose one returned definition, then pass its stable `function_id` to `ue_inspect_source_function.py`; name, owner, and parameter text remain fallback selectors. Do not automatically inspect all function bodies or any dependency source returned by an include result. The model must explicitly choose every deeper source unit or function.
 
 Do not embed or reinterpret later source-tool results as fields of the earlier `.uproject` result. Each tool keeps its own schema, validation, and limits.
 
@@ -74,6 +83,11 @@ python tools/ue_read_plugin_descriptor.py --plugin <plugin>
 python tools/ue_inspect_module_rules.py --rules <rules>
 python tools/ue_inspect_target_rules.py --target <target>
 python tools/ue_inspect_module_entry.py --rules <rules>
+python tools/ue_list_source_includes.py --source <source> [--header <header>]
+python tools/ue_list_source_types.py --source <source> [--header <header>]
+python tools/ue_list_source_variables.py --source <source> [--header <header>]
+python tools/ue_list_source_functions.py --source <source> [--header <header>]
+python tools/ue_inspect_source_function.py --source <source> (--function <name> | --function-id <id>) [--owner <type>] [--parameters <text>] [--header <header>]
 ```
 
 Plugin resolution derives the Engine root from the project's `EngineAssociation` by default. Pass `--engine-root` only as an explicit override:
@@ -160,6 +174,18 @@ Treat `ue-itps.target-rule-relations.v1` as a TargetRules relevance projection, 
 - `closure` exposes only `status` and `reason`; transition summaries and pairing mechanisms are omitted because they duplicate other facts.
 - `conditional_overrides` reports when an observable result or output stops using its source default; the default and replacement values are deliberately absent.
 - `unresolved_effects` retains state-looking external calls whose callee bodies are outside the selected module evidence boundary. Explicit conservative matches currently include `UGameplayTagsManager::Get().AddTagIniSearchPath`, `PreLoadingScreen->Init`, and `PreLoadingScreen.Reset`; these report possible effects without inferring concrete state, and same-named methods on other receivers are not included by this whitelist.
+
+## Interpret source fact v1 schemas
+
+- Every source tool requires one explicitly selected `.cpp/.cc`. An explicit `--header` is read as supplied; otherwise only one directly included, same-stem header in the same source boundary may be selected automatically.
+- `source-includes.v1` reports direct spellings and unique filesystem provenance. `origin_unit` distinguishes the selected source from its companion header. `resolved` is not effective UBT or compiler include-path proof. Physical Build.cs and `.uplugin` ancestry does not prove that a dependency is required, correctly declared, public/private, or suitable for the user's goal.
+- `source-types.v1` reports class, struct, enum, inheritance, member-name indexes, per-member evidence in `member_details`, and type-related UE macros. It does not generate a semantic type summary. Macros retain independent evidence and are not attached to a type by proximity guesses.
+- `source-variables.v1` separates `file`, `member`, `parameter`, and `local` scopes. Initializers are retained as source expressions and are not evaluated. Callable-template members and supported function-pointer declarators remain variables. Ambiguous C++ declarations are reported in `unresolved_declarations` with a validation warning instead of being silently omitted.
+- `source-functions.v1` is a signature index with conservative declaration-definition relations. Each callable owns a stable `function_id` that includes parameters and required cv/ref identity qualifiers. Relation statuses distinguish `matched`, `inline_definition`, `source_only`, `declaration_only`, and `ambiguous`. The index deliberately omits function-body operations.
+- `source-function.v1` projects operations from exactly one selected definition. Calls are not followed. Prefer the returned `function_id` for exact selection; name, owner, and parameter selectors remain available. Operations expose stable per-result IDs, parent/depth relationships, expression roles, conservative call kinds, and scalar literal evaluation.
+- Pure command-line syntax errors use argparse stderr and exit 2. Source input/read failures return schema-shaped JSON and exit 2. A missing or ambiguous function selection returns `validation: error` JSON and exit 1.
+- Referenced C++ files are never recursively read. The model must explicitly select another source unit for deeper inspection.
+- The tools do not generate feature labels, variable purposes, implementation advice, Build.cs changes, or acceptance conclusions. The model remains responsible for connecting facts and making decisions.
 
 ## Interpretation boundaries
 
