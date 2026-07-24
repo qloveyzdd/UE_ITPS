@@ -32,7 +32,7 @@ _CONTROL_KEYWORDS = {
     "yield",
 }
 
-_NON_DECLARATION_STARTS = _CONTROL_KEYWORDS
+_NON_DECLARATION_STARTS = _CONTROL_KEYWORDS | {"{", "}"}
 
 _TYPE_KEYWORDS = {
     "auto",
@@ -72,6 +72,13 @@ _DECLARATION_PREFIXES = {
     "inline",
     "static",
     "virtual",
+}
+
+_MEMBER_ANNOTATION_MACROS = {
+    "GENERATED_BODY",
+    "GENERATED_UCLASS_BODY",
+    "GENERATED_USTRUCT_BODY",
+    "UFUNCTION",
 }
 
 
@@ -289,6 +296,39 @@ def _member_start(tokens: list[Token], lower: int, index: int) -> int:
     return lower
 
 
+def _member_declaration_prefix(
+    text: str,
+    tokens: list[Token],
+    forward: dict[int, int],
+    start: int,
+    end: int,
+) -> tuple[int, list[str]]:
+    cursor = start
+    macros: list[str] = []
+    while cursor < end:
+        if (
+            cursor + 1 < end
+            and tokens[cursor].value in {"public", "protected", "private"}
+            and tokens[cursor + 1].value == ":"
+        ):
+            cursor += 2
+            continue
+        if (
+            cursor + 1 < end
+            and tokens[cursor].value in _MEMBER_ANNOTATION_MACROS
+            and tokens[cursor + 1].value == "("
+            and cursor + 1 in forward
+            and forward[cursor + 1] < end
+        ):
+            close = forward[cursor + 1]
+            if tokens[cursor].value == "UFUNCTION":
+                macros.append(_raw(text, tokens, cursor, close + 1))
+            cursor = close + 1
+            continue
+        break
+    return cursor, macros
+
+
 def _declaration_name(
     text: str, tokens: list[Token], start: int, end: int
 ) -> str | None:
@@ -462,6 +502,7 @@ def parse_classes(text: str, tokens: list[Token]) -> tuple[list[dict[str, Any]],
                 "location": _location(token, tokens[body_end]),
                 "members": members,
                 "body_range": (brace + 1, body_end),
+                "_token_range": (index, body_end + 1),
             }
         )
     return classes, forward, reverse
@@ -513,20 +554,27 @@ def _class_members(
         ):
             index = close + 1
             continue
-        if any(token.value == "=" for token in tokens[member_start:index]):
-            index = close + 1
-            continue
+        declaration_start, macros = _member_declaration_prefix(
+            text,
+            tokens,
+            forward,
+            member_start,
+            name_index,
+        )
         has_body = tokens[cursor].value == "{" and cursor in forward
         final_index = forward[cursor] if has_body else cursor
         members.append(
             {
                 "name": tokens[name_index].value,
                 "parameters": _raw(text, tokens, index + 1, close),
-                "signature": _raw(text, tokens, member_start, cursor),
-                "location": _location(tokens[member_start], tokens[final_index]),
+                "signature": _raw(text, tokens, declaration_start, cursor),
+                "location": _location(
+                    tokens[declaration_start], tokens[final_index]
+                ),
                 "has_body": has_body,
                 "is_constructor": tokens[name_index].value == class_name,
                 "body_range": (cursor + 1, final_index) if has_body else None,
+                "_macros": macros,
             }
         )
         index = final_index + 1

@@ -145,6 +145,12 @@ def public_owner(owner: dict[str, Any] | None) -> dict[str, Any] | None:
     return result
 
 
+def include_owner(owner: dict[str, Any] | None) -> dict[str, Any] | None:
+    if owner is None:
+        return None
+    return {"kind": owner["kind"]}
+
+
 def rooted_path(
     path: Path, project_root: Path, engine_root: Path | None
 ) -> dict[str, str]:
@@ -228,7 +234,7 @@ def resolve_include(
         return {
             "status": "resolved",
             "location": rooted_path(selected, project_root, engine_root),
-            "owner": public_owner(owner_for_path(selected, records)),
+            "owner": include_owner(owner_for_path(selected, records)),
             "method": sorted(methods),
         }
     if ordered:
@@ -237,7 +243,7 @@ def resolve_include(
             "candidates": [
                 {
                     "location": rooted_path(path, project_root, engine_root),
-                    "owner": public_owner(owner_for_path(path, records)),
+                    "owner": include_owner(owner_for_path(path, records)),
                 }
                 for path in ordered
             ],

@@ -17,7 +17,6 @@ from ue_project_tools.source_unit import (  # noqa: E402
     list_source_functions,
     list_source_includes,
     list_source_types,
-    list_source_variables,
 )
 
 
@@ -90,6 +89,7 @@ struct FThing
     UPROPERTY()
     int32 Count = 0;
 
+    UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category="Fixture")
     void Run(int32 Value) const;
 };
 """,
@@ -133,7 +133,10 @@ int32 MakeThing()
             result["context"]["project_discovery_method"],
             "nearest-source-ancestor",
         )
-        self.assertEqual(result["source_unit"]["header"]["status"], "selected")
+        self.assertEqual(
+            result["source_unit"]["header"]["path"],
+            "Source/Fixture/Public/Thing.h",
+        )
 
     def test_include_tool_reports_unique_provenance_without_recursion(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -148,18 +151,42 @@ int32 MakeThing()
         self.assertEqual(
             result["schema_version"], "ue-itps.source-includes.v1"
         )
+        self.assertNotIn(
+            "Thing.h",
+            {item["spelling"] for item in result["includes"]},
+        )
         external = next(
             item
             for item in result["includes"]
             if item["spelling"] == "ExternalThing.h"
         )
-        self.assertEqual(external["resolution"]["status"], "resolved")
+        self.assertEqual(
+            external["evidence"],
+            {"unit": "header", "line": 3},
+        )
+        self.assertNotIn("origin_unit", external)
+        self.assertNotIn("syntax", external)
+        self.assertNotIn("status", external["resolution"])
         self.assertEqual(
             external["resolution"]["owner"],
             {
                 "kind": "engine_plugin_module",
-                "module": "Demo",
-                "plugin": "Demo",
+            },
+        )
+        generated_statuses = {
+            item["spelling"]: item["resolution"].get("status")
+            for item in result["includes"]
+            if item["spelling"]
+            in {
+                "UE_INLINE_GENERATED_CPP_BY_NAME(Thing)",
+                "Thing.generated.h",
+            }
+        }
+        self.assertEqual(
+            generated_statuses,
+            {
+                "UE_INLINE_GENERATED_CPP_BY_NAME(Thing)": "generated_source",
+                "Thing.generated.h": "generated_header",
             },
         )
         self.assertNotIn("types", result)
@@ -176,43 +203,231 @@ int32 MakeThing()
         self.assertEqual(result["schema_version"], "ue-itps.source-types.v1")
         type_fact = next(item for item in result["types"] if item["name"] == "FThing")
         self.assertEqual(type_fact["kind"], "struct")
-        self.assertIn("Count", type_fact["member_variables"])
-        self.assertIn("Run", type_fact["member_functions"])
-        self.assertIn(
-            "USTRUCT", [item["name"] for item in result["type_macros"]]
+        self.assertNotIn("member_variables", type_fact)
+        self.assertNotIn("member_functions", type_fact)
+        self.assertNotIn("type_macros", result)
+        self.assertEqual(
+            type_fact["macros"],
+            ["USTRUCT(BlueprintType)", "GENERATED_BODY()"],
         )
+        variables = type_fact["member_details"]["variables"]
+        functions = type_fact["member_details"]["functions"]
+        self.assertEqual([item["name"] for item in variables], ["Count"])
+        self.assertEqual(variables[0]["macros"], ["UPROPERTY()"])
+        self.assertEqual(variables[0]["evidence"]["unit"], "header")
+        self.assertNotIn("root", variables[0]["evidence"])
+        self.assertNotIn("path", variables[0]["evidence"])
+        self.assertEqual([item["name"] for item in functions], ["Run"])
+        self.assertEqual(
+            functions[0]["macros"],
+            [
+                "UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, "
+                'Category="Fixture")'
+            ],
+        )
+        self.assertEqual(functions[0]["evidence"]["unit"], "header")
+        self.assertEqual(type_fact["evidence"]["unit"], "header")
+        self.assertEqual(type_fact["evidence"]["line"], 8)
+        self.assertNotIn("root", type_fact["evidence"])
+        self.assertNotIn("path", type_fact["evidence"])
         self.assertNotIn("summary", type_fact)
 
-    def test_variable_tool_separates_scopes_and_preserves_initializers(self) -> None:
+    def test_type_tool_attaches_reflection_macros_without_polluting_declarations(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
-            _, engine_root, source, _ = self.write_fixture(
+            _, engine_root, source, header = self.write_fixture(
                 Path(temporary_directory)
             )
-            result = list_source_variables(
+            header.write_text(
+                """
+#pragma once
+UCLASS()
+class UReflectedFixture
+{
+    GENERATED_BODY()
+
+public:
+    UReflectedFixture();
+
+    UFUNCTION(BlueprintCallable, Category = "Fixture")
+    void Run();
+
+private:
+    UPROPERTY(EditAnywhere)
+    int32 Count = 0;
+};
+""",
+                encoding="utf-8",
+            )
+            source.write_text('#include "Thing.h"\n', encoding="utf-8")
+
+            result = list_source_types(
                 source, engine_override=engine_root
             )
 
-        self.assert_common_context(result)
+        reflected = next(
+            item
+            for item in result["types"]
+            if item["name"] == "UReflectedFixture"
+        )
+        variables = reflected["member_details"]["variables"]
+        functions = reflected["member_details"]["functions"]
         self.assertEqual(
-            result["schema_version"], "ue-itps.source-variables.v1"
+            reflected["macros"], ["UCLASS()", "GENERATED_BODY()"]
         )
-        indexed = {
-            (item["scope"], item["name"]): item
-            for item in result["variables"]
-        }
-        self.assertEqual(indexed[("file", "GCount")]["initializer"], "1")
-        self.assertEqual(indexed[("member", "Count")]["initializer"], "0")
         self.assertEqual(
-            indexed[("parameter", "Value")]["callable"]["owner"], "FThing"
+            reflected["evidence"],
+            {"unit": "header", "line": 3, "end_line": 17},
         )
-        self.assertIn(("local", "LocalValue"), indexed)
         self.assertEqual(
-            indexed[("local", "LocalValue")]["initializer"], "Value"
+            [(item["name"], item["type_expression"]) for item in variables],
+            [("Count", "int32")],
         )
-        self.assertIn(
-            "UPROPERTY", [item["name"] for item in result["variable_macros"]]
+        self.assertEqual(variables[0]["macros"], ["UPROPERTY(EditAnywhere)"])
+        self.assertEqual(
+            [(item["name"], item["signature"]) for item in functions],
+            [
+                ("UReflectedFixture", "UReflectedFixture()"),
+                ("Run", "void Run()"),
+            ],
         )
-        self.assertNotIn(("file", "UForward"), indexed)
+        self.assertEqual(
+            functions[1]["macros"],
+            ['UFUNCTION(BlueprintCallable, Category = "Fixture")'],
+        )
+        self.assertEqual(result["validation"]["status"], "ok")
+
+    def test_type_tool_attaches_uenum_and_uinterface_macros(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            _, engine_root, source, header = self.write_fixture(
+                Path(temporary_directory)
+            )
+            header.write_text(
+                """
+#pragma once
+UENUM(BlueprintType)
+enum class EFixtureMode : uint8
+{
+    First,
+    Second,
+};
+
+UINTERFACE(MinimalAPI)
+class UFixtureInterface : public UInterface
+{
+    GENERATED_BODY()
+};
+""",
+                encoding="utf-8",
+            )
+            source.write_text('#include "Thing.h"\n', encoding="utf-8")
+
+            result = list_source_types(
+                source, engine_override=engine_root
+            )
+
+        enum_type = next(
+            item
+            for item in result["types"]
+            if item["name"] == "EFixtureMode"
+        )
+        interface_type = next(
+            item
+            for item in result["types"]
+            if item["name"] == "UFixtureInterface"
+        )
+        self.assertEqual(enum_type["kind"], "enum")
+        self.assertTrue(enum_type["scoped"])
+        self.assertEqual(enum_type["macros"], ["UENUM(BlueprintType)"])
+        self.assertEqual(
+            enum_type["evidence"],
+            {"unit": "header", "line": 3, "end_line": 8},
+        )
+        self.assertEqual(interface_type["kind"], "class")
+        self.assertEqual(interface_type["base_types"], ["UInterface"])
+        self.assertEqual(
+            interface_type["macros"],
+            ["UINTERFACE(MinimalAPI)", "GENERATED_BODY()"],
+        )
+        self.assertEqual(
+            interface_type["evidence"],
+            {"unit": "header", "line": 10, "end_line": 14},
+        )
+        self.assertEqual(result["validation"]["status"], "ok")
+
+    def test_type_tool_attaches_multiline_macros_inside_if_blocks(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            _, engine_root, source, header = self.write_fixture(
+                Path(temporary_directory)
+            )
+            header.write_text(
+                """
+#pragma once
+#if WITH_EDITOR
+UCLASS(
+    BlueprintType,
+    meta=(DisplayName="Conditional Fixture")
+)
+class UConditionalFixture
+{
+    GENERATED_BODY()
+
+#if WITH_EDITORONLY_DATA
+    UPROPERTY(
+        EditAnywhere,
+        Category = "Fixture"
+    )
+    int32 Count = 0;
+#endif
+
+#if WITH_EDITOR
+    UFUNCTION(
+        BlueprintCallable,
+        Category = "Fixture"
+    )
+    void Run();
+#endif
+};
+#endif
+""",
+                encoding="utf-8",
+            )
+            source.write_text('#include "Thing.h"\n', encoding="utf-8")
+
+            result = list_source_types(
+                source, engine_override=engine_root
+            )
+
+        conditional = next(
+            item
+            for item in result["types"]
+            if item["name"] == "UConditionalFixture"
+        )
+        variables = conditional["member_details"]["variables"]
+        functions = conditional["member_details"]["functions"]
+        self.assertEqual(
+            conditional["macros"],
+            [
+                'UCLASS( BlueprintType, meta=(DisplayName="Conditional '
+                'Fixture") )',
+                "GENERATED_BODY()",
+            ],
+        )
+        self.assertEqual(conditional["evidence"]["line"], 4)
+        self.assertEqual([item["name"] for item in variables], ["Count"])
+        self.assertEqual(
+            variables[0]["macros"],
+            ['UPROPERTY( EditAnywhere, Category = "Fixture" )'],
+        )
+        self.assertEqual([item["name"] for item in functions], ["Run"])
+        self.assertEqual(
+            functions[0]["macros"],
+            ['UFUNCTION( BlueprintCallable, Category = "Fixture" )'],
+        )
+        self.assertEqual(result["validation"]["status"], "ok")
 
     def test_function_index_and_selected_function_detail_stay_separate(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -225,8 +440,6 @@ int32 MakeThing()
             detail = inspect_source_function(
                 source,
                 "Run",
-                owner="FThing",
-                parameters="int32 Value",
                 engine_override=engine_root,
             )
 
@@ -245,16 +458,21 @@ int32 MakeThing()
         self.assertEqual(
             detail["schema_version"], "ue-itps.source-function.v1"
         )
-        self.assertEqual(detail["function"]["name"], "Run")
-        invocation = next(
-            item
-            for item in detail["operations"]
-            if item.get("callee") == "ExternalCall"
+        self.assertEqual(detail["selection"], {"name": "Run"})
+        self.assertEqual(detail["match_count"], 1)
+        match = detail["matches"][0]
+        self.assertEqual(match["function"]["name"], "Run")
+        self.assertNotIn("function_id", match["function"])
+        self.assertNotIn("parameter_signature", match["function"])
+        self.assertNotIn("evidence", match["function"])
+        self.assertEqual(
+            list(match["relation"]),
+            ["status", "declarations", "definitions"],
         )
-        self.assertEqual(invocation["callable"]["owner"], "FThing")
-        self.assertNotIn(
-            "construction", [item["kind"] for item in detail["operations"]]
-        )
+        self.assertNotIn("operations", match)
+        self.assertNotIn("body", match)
+        self.assertEqual(match["external_types"], [])
+        self.assertEqual(match["external_methods"], [])
 
     def test_callable_template_member_is_a_variable_not_a_void_function(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -277,9 +495,6 @@ struct FCallableFixture
             )
 
             types = list_source_types(source, engine_override=engine_root)
-            variables = list_source_variables(
-                source, engine_override=engine_root
-            )
             functions = list_source_functions(
                 source, engine_override=engine_root
             )
@@ -290,37 +505,40 @@ struct FCallableFixture
             if item["name"] == "FCallableFixture"
         )
         self.assertEqual(
-            type_fact["member_variables"],
+            [
+                item["name"]
+                for item in type_fact["member_details"]["variables"]
+            ],
             ["JobFunc", "Callback", "MemberCallback"],
         )
-        self.assertEqual(type_fact["member_functions"], ["Run"])
-        details = {
-            (item["kind"], item["name"]): item
-            for item in type_fact["member_details"]
+        self.assertEqual(
+            [
+                item["name"]
+                for item in type_fact["member_details"]["functions"]
+            ],
+            ["Run"],
+        )
+        variable_details = {
+            item["name"]: item
+            for item in type_fact["member_details"]["variables"]
+        }
+        function_details = {
+            item["name"]: item
+            for item in type_fact["member_details"]["functions"]
         }
         self.assertEqual(
-            details[("variable", "JobFunc")]["evidence"]["line"], 6
+            variable_details["JobFunc"]["evidence"]["line"], 6
         )
         self.assertEqual(
-            details[("function", "Run")]["evidence"]["line"], 9
-        )
-        self.assertEqual(
-            {
-                item["name"]
-                for item in variables["variables"]
-                if item["scope"] == "member"
-                and item["owner"] == "FCallableFixture"
-            },
-            {"Callback", "JobFunc", "MemberCallback"},
+            function_details["Run"]["evidence"]["line"], 9
         )
         self.assertNotIn(
             "void", {item["name"] for item in functions["functions"]}
         )
         self.assertEqual(types["validation"]["status"], "ok")
-        self.assertEqual(variables["validation"]["status"], "ok")
         self.assertEqual(functions["validation"]["status"], "ok")
 
-    def test_unresolved_declaration_is_reported_instead_of_silently_guessed(self) -> None:
+    def test_unresolved_declaration_is_reported_by_remaining_indexes(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             _, engine_root, source, header = self.write_fixture(
                 Path(temporary_directory)
@@ -336,26 +554,11 @@ struct FAmbiguous
                 encoding="utf-8",
             )
 
-            result = list_source_variables(
-                source, engine_override=engine_root
-            )
             types = list_source_types(source, engine_override=engine_root)
             functions = list_source_functions(
                 source, engine_override=engine_root
             )
 
-        self.assertEqual(result["validation"]["status"], "warning")
-        self.assertFalse(
-            [
-                item
-                for item in result["variables"]
-                if item.get("owner") == "FAmbiguous"
-            ]
-        )
-        unresolved = result["unresolved_declarations"]
-        self.assertEqual(len(unresolved), 1)
-        self.assertEqual(unresolved[0]["reason"], "multiple_declarators")
-        self.assertEqual(unresolved[0]["scope"], "member")
         self.assertEqual(types["validation"]["status"], "warning")
         self.assertEqual(
             types["unresolved_declarations"][0]["reason"],
@@ -380,8 +583,12 @@ struct FRelations
     void Matched() const;
     void Inline() const {}
     void DeclarationOnly();
-    void Overloaded() {}
-    void Overloaded() const {}
+    void Overloaded() { NonConstCall(); }
+    void Overloaded() const { ConstCall(); }
+};
+struct FOtherRelations
+{
+    void Overloaded();
 };
 """,
                 encoding="utf-8",
@@ -390,6 +597,7 @@ struct FRelations
                 """
 #include "Thing.h"
 void FRelations::Matched() const {}
+void FOtherRelations::Overloaded() { OtherCall(); }
 void SourceOnly() {}
 """,
                 encoding="utf-8",
@@ -408,13 +616,12 @@ void SourceOnly() {}
             )
             detail = inspect_source_function(
                 source,
-                function_id=inline["function_id"],
+                "Inline",
                 engine_override=engine_root,
             )
-            ambiguous = inspect_source_function(
+            overloaded_detail = inspect_source_function(
                 source,
                 "Overloaded",
-                owner="FRelations",
                 engine_override=engine_root,
             )
 
@@ -431,16 +638,36 @@ void SourceOnly() {}
             for item in first["functions"]
             if item["name"] == "Overloaded"
         ]
-        self.assertEqual(len(overloads), 2)
+        self.assertEqual(len(overloads), 3)
         self.assertEqual(
-            len({item["function_id"] for item in overloads}), 2
+            len({item["function_id"] for item in overloads}), 3
         )
-        self.assertEqual(detail["function_id"], inline["function_id"])
+        self.assertEqual(detail["match_count"], 1)
         self.assertEqual(
-            detail["function"]["function_id"], inline["function_id"]
+            detail["matches"][0]["function_id"], inline["function_id"]
         )
-        self.assertEqual(ambiguous["validation"]["status"], "error")
-        self.assertEqual(len(ambiguous["candidates"]), 2)
+        self.assertEqual(overloaded_detail["validation"]["status"], "ok")
+        self.assertEqual(overloaded_detail["match_count"], 3)
+        self.assertEqual(
+            [
+                (
+                    item["function"]["owner"],
+                    item["function"]["qualifiers"],
+                )
+                for item in overloaded_detail["matches"]
+            ],
+            [
+                ("FOtherRelations", []),
+                ("FRelations", []),
+                ("FRelations", ["const"]),
+            ],
+        )
+        other_match = overloaded_detail["matches"][0]
+        self.assertEqual(other_match["external_types"], [])
+        self.assertEqual(other_match["external_methods"], [])
+        self.assertTrue(
+            all("body" not in item for item in overloaded_detail["matches"])
+        )
 
     def test_qualified_calls_are_not_definitions_and_destructor_keeps_owner(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -487,7 +714,7 @@ void FScoped::Run()
             )
             fake_detail = inspect_source_function(
                 source,
-                function_id="method|FCommandLine|Get|()|",
+                "Get",
                 engine_override=engine_root,
             )
 
@@ -515,40 +742,6 @@ void FScoped::Run()
             fake_detail["validation"]["problems"][0]["code"],
             "function-not-found",
         )
-
-    def test_lambda_call_statements_do_not_produce_variable_warnings(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            _, engine_root, source, header = self.write_fixture(
-                Path(temporary_directory)
-            )
-            header.write_text(
-                """
-#pragma once
-struct FVariableExpressions
-{
-    void Run();
-};
-""",
-                encoding="utf-8",
-            )
-            source.write_text(
-                """
-#include "Thing.h"
-void FVariableExpressions::Run()
-{
-    Algo::SortBy(Items, [](const auto& Data) { return Data.Value; }, TGreater<>());
-    Entries.Sort([](const auto& A, const auto& B) { return A.Value < B.Value; });
-}
-""",
-                encoding="utf-8",
-            )
-
-            variables = list_source_variables(
-                source, engine_override=engine_root
-            )
-
-        self.assertEqual(variables["validation"]["status"], "ok")
-        self.assertFalse(variables["unresolved_declarations"])
 
     def test_elaborated_parameter_does_not_create_type_or_keyword_callable(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -605,7 +798,7 @@ bool FPacket::NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSucce
             )
             fake_detail = inspect_source_function(
                 source,
-                function_id="method|bOutSuccess|if|(bHasTimeStamp)|",
+                "if",
                 engine_override=engine_root,
             )
 
@@ -675,44 +868,17 @@ struct FInlineMembers
             item for item in types["types"] if item["name"] == "FInlineMembers"
         )
         self.assertEqual(types["validation"]["status"], "ok")
-        self.assertEqual(projected["member_variables"], ["First", "Last"])
-
-    def test_array_declaration_is_not_a_structured_binding(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            _, engine_root, source, _ = self.write_fixture(
-                Path(temporary_directory)
-            )
-            source.write_text(
-                """
-#include "Thing.h"
-void FThing::Run(int32 Value) const
-{
-    const FText Names[] = { FText(), FText() };
-    auto [First, Second] = Pair;
-}
-""",
-                encoding="utf-8",
-            )
-
-            variables = list_source_variables(
-                source, engine_override=engine_root
-            )
-
-        names = {
-            item["name"]
-            for item in variables["variables"]
-            if item["scope"] == "local"
-        }
-        self.assertIn("Names", names)
         self.assertEqual(
             [
-                item["reason"]
-                for item in variables["unresolved_declarations"]
+                item["name"]
+                for item in projected["member_details"]["variables"]
             ],
-            ["structured_binding"],
+            ["First", "Last"],
         )
 
-    def test_function_operations_report_hierarchy_roles_and_literals(self) -> None:
+    def test_reflected_class_closing_brace_is_not_an_unresolved_declaration(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             _, engine_root, source, header = self.write_fixture(
                 Path(temporary_directory)
@@ -720,9 +886,66 @@ void FThing::Run(int32 Value) const
             header.write_text(
                 """
 #pragma once
+USTRUCT()
+struct FPreviewSettings
+{
+    GENERATED_BODY()
+
+    int32 Count = 0;
+};
+
+UCLASS()
+class FIXTURE_API UFixtureNotify
+{
+    GENERATED_BODY()
+
+public:
+    UE_API UFixtureNotify();
+
+private:
+#if WITH_EDITORONLY_DATA
+    UPROPERTY()
+    FPreviewSettings PreviewSettings;
+#endif
+};
+""",
+                encoding="utf-8",
+            )
+            source.write_text('#include "Thing.h"\n', encoding="utf-8")
+
+            functions = list_source_functions(
+                source, engine_override=engine_root
+            )
+
+        self.assertEqual(functions["validation"]["status"], "ok")
+        self.assertFalse(functions["unresolved_declarations"])
+
+    def test_function_external_types_and_methods_use_local_syntax(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            _, engine_root, source, header = self.write_fixture(
+                Path(temporary_directory)
+            )
+            external_header = header.parent / "ExternalApi.h"
+            external_header.write_text(
+                "struct FExternalApi { // deliberately malformed and never read\n",
+                encoding="utf-8",
+            )
+            header.write_text(
+                """
+#pragma once
+struct FExternalApi;
+struct FLocalType;
+struct FMemberType;
+struct FSecondLocalType;
+template <typename T> class TWrapper;
+struct FUnusedType;
 struct FOperations
 {
-    void Run();
+    TWrapper<FExternalApi> UsedApi;
+    FUnusedType UnusedValue;
+    FMemberType Shadowed;
+    FMemberType LocalShadowed;
+    void Run(FLocalType Shadowed);
 };
 """,
                 encoding="utf-8",
@@ -730,14 +953,14 @@ struct FOperations
             source.write_text(
                 """
 #include "Thing.h"
-void FOperations::Run()
+#include "ExternalApi.h"
+void FOperations::Run(FLocalType Shadowed)
 {
-    if (Check(false))
-    {
-        Outer(Inner(0.0f), nullptr);
-        UE_LOG(LogTemp, Display, TEXT("done"));
-        FOperations();
-    }
+    FSecondLocalType LocalShadowed;
+    Shadowed->Call();
+    LocalShadowed->Ping();
+    UsedApi->Call<FExternalApi>();
+    Unknown->Missing();
 }
 """,
                 encoding="utf-8",
@@ -746,37 +969,32 @@ void FOperations::Run()
             result = inspect_source_function(
                 source,
                 "Run",
-                owner="FOperations",
                 engine_override=engine_root,
             )
 
-        operations = result["operations"]
-        check = next(item for item in operations if item.get("callee") == "Check")
-        outer = next(item for item in operations if item.get("callee") == "Outer")
-        inner = next(item for item in operations if item.get("callee") == "Inner")
-        log = next(item for item in operations if item.get("callee") == "UE_LOG")
-        construction = next(
-            item
-            for item in operations
-            if item.get("callee") == "FOperations"
-        )
-        self.assertEqual(check["expression_role"], "condition")
-        self.assertIsNone(outer["parent_operation_id"])
-        self.assertEqual(inner["parent_operation_id"], outer["operation_id"])
-        self.assertEqual(inner["depth"], outer["depth"] + 1)
+        self.assertEqual(result["match_count"], 1)
+        match = result["matches"][0]
+        self.assertNotIn("operations", match)
+        self.assertNotIn("body", match)
         self.assertEqual(
-            inner["arguments"][0]["evaluation"]["literal_values"], [0.0]
+            match["external_types"],
+            [
+                "FLocalType",
+                "FSecondLocalType",
+                "TWrapper<FExternalApi>",
+            ],
         )
         self.assertEqual(
-            check["arguments"][0]["evaluation"]["literal_values"], [False]
+            match["external_methods"],
+            [
+                "FLocalType->Call()",
+                "FSecondLocalType->Ping()",
+                "TWrapper<FExternalApi>->Call<FExternalApi>()",
+                "Unknown->Missing()",
+            ],
         )
-        self.assertEqual(
-            outer["arguments"][1]["evaluation"]["literal_values"], [None]
-        )
-        self.assertEqual(log["call_kind"], "known_macro")
-        self.assertEqual(construction["call_kind"], "construction_candidate")
 
-    def test_include_origin_unit_is_explicit(self) -> None:
+    def test_include_evidence_identifies_cpp_or_header(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             _, engine_root, source, _ = self.write_fixture(
                 Path(temporary_directory)
@@ -785,12 +1003,16 @@ void FOperations::Run()
                 source, engine_override=engine_root
             )
 
-        origins = {
-            item["spelling"]: item["origin_unit"]
+        evidence_units = {
+            item["spelling"]: item["evidence"]["unit"]
             for item in result["includes"]
         }
-        self.assertEqual(origins["Thing.h"], "source")
-        self.assertEqual(origins["ExternalThing.h"], "companion_header")
+        self.assertNotIn("Thing.h", evidence_units)
+        self.assertEqual(
+            evidence_units["UE_INLINE_GENERATED_CPP_BY_NAME(Thing)"],
+            "cpp",
+        )
+        self.assertEqual(evidence_units["ExternalThing.h"], "header")
 
     def test_missing_function_is_a_structured_cli_error(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -831,8 +1053,6 @@ void FOperations::Run()
         commands = {
             "ue_list_source_includes.py": [],
             "ue_list_source_types.py": [],
-            "ue_list_source_variables.py": [],
-            "ue_list_source_functions.py": [],
             "ue_inspect_source_function.py": [
                 "--function",
                 "Missing",
@@ -863,29 +1083,112 @@ void FOperations::Run()
                     "source-input-failure",
                 )
 
-    def test_header_selection_returns_ambiguity_without_reading_candidates(self) -> None:
+    def test_header_is_derived_without_include_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             project, engine_root, source, header = self.write_fixture(root)
-            module_root = project.parent / "Source" / "Fixture"
-            first = module_root / "Public" / "A" / "Thing.h"
-            second = module_root / "Public" / "B" / "Thing.h"
-            first.parent.mkdir(parents=True)
-            second.parent.mkdir(parents=True)
-            first.write_text("struct FFirst {", encoding="utf-8")
-            second.write_text("struct FSecond {", encoding="utf-8")
-            header.unlink()
             source.write_text(
-                '#include "A/Thing.h"\n#include "B/Thing.h"\nvoid Local() {}\n',
+                "void Local() {}\n",
                 encoding="utf-8",
             )
 
             result = list_source_types(source, engine_override=engine_root)
 
-        self.assertEqual(result["source_unit"]["header"]["status"], "ambiguous")
-        self.assertEqual(len(result["source_unit"]["header"]["candidates"]), 2)
+        header_fact = result["source_unit"]["header"]
+        self.assertEqual(
+            header_fact["path"],
+            "Source/Fixture/Public/Thing.h",
+        )
+        self.assertEqual(result["validation"]["status"], "ok")
+        self.assertIn("FThing", {item["name"] for item in result["types"]})
+
+    def test_multiple_automatic_headers_are_reported_in_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            _, engine_root, source, header = self.write_fixture(
+                Path(temporary_directory)
+            )
+            header.with_suffix(".hpp").write_text(
+                "struct FAlternateThing {};",
+                encoding="utf-8",
+            )
+
+            result = list_source_types(source, engine_override=engine_root)
+
+        self.assertIsNone(result["source_unit"]["header"])
+        problem = next(
+            problem
+            for problem in result["validation"]["problems"]
+            if problem["code"] == "source-unit-header-ambiguous"
+        )
+        self.assertEqual(len(problem["candidates"]), 2)
         self.assertEqual(result["validation"]["status"], "warning")
-        self.assertFalse(result["types"])
+
+    def test_unresolved_includes_move_to_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            project, engine_root, source, _ = self.write_fixture(
+                Path(temporary_directory)
+            )
+            project_duplicate = (
+                project.parent
+                / "Source"
+                / "Fixture"
+                / "Public"
+                / "Duplicate.h"
+            )
+            engine_duplicate = (
+                engine_root
+                / "Engine"
+                / "Plugins"
+                / "Demo"
+                / "Source"
+                / "Demo"
+                / "Public"
+                / "Duplicate.h"
+            )
+            project_duplicate.write_text("", encoding="utf-8")
+            engine_duplicate.write_text("", encoding="utf-8")
+            source.write_text(
+                """
+#include "Thing.h"
+#include "Duplicate.h"
+#include "Missing.h"
+#include UNKNOWN_HEADER_MACRO(Thing)
+#include <vector>
+""",
+                encoding="utf-8",
+            )
+
+            result = list_source_includes(
+                source, engine_override=engine_root
+            )
+
+        spellings = {item["spelling"] for item in result["includes"]}
+        self.assertNotIn("Duplicate.h", spellings)
+        self.assertNotIn("Missing.h", spellings)
+        self.assertNotIn("UNKNOWN_HEADER_MACRO(Thing)", spellings)
+        system_include = next(
+            item for item in result["includes"] if item["spelling"] == "vector"
+        )
+        self.assertEqual(
+            system_include["resolution"]["status"],
+            "system_or_sdk_unresolved",
+        )
+        problems = {
+            problem["code"]: problem
+            for problem in result["validation"]["problems"]
+        }
+        self.assertIn("source-include-ambiguous", problems)
+        self.assertIn("source-include-not-found", problems)
+        self.assertIn("source-include-macro-unresolved", problems)
+        ambiguous_candidates = problems[
+            "source-include-ambiguous"
+        ]["include"]["resolution"]["candidates"]
+        self.assertTrue(
+            all(
+                set(candidate["owner"]) == {"kind"}
+                for candidate in ambiguous_candidates
+            )
+        )
 
     def test_project_discovery_rejects_nearest_ancestor_ambiguity(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

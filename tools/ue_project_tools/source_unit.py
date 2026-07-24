@@ -17,22 +17,17 @@ from .source_includes import (
     resolve_include,
     rooted_path,
 )
-from .source_controls import _conditions_for
-from .source_flow import condition_spans
-from .source_operations import parse_operations
+from .source_controls import _member_chain_start
 from .source_declarations import (
     _FORBIDDEN_CALLABLE_NAMES,
     _TYPE_KEYWORDS,
     _class_field_names,
     _classify_declaration,
     _declaration_assignment,
-    _declaration_name,
 )
 from .source_parser import parse_cpp_file
-from .source_preprocessor import preprocessor_conditions
 from .source_tokens import (
     Token,
-    _evaluation,
     _location,
     _raw,
     _raw_from_values,
@@ -42,7 +37,6 @@ from .source_tokens import (
 )
 
 
-_HEADER_SUFFIXES = {".h", ".hpp"}
 _SOURCE_SUFFIXES = {".cpp", ".cc"}
 _SOURCE_MACROS = {
     "UCLASS",
@@ -74,6 +68,50 @@ def _validated_file(path: Path, suffixes: set[str], label: str) -> Path:
     if not resolved.is_file():
         raise ValueError(f"{label} is not a file: {resolved}")
     return resolved
+
+
+def _automatic_headers(
+    source: Path,
+    source_owner: dict[str, Any] | None,
+) -> list[Path]:
+    candidate_bases = [source.parent / source.stem]
+    if source_owner is not None:
+        module_root = Path(source_owner["root"]).resolve()
+        try:
+            relative = source.relative_to(module_root)
+        except ValueError:
+            relative = None
+        if relative is not None:
+            relative_base = relative.parent / relative.stem
+            if relative.parts and relative.parts[0].casefold() == "private":
+                tail = Path(*relative_base.parts[1:])
+                candidate_bases.extend(
+                    [module_root / "Public" / tail, module_root / "Classes" / tail]
+                )
+            elif (
+                relative.parts
+                and relative.parts[0].casefold()
+                not in {"public", "classes"}
+            ):
+                candidate_bases.extend(
+                    [
+                        module_root / "Public" / relative_base,
+                        module_root / "Classes" / relative_base,
+                    ]
+                )
+
+    seen: set[str] = set()
+    results: list[Path] = []
+    for base in candidate_bases:
+        for suffix in (".h", ".hpp"):
+            candidate = (base.parent / f"{base.name}{suffix}").resolve()
+            key = normalized(candidate).casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            if candidate.is_file():
+                results.append(candidate)
+    return results
 
 
 def _file_evidence(
@@ -125,6 +163,10 @@ def _source_macros(parsed: dict[str, Any], path: Path, project_root: Path, engin
             "evidence": _file_evidence(
                 path, token.line, project_root, engine_root
             ),
+            "_expression": token.value,
+            "_path": path,
+            "_token_index": index,
+            "_close_index": index,
         }
         if index + 1 < len(tokens) and tokens[index + 1].value == "(" and index + 1 in forward:
             close = forward[index + 1]
@@ -132,6 +174,8 @@ def _source_macros(parsed: dict[str, Any], path: Path, project_root: Path, engin
                 _raw(text, tokens, start, end)
                 for start, end in _split_arguments(tokens, index + 2, close)
             ]
+            item["_expression"] = _raw(text, tokens, index, close + 1)
+            item["_close_index"] = close
         macros.append(item)
     return macros
 
@@ -455,7 +499,288 @@ def _public_callable(part: dict[str, Any]) -> dict[str, Any]:
         key: value
         for key, value in part.items()
         if not key.startswith("_")
+        and key not in {"function_id", "parameter_signature", "evidence"}
     }
+
+
+def _public_relation(relation: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: relation[key]
+        for key in ("status", "declarations", "definitions")
+    }
+
+
+def _primary_type_name(type_expression: str) -> str | None:
+    identifiers = [
+        token.value
+        for token in lex_source(type_expression)
+        if token.kind == "identifier"
+        and token.value
+        not in {
+            "auto",
+            "class",
+            "const",
+            "enum",
+            "struct",
+            "typename",
+            "volatile",
+        }
+    ]
+    return identifiers[0] if identifiers else None
+
+
+def _canonical_type_expression(type_expression: str) -> str:
+    tokens = [
+        token
+        for token in lex_source(type_expression)
+        if token.value
+        not in {
+            "class",
+            "const",
+            "struct",
+            "typename",
+            "volatile",
+            "*",
+            "&",
+            "&&",
+        }
+    ]
+    rendered = _raw_from_values(tokens)
+    rendered = re.sub(r"\s*<\s*", "<", rendered)
+    rendered = re.sub(r"\s*>\s*", ">", rendered)
+    rendered = re.sub(r"\s*,\s*", ", ", rendered)
+    return rendered
+
+
+def _parameter_symbol_types(part: dict[str, Any]) -> dict[str, str]:
+    tokens = lex_source(part["parameters"])
+    forward, _ = token_pairs(tokens)
+    symbols: dict[str, str] = {}
+    for start, end in _split_arguments(tokens, 0, len(tokens)):
+        classification = _classify_declaration(
+            tokens, forward, start, end
+        )
+        if classification["kind"] != "variable":
+            continue
+        name_index = int(classification["name_index"])
+        type_expression = _raw_from_values(tokens[start:name_index])
+        canonical_type = _canonical_type_expression(type_expression)
+        if canonical_type:
+            symbols[str(classification["name"])] = canonical_type
+    return symbols
+
+
+def _function_symbol_types(
+    part: dict[str, Any],
+    loaded: dict[str, Any],
+) -> tuple[dict[str, str], set[str]]:
+    symbols = _parameter_symbol_types(part)
+    type_names = set(symbols.values())
+    variables, _ = _declaration_variables(
+        loaded["parsed_by_path"][part["_path"]],
+        part["_path"],
+        part["_body_range"][0],
+        part["_body_range"][1],
+        scope="local",
+        owner=part["owner"],
+        project_root=loaded["project_root"],
+        engine_root=loaded["engine_root"],
+    )
+    shadowed_member_names = {
+        *symbols,
+        *(variable["name"] for variable in variables),
+    }
+    parsed = loaded["parsed_by_path"][part["_path"]]
+    tokens: list[Token] = parsed["tokens"]
+    start, end = part["_body_range"]
+    referenced_names = {
+        token.value
+        for token in tokens[start:end]
+        if token.kind == "identifier"
+    }
+    variables.extend(
+        item
+        for item in _source_declaration_facts(loaded)[0]
+        if item["scope"] == "member"
+        and item.get("owner") == part["owner"]
+        and item["name"] in referenced_names
+        and item["name"] not in shadowed_member_names
+    )
+    for variable in variables:
+        if any(
+            token.value in {".", "->"}
+            for token in lex_source(variable["type_expression"])
+        ):
+            continue
+        canonical_type = _canonical_type_expression(
+            variable["type_expression"]
+        )
+        if not canonical_type:
+            continue
+        symbols[variable["name"]] = canonical_type
+        outer_type = _primary_type_name(canonical_type)
+        if (
+            outer_type
+            and outer_type[0].isupper()
+            and not outer_type.isupper()
+        ):
+            type_names.add(canonical_type)
+    for semicolon in range(start, end):
+        if tokens[semicolon].value != ";":
+            continue
+        statement_start = _statement_start(tokens, start, semicolon)
+        classification = _classify_declaration(
+            tokens,
+            parsed["forward"],
+            statement_start,
+            semicolon,
+        )
+        if classification["kind"] != "callable":
+            continue
+        name_index = int(classification["name_index"])
+        if (
+            name_index <= statement_start
+            or name_index + 1 >= semicolon
+            or tokens[name_index + 1].value not in {"(", "{"}
+            or tokens[name_index - 1].value in {".", "->", "::"}
+            or any(
+                tokens[index].value in {".", "->"}
+                for index in range(statement_start, name_index)
+            )
+        ):
+            continue
+        canonical_type = _canonical_type_expression(
+            _raw_from_values(tokens[statement_start:name_index])
+        )
+        outer_type = _primary_type_name(canonical_type)
+        if (
+            not outer_type
+            or not outer_type[0].isupper()
+            or outer_type.isupper()
+        ):
+            continue
+        symbols[str(classification["name"])] = canonical_type
+        type_names.add(canonical_type)
+    return symbols, type_names
+
+
+def _call_name_before_open(
+    tokens: list[Token],
+    open_index: int,
+    lower: int,
+) -> int | None:
+    candidate = open_index - 1
+    if candidate >= lower and tokens[candidate].kind == "identifier":
+        return candidate
+    if candidate < lower or tokens[candidate].value not in {">", ">>"}:
+        return None
+    depth = 0
+    for cursor in range(candidate, lower - 1, -1):
+        value = tokens[cursor].value
+        if value == ">":
+            depth += 1
+        elif value == ">>":
+            depth += 2
+        elif value == "<":
+            depth -= 1
+            if depth == 0:
+                name_index = cursor - 1
+                if (
+                    name_index >= lower
+                    and tokens[name_index].kind == "identifier"
+                ):
+                    return name_index
+                return None
+    return None
+
+
+def _external_methods(
+    part: dict[str, Any],
+    loaded: dict[str, Any],
+    symbol_types: dict[str, str],
+) -> list[str]:
+    parsed = loaded["parsed_by_path"][part["_path"]]
+    text = parsed["text"]
+    tokens: list[Token] = parsed["tokens"]
+    forward: dict[int, int] = parsed["forward"]
+    reverse: dict[int, int] = parsed["reverse"]
+    start, end = part["_body_range"]
+    local_methods = {
+        item["name"]
+        for item in loaded["parts"]
+        if item["owner"] == part["owner"]
+    }
+    results: list[str] = []
+    for open_index in range(start, end):
+        if tokens[open_index].value != "(" or open_index not in forward:
+            continue
+        close_index = forward[open_index]
+        if close_index >= end:
+            continue
+        name_index = _call_name_before_open(tokens, open_index, start)
+        if name_index is None or name_index - 1 < start:
+            continue
+        operator = tokens[name_index - 1].value
+        if operator not in {".", "->", "::"}:
+            continue
+        callee_start = _member_chain_start(
+            tokens, reverse, name_index, start
+        )
+        receiver_tokens = tokens[callee_start : name_index - 1]
+        receiver_identifiers = [
+            token.value
+            for token in receiver_tokens
+            if token.kind == "identifier"
+        ]
+        owner_type: str | None = None
+        if operator == "::" and name_index >= 2:
+            owner_type = tokens[name_index - 2].value
+        elif receiver_identifiers:
+            receiver_root = receiver_identifiers[0]
+            owner_type = (
+                part["owner"]
+                if receiver_root == "this"
+                else symbol_types.get(receiver_root)
+            )
+        method_name = tokens[name_index].value
+        if owner_type == part["owner"] and method_name in local_methods:
+            continue
+        original_expression = _raw(
+            text, tokens, callee_start, close_index + 1
+        )
+        if owner_type is None:
+            results.append(original_expression)
+            continue
+        method_expression = _raw(
+            text, tokens, name_index, close_index + 1
+        )
+        results.append(f"{owner_type}{operator}{method_expression}")
+    return list(dict.fromkeys(results))
+
+
+def _external_type_facts(
+    part: dict[str, Any],
+    loaded: dict[str, Any],
+    candidate_names: set[str],
+) -> list[str]:
+    local_types = {
+        class_item["name"]
+        for _, source_parsed in loaded["parsed_files"]
+        for class_item in source_parsed["classes"]
+    }
+    return sorted(
+        {
+            type_expression
+            for type_expression in candidate_names
+            if (
+                (outer_type := _primary_type_name(type_expression))
+                and outer_type not in local_types
+                and outer_type[0].isupper()
+                and not outer_type.isupper()
+            )
+        },
+        key=str.casefold,
+    )
 
 
 def _relations(parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -504,314 +829,6 @@ def _relations(parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return relations
 
 
-_KNOWN_CALL_MACROS = {
-    "TEXT",
-    "UE_CLOG",
-    "UE_LOG",
-    "UE_LOGFMT",
-}
-
-
-def _scalar_literal(expression: str) -> tuple[bool, Any]:
-    tokens = lex_source(expression.strip())
-    sign = 1
-    if len(tokens) == 2 and tokens[0].value in {"+", "-"}:
-        sign = -1 if tokens[0].value == "-" else 1
-        tokens = tokens[1:]
-    if len(tokens) != 1:
-        return False, None
-    token = tokens[0]
-    if token.kind == "identifier":
-        if token.value == "true":
-            return True, True
-        if token.value == "false":
-            return True, False
-        if token.value in {"nullptr", "null", "NULL"}:
-            return True, None
-        return False, None
-    if token.kind != "number":
-        return False, None
-    raw = re.sub(r"[uUlLfF]+$", "", token.value)
-    try:
-        if raw.casefold().startswith(("0x", "0b", "0o")):
-            return True, sign * int(raw, 0)
-        if any(marker in raw.casefold() for marker in (".", "e")):
-            return True, sign * float(raw)
-        return True, sign * int(raw, 0)
-    except ValueError:
-        return False, None
-
-
-def _source_evaluation(
-    expression: str, evaluation: dict[str, Any]
-) -> dict[str, Any]:
-    if evaluation.get("status") != "unresolved":
-        return evaluation
-    matched, value = _scalar_literal(expression)
-    if not matched:
-        return evaluation
-    return {"status": "literal", "literal_values": [value]}
-
-
-def _enhance_operation_evaluations(operation: dict[str, Any]) -> None:
-    for argument in operation.get("arguments", []):
-        argument["evaluation"] = _source_evaluation(
-            argument["expression"], argument["evaluation"]
-        )
-    if "value_expression" in operation and "evaluation" in operation:
-        operation["evaluation"] = _source_evaluation(
-            operation["value_expression"], operation["evaluation"]
-        )
-    elif operation.get("kind") == "return" and "evaluation" in operation:
-        operation["evaluation"] = _source_evaluation(
-            operation["expression"], operation["evaluation"]
-        )
-
-
-def _call_kind(operation: dict[str, Any], owner: str | None) -> str:
-    callee = operation.get("callee")
-    if not isinstance(callee, str):
-        return ""
-    if callee in _KNOWN_CALL_MACROS:
-        return "known_macro"
-    if (
-        "->" not in callee
-        and "." not in callee
-        and "::" not in callee
-        and (
-            callee == owner
-            or re.fullmatch(r"(?:F|U|A|E|I|T)[A-Z][A-Za-z0-9_]*", callee)
-        )
-    ):
-        return "construction_candidate"
-    return "call"
-
-
-def _operation_hierarchy(
-    operations: list[dict[str, Any]],
-    condition_expressions: list[tuple[int, str]],
-) -> None:
-    for index, operation in enumerate(operations, start=1):
-        operation["operation_id"] = f"op-{index:04d}"
-        operation["parent_operation_id"] = None
-        operation["depth"] = 0
-        operation["expression_role"] = "statement"
-
-    for child_index, child in enumerate(operations):
-        child_expression = child.get("expression")
-        if not isinstance(child_expression, str) or not child_expression:
-            continue
-        candidates: list[tuple[int, int]] = []
-        for parent_index, parent in enumerate(operations):
-            if parent_index == child_index:
-                continue
-            parent_expression = parent.get("expression")
-            if (
-                not isinstance(parent_expression, str)
-                or parent_expression == child_expression
-                or child_expression not in parent_expression
-                or parent["evidence"]["path"] != child["evidence"]["path"]
-                or parent["evidence"]["line"] != child["evidence"]["line"]
-            ):
-                continue
-            candidates.append((len(parent_expression), parent_index))
-        if candidates:
-            _, parent_index = min(candidates)
-            parent = operations[parent_index]
-            child["parent_operation_id"] = parent["operation_id"]
-            if parent.get("kind") == "invocation":
-                child["expression_role"] = "argument"
-            elif parent.get("kind") == "assignment":
-                child["expression_role"] = "value"
-            elif parent.get("kind") == "return":
-                child["expression_role"] = "return_value"
-
-    by_id = {item["operation_id"]: item for item in operations}
-
-    def depth(item: dict[str, Any], seen: set[str]) -> int:
-        parent_id = item["parent_operation_id"]
-        if parent_id is None or parent_id in seen or parent_id not in by_id:
-            return 0
-        return 1 + depth(by_id[parent_id], {*seen, parent_id})
-
-    for operation in operations:
-        operation["depth"] = depth(operation, {operation["operation_id"]})
-        expression = operation.get("expression")
-        line = operation["evidence"]["line"]
-        if isinstance(expression, str) and any(
-            condition_line == line and expression in condition_expression
-            for condition_line, condition_expression in condition_expressions
-        ):
-            operation["expression_role"] = "condition"
-
-
-def _operations(
-    parts: list[dict[str, Any]], parsed_by_path: dict[Path, dict[str, Any]]
-) -> list[dict[str, Any]]:
-    results: list[dict[str, Any]] = []
-    for part in parts:
-        body_range = part["_body_range"]
-        if body_range is None:
-            continue
-        parsed = parsed_by_path[part["_path"]]
-        parsed_operations = parse_operations(
-            parsed["text"],
-            parsed["tokens"],
-            parsed["forward"],
-            parsed["reverse"],
-            body_range[0],
-            body_range[1],
-            include_control_metadata=True,
-        )
-        parsed_operations.extend(
-            _return_and_construction_operations(parsed, body_range)
-        )
-        condition_expressions = [
-            (
-                int(span["start_line"]),
-                str(span["condition"]["expression"]),
-            )
-            for span in condition_spans(
-                parsed["tokens"],
-                parsed["forward"],
-                body_range[0],
-                body_range[1],
-            )
-        ]
-        public_operations: list[dict[str, Any]] = []
-        for operation in parsed_operations:
-            public_operation = dict(operation)
-            _enhance_operation_evaluations(public_operation)
-            call_kind = _call_kind(public_operation, part["owner"])
-            if call_kind:
-                public_operation["call_kind"] = call_kind
-            public_operation["callable"] = {
-                "function_id": part["function_id"],
-                "kind": part["kind"],
-                "owner": part["owner"],
-                "name": part["name"],
-                "parameter_signature": part["parameter_signature"],
-                "identity_qualifiers": list(part["_identity"][4]),
-            }
-            location = public_operation.pop("location")
-            public_operation["evidence"] = {
-                **{
-                    key: value
-                    for key, value in part["evidence"].items()
-                    if key in {"root", "path"}
-                },
-                **location,
-            }
-            public_operations.append(public_operation)
-        public_operations.sort(
-            key=lambda item: (
-                item["evidence"]["root"],
-                item["evidence"]["path"].casefold(),
-                item["evidence"]["line"],
-                item["kind"],
-            )
-        )
-        _operation_hierarchy(public_operations, condition_expressions)
-        results.extend(public_operations)
-    return sorted(
-        results,
-        key=lambda item: (
-            item["evidence"]["root"],
-            item["evidence"]["path"].casefold(),
-            item["evidence"]["line"],
-            item["kind"],
-        ),
-    )
-
-
-def _statement_end(tokens: list[Token], start: int, end: int) -> int:
-    depth = 0
-    for index in range(start, end):
-        value = tokens[index].value
-        if value in {"(", "[", "{"}:
-            depth += 1
-        elif value in {")", "]", "}"}:
-            depth = max(0, depth - 1)
-        elif value == ";" and depth == 0:
-            return index
-    return end
-
-
-def _return_and_construction_operations(
-    parsed: dict[str, Any], body_range: tuple[int, int]
-) -> list[dict[str, Any]]:
-    text = parsed["text"]
-    tokens: list[Token] = parsed["tokens"]
-    forward: dict[int, int] = parsed["forward"]
-    start, end = body_range
-    spans = condition_spans(tokens, forward, start, end)
-    pp_context = preprocessor_conditions(text)
-    results: list[dict[str, Any]] = []
-
-    for index in range(start, end):
-        token = tokens[index]
-        if token.value == "return":
-            expression_end = _statement_end(tokens, index + 1, end)
-            expression_tokens = tokens[index + 1 : expression_end]
-            results.append(
-                {
-                    "kind": "return",
-                    "expression": _raw(
-                        text, tokens, index + 1, expression_end
-                    ),
-                    "evaluation": _evaluation(expression_tokens),
-                    "conditions": _conditions_for(
-                        index, token, spans, pp_context
-                    ),
-                    "location": _location(
-                        token,
-                        tokens[expression_end]
-                        if expression_end < len(tokens)
-                        else token,
-                    ),
-                }
-            )
-            continue
-        if token.value != "new" or index + 1 >= end:
-            continue
-        opening = next(
-            (
-                cursor
-                for cursor in range(index + 1, end)
-                if tokens[cursor].value in {"(", "{", ";", ","}
-            ),
-            None,
-        )
-        if opening is None or tokens[opening].value not in {"(", "{"}:
-            continue
-        if opening not in forward or forward[opening] >= end:
-            continue
-        close = forward[opening]
-        arguments = [
-            {
-                "expression": _raw(text, tokens, argument_start, argument_end),
-                "evaluation": _evaluation(
-                    tokens[argument_start:argument_end]
-                ),
-            }
-            for argument_start, argument_end in _split_arguments(
-                tokens, opening + 1, close
-            )
-        ]
-        results.append(
-            {
-                "kind": "construction",
-                "type": _raw_from_values(tokens[index + 1 : opening]),
-                "form": "parenthesized" if tokens[opening].value == "(" else "braced",
-                "arguments": arguments,
-                "expression": _raw(text, tokens, index, close + 1),
-                "conditions": _conditions_for(index, token, spans, pp_context),
-                "location": _location(token, tokens[close]),
-            }
-        )
-    return results
-
-
 def _types(
     parsed_files: list[tuple[Path, dict[str, Any]]],
     project_root: Path,
@@ -846,7 +863,6 @@ def _types(
 
 def _load_source_unit(
     source_file: Path,
-    header_file: Path | None = None,
     engine_override: Path | None = None,
 ) -> dict[str, Any]:
     source = _validated_file(source_file, _SOURCE_SUFFIXES, "Source file")
@@ -886,109 +902,90 @@ def _load_source_unit(
     )
     source_owner = owner_for_path(source, records)
     source_text = source.read_text(encoding="utf-8-sig", errors="replace")
-    raw_source_includes = extract_includes(source_text)
-    source_includes: list[dict[str, Any]] = []
-    for include in raw_source_includes:
-        line = int(include.pop("line"))
-        source_includes.append(
-            {
-                **include,
-                "origin_unit": "source",
-                "evidence": _file_evidence(
-                    source, line, project_root, engine_root
-                ),
-                "resolution": resolve_include(
-                    include,
-                    source,
-                    records,
-                    project_root,
-                    engine_root,
-                ),
-            }
-        )
-
-    selected_header: Path | None = None
-    header_status = "absent"
-    selection_evidence: dict[str, Any] | None = None
-    header_candidates: list[dict[str, str]] = []
-    if header_file is not None:
-        selected_header = _validated_file(
-            header_file, _HEADER_SUFFIXES, "Header file"
-        )
-        if not _is_relative_to(selected_header, project_root) and (
-            engine_root is None or not _is_relative_to(selected_header, engine_root)
-        ):
-            raise ValueError(
-                "Header file must be inside the selected project or resolved Engine: "
-                f"{selected_header}"
-            )
-        header_status = "explicit"
-    else:
-        candidate_paths: dict[str, Path] = {}
-        for include in source_includes:
-            resolution = include["resolution"]
-            if resolution["status"] != "resolved":
-                continue
-            location = resolution["location"]
-            root = project_root if location["root"] == "project" else engine_root
-            if root is None:
-                continue
-            candidate = (root / location["path"]).resolve()
-            if candidate.suffix.casefold() not in _HEADER_SUFFIXES:
-                continue
-            if candidate.stem.casefold() != source.stem.casefold():
-                continue
-            if owner_for_path(candidate, records) is not source_owner:
-                continue
-            candidate_paths[normalized(candidate).casefold()] = candidate
-        ordered_candidates = sorted(
-            candidate_paths.values(), key=lambda item: normalized(item).casefold()
-        )
-        header_candidates = [
-            rooted_path(path, project_root, engine_root)
-            for path in ordered_candidates
-        ]
-        if len(ordered_candidates) == 1:
-            selected_header = ordered_candidates[0]
-            header_status = "selected"
-            matching_include = next(
-                include
-                for include in source_includes
-                if include["resolution"].get("location")
-                == rooted_path(selected_header, project_root, engine_root)
-            )
-            selection_evidence = matching_include["evidence"]
-        elif len(ordered_candidates) > 1:
-            header_status = "ambiguous"
+    header_candidates = _automatic_headers(source, source_owner)
+    selected_header = header_candidates[0] if len(header_candidates) == 1 else None
+    header_locations = [
+        rooted_path(candidate, project_root, engine_root)
+        for candidate in header_candidates
+    ]
 
     parsed_files: list[tuple[Path, dict[str, Any]]] = [
         (source, parse_cpp_file(source))
     ]
-    all_includes = list(source_includes)
+    all_includes: list[dict[str, Any]] = []
+    include_problems: list[dict[str, Any]] = []
+
+    def collect_include(
+        include: dict[str, Any],
+        unit: str,
+        including_file: Path,
+    ) -> None:
+        resolution = resolve_include(
+            include,
+            including_file,
+            records,
+            project_root,
+            engine_root,
+        )
+        resolved_locations = [
+            *([resolution["location"]] if "location" in resolution else []),
+            *[
+                candidate["location"]
+                for candidate in resolution.get("candidates", [])
+            ],
+        ]
+        if any(location in header_locations for location in resolved_locations):
+            return
+
+        fact = {
+            "spelling": include["spelling"],
+            "conditions": include["conditions"],
+            "evidence": {
+                "unit": unit,
+                "line": int(include["line"]),
+            },
+            "resolution": resolution,
+        }
+        status = str(resolution["status"])
+        if status == "resolved":
+            fact["resolution"] = {
+                key: value
+                for key, value in resolution.items()
+                if key != "status"
+            }
+            all_includes.append(fact)
+            return
+        if status in {
+            "generated_header",
+            "generated_source",
+            "system_or_sdk_unresolved",
+        }:
+            all_includes.append(fact)
+            return
+
+        messages = {
+            "ambiguous": "Include resolved to multiple filesystem candidates",
+            "not_found": "Include could not be located in known source roots",
+            "macro_unresolved": "Include macro could not be resolved statically",
+        }
+        include_problems.append(
+            {
+                "severity": "warning",
+                "code": f"source-include-{status.replace('_', '-')}",
+                "include": fact,
+                "message": messages.get(
+                    status, "Include provenance could not be resolved"
+                ),
+            }
+        )
+
+    for include in extract_includes(source_text):
+        collect_include(include, "cpp", source)
     if selected_header is not None:
         parsed_header = parse_cpp_file(selected_header)
         parsed_files.append((selected_header, parsed_header))
         for include in extract_includes(parsed_header["text"]):
-            line = int(include.pop("line"))
-            all_includes.append(
-                {
-                    **include,
-                    "origin_unit": "companion_header",
-                    "evidence": _file_evidence(
-                        selected_header,
-                        line,
-                        project_root,
-                        engine_root,
-                    ),
-                    "resolution": resolve_include(
-                        include,
-                        selected_header,
-                        records,
-                        project_root,
-                        engine_root,
-                    ),
-                }
-            )
+            collect_include(include, "header", selected_header)
 
     problems: list[dict[str, Any]] = []
     if engine_result["status"] != "resolved":
@@ -1011,13 +1008,13 @@ def _load_source_unit(
                 "message": "No enclosing Build.cs source boundary was found",
             }
         )
-    if header_status == "ambiguous":
+    if len(header_candidates) > 1:
         problems.append(
             {
                 "severity": "warning",
                 "code": "source-unit-header-ambiguous",
-                "candidates": header_candidates,
-                "message": "Multiple directly included same-stem header candidates were found",
+                "candidates": header_locations,
+                "message": "Multiple automatically derived companion headers were found",
             }
         )
     for path, parsed in parsed_files:
@@ -1031,18 +1028,11 @@ def _load_source_unit(
 
     parts = _callable_parts(parsed_files, project_root, engine_root)
     parsed_by_path = {path: parsed for path, parsed in parsed_files}
-    header_fact: dict[str, Any] = {"status": header_status}
-    if selected_header is not None:
-        header_fact["location"] = rooted_path(
-            selected_header, project_root, engine_root
-        )
-        header_fact["owner"] = public_owner(
-            owner_for_path(selected_header, records)
-        )
-    if selection_evidence is not None:
-        header_fact["selection_evidence"] = selection_evidence
-    if header_candidates:
-        header_fact["candidates"] = header_candidates
+    header_fact = (
+        rooted_path(selected_header, project_root, engine_root)
+        if selected_header is not None
+        else None
+    )
 
     macros = [
         macro
@@ -1078,6 +1068,7 @@ def _load_source_unit(
             "header": header_fact,
         },
         "includes": all_includes,
+        "include_problems": include_problems,
         "macros": macros,
         "parts": parts,
         "parsed_files": parsed_files,
@@ -1111,7 +1102,7 @@ def _source_result(
         [*loaded["problems"], *(additional_problems or [])],
         responsibility=responsibility,
         boundaries=[
-            "Only the selected .cpp and an explicit or uniquely evidenced companion header are read as C++ source.",
+            "Only the selected .cpp and one unambiguous automatically derived companion header are read as C++ source.",
             *boundaries,
             "The result does not decide required dependencies, feature meaning, implementation correctness, or build-rule changes.",
             "Validation reports input and locally observable structural problems; ok does not prove compilation or runtime behavior.",
@@ -1121,21 +1112,120 @@ def _source_result(
 
 def list_source_includes(
     source_file: Path,
-    header_file: Path | None = None,
     engine_override: Path | None = None,
 ) -> dict[str, Any]:
-    loaded = _load_source_unit(source_file, header_file, engine_override)
+    loaded = _load_source_unit(source_file, engine_override)
     return _source_result(
         "ue-itps.source-includes.v1",
         loaded,
         {"includes": loaded["includes"]},
-        responsibility="Report direct include spellings and deterministic filesystem provenance.",
+        responsibility="Report non-companion direct include spellings and deterministic filesystem provenance.",
         boundaries=[
+            "The selected source's own companion-header include is represented by source_unit.header and omitted from includes.",
+            "Ambiguous, missing, and unresolved-macro includes are moved to validation.",
             "Referenced files are located for provenance but are never recursively read.",
             "A resolved include is a unique filesystem candidate, not proof of the effective compiler include path.",
             "Physical ownership does not prove that a dependency is required or correctly declared.",
         ],
+        additional_problems=loaded["include_problems"],
     )
+
+
+def _type_unit_evidence(
+    loaded: dict[str, Any],
+    path: Path,
+    location: dict[str, Any],
+) -> dict[str, Any]:
+    source_path = loaded["parsed_files"][0][0]
+    evidence: dict[str, Any] = {
+        "unit": "cpp" if path == source_path else "header",
+        "line": int(location["line"]),
+    }
+    end_line = int(location.get("end_line", location["line"]))
+    if end_line != evidence["line"]:
+        evidence["end_line"] = end_line
+    return evidence
+
+
+def _macro_prefix_start(tokens: list[Token], index: int) -> int:
+    cursor = index - 1
+    while cursor >= 0:
+        if tokens[cursor].value in {";", "{", "}"}:
+            return cursor + 1
+        cursor -= 1
+    return 0
+
+
+def _type_macros(
+    loaded: dict[str, Any],
+    parsed: dict[str, Any],
+    path: Path,
+    type_item: dict[str, Any],
+) -> list[dict[str, Any]]:
+    tokens: list[Token] = parsed["tokens"]
+    if "_token_range" in type_item:
+        type_index = int(type_item["_token_range"][0])
+    else:
+        type_index = next(
+            (
+                index
+                for index, token in enumerate(tokens)
+                if token.value == "enum"
+                and token.line == int(type_item["evidence"]["line"])
+            ),
+            -1,
+        )
+    if type_index < 0:
+        return []
+
+    prefix_start = _macro_prefix_start(tokens, type_index)
+    declaration_macros = (
+        {"UENUM"}
+        if type_item["kind"] == "enum"
+        else {"UCLASS", "UINTERFACE", "USTRUCT"}
+    )
+    body_range = type_item.get("body_range")
+    selected = []
+    for macro in loaded["macros"]:
+        if macro["_path"] != path:
+            continue
+        macro_index = int(macro["_token_index"])
+        if (
+            macro["name"] in declaration_macros
+            and prefix_start <= macro_index < type_index
+        ):
+            selected.append(macro)
+            continue
+        if (
+            body_range is not None
+            and macro["name"]
+            in {
+                "GENERATED_BODY",
+                "GENERATED_UCLASS_BODY",
+                "GENERATED_USTRUCT_BODY",
+            }
+            and int(body_range[0]) <= macro_index < int(body_range[1])
+        ):
+            selected.append(macro)
+    selected.sort(key=lambda item: int(item["_token_index"]))
+    return selected
+
+
+def _type_evidence(
+    loaded: dict[str, Any],
+    path: Path,
+    location: dict[str, Any],
+    macros: list[dict[str, Any]],
+) -> dict[str, Any]:
+    adjusted = dict(location)
+    declaration_lines = [
+        int(macro["evidence"]["line"])
+        for macro in macros
+        if macro["name"] in {"UCLASS", "UENUM", "UINTERFACE", "USTRUCT"}
+    ]
+    if declaration_lines:
+        adjusted["line"] = min(declaration_lines)
+    return _type_unit_evidence(loaded, path, adjusted)
 
 
 def _type_facts(
@@ -1148,7 +1238,16 @@ def _type_facts(
     problems: list[dict[str, Any]] = []
     for path, parsed in loaded["parsed_files"]:
         for class_item in parsed["classes"]:
-            class_evidence = _public_location(
+            type_macros = _type_macros(
+                loaded, parsed, path, class_item
+            )
+            type_evidence = _type_evidence(
+                loaded,
+                path,
+                class_item["location"],
+                type_macros,
+            )
+            rooted_class_evidence = _public_location(
                 path,
                 class_item["location"],
                 project_root,
@@ -1156,32 +1255,33 @@ def _type_facts(
             )
             member_variable_details = [
                 {
-                    "kind": "variable",
                     "name": item["name"],
                     "type_expression": item["type_expression"],
-                    "evidence": item["evidence"],
+                    "macros": list(item.get("_macros", [])),
+                    "evidence": _type_unit_evidence(
+                        loaded, path, item["evidence"]
+                    ),
                 }
                 for item in variables
                 if item["scope"] == "member"
                 and item.get("owner") == class_item["name"]
-                and item["evidence"]["root"] == class_evidence["root"]
-                and item["evidence"]["path"] == class_evidence["path"]
-                and class_evidence["line"]
+                and item["evidence"]["root"] == rooted_class_evidence["root"]
+                and item["evidence"]["path"] == rooted_class_evidence["path"]
+                and rooted_class_evidence["line"]
                 <= item["evidence"]["line"]
-                <= class_evidence.get("end_line", class_evidence["line"])
+                <= rooted_class_evidence.get(
+                    "end_line", rooted_class_evidence["line"]
+                )
             ]
             member_function_details = [
                 {
-                    "kind": "function",
                     "name": _callable_name(
                         member["name"], member["signature"]
                     ),
                     "signature": " ".join(member["signature"].split()),
-                    "evidence": _public_location(
-                        path,
-                        member["location"],
-                        project_root,
-                        engine_root,
+                    "macros": list(member.get("_macros", [])),
+                    "evidence": _type_unit_evidence(
+                        loaded, path, member["location"]
                     ),
                 }
                 for member in class_item["members"]
@@ -1204,7 +1304,7 @@ def _type_facts(
                         "type": class_item["name"],
                         "lexical_member_variables": lexical_field_names,
                         "projected_member_variables": projected_field_names,
-                        "evidence": class_evidence,
+                        "evidence": type_evidence,
                         "message": (
                             "Member-variable name and variable-detail "
                             "projections disagree"
@@ -1216,37 +1316,46 @@ def _type_facts(
                     "kind": class_item["kind"],
                     "name": class_item["name"],
                     "base_types": class_item["base_types"],
-                    "member_variables": projected_field_names,
-                    "member_functions": sorted(
-                        {
-                            _callable_name(
-                                member["name"], member["signature"]
-                            )
-                            for member in class_item["members"]
-                            if member["name"] not in _SOURCE_MACROS
-                        },
-                        key=str.casefold,
-                    ),
-                    "member_details": sorted(
-                        [
-                            *member_variable_details,
-                            *member_function_details,
-                        ],
-                        key=lambda item: (
-                            item["evidence"]["line"],
-                            item["kind"],
-                            item["name"].casefold(),
-                        ),
-                    ),
-                    "evidence": class_evidence,
+                    "macros": [
+                        str(macro["_expression"])
+                        for macro in type_macros
+                    ],
+                    "member_details": {
+                        "variables": member_variable_details,
+                        "functions": member_function_details,
+                    },
+                    "evidence": type_evidence,
                 }
             )
-        results.extend(_enums(parsed, path, project_root, engine_root))
+        for enum_item in _enums(
+            parsed, path, project_root, engine_root
+        ):
+            enum_macros = _type_macros(
+                loaded, parsed, path, enum_item
+            )
+            results.append(
+                {
+                    **{
+                        key: value
+                        for key, value in enum_item.items()
+                        if key != "evidence"
+                    },
+                    "macros": [
+                        str(macro["_expression"])
+                        for macro in enum_macros
+                    ],
+                    "evidence": _type_evidence(
+                        loaded,
+                        path,
+                        enum_item["evidence"],
+                        enum_macros,
+                    ),
+                }
+            )
     return sorted(
         results,
         key=lambda item: (
-            item["evidence"]["root"],
-            item["evidence"]["path"].casefold(),
+            0 if item["evidence"]["unit"] == "cpp" else 1,
             item["evidence"]["line"],
         ),
     ), problems
@@ -1254,26 +1363,11 @@ def _type_facts(
 
 def list_source_types(
     source_file: Path,
-    header_file: Path | None = None,
     engine_override: Path | None = None,
 ) -> dict[str, Any]:
-    loaded = _load_source_unit(source_file, header_file, engine_override)
-    variables, unresolved = _variable_facts(loaded)
+    loaded = _load_source_unit(source_file, engine_override)
+    variables, unresolved = _source_declaration_facts(loaded)
     types, type_problems = _type_facts(loaded, variables)
-    type_macros = [
-        macro
-        for macro in loaded["macros"]
-        if macro["name"]
-        in {
-            "UCLASS",
-            "USTRUCT",
-            "UENUM",
-            "UINTERFACE",
-            "GENERATED_BODY",
-            "GENERATED_UCLASS_BODY",
-            "GENERATED_USTRUCT_BODY",
-        }
-    ]
     return _source_result(
         "ue-itps.source-types.v1",
         loaded,
@@ -1282,12 +1376,11 @@ def list_source_types(
             "unresolved_declarations": [
                 item for item in unresolved if item["scope"] == "member"
             ],
-            "type_macros": type_macros,
         },
         responsibility="Index class, struct, enum, inheritance, member-name, and UE type-macro facts.",
         boundaries=[
             "Member lists are lexical indexes and are not semantic summaries.",
-            "Type macros retain their own evidence and are not attached to a type by heuristic proximity.",
+            "Type and member macros are attached by lexical declaration adjacency, not UHT semantic analysis.",
             "The result is not a complete C++ type system, inheritance graph, or reflection result.",
         ],
         additional_problems=[
@@ -1319,67 +1412,6 @@ def list_source_types(
 
 def _normalized_text(value: str) -> str:
     return " ".join(value.split())
-
-
-def _parameter_variables(part: dict[str, Any]) -> list[dict[str, Any]]:
-    parameters = part["parameters"]
-    if not parameters.strip() or parameters.strip() == "void":
-        return []
-    wrapper = f"({parameters})"
-    tokens = lex_source(wrapper)
-    forward, _ = token_pairs(tokens)
-    if not tokens or tokens[0].value != "(" or 0 not in forward:
-        return []
-    results: list[dict[str, Any]] = []
-    for position, (start, end) in enumerate(
-        _split_arguments(tokens, 1, forward[0])
-    ):
-        group = tokens[start:end]
-        if not group:
-            continue
-        default_index = next(
-            (index for index, token in enumerate(group) if token.value == "="),
-            len(group),
-        )
-        declaration_tokens = group[:default_index]
-        name_index = next(
-            (
-                index
-                for index in range(len(declaration_tokens) - 1, -1, -1)
-                if declaration_tokens[index].kind == "identifier"
-                and (
-                    index == len(declaration_tokens) - 1
-                    or declaration_tokens[index + 1].value == "["
-                )
-            ),
-            None,
-        )
-        if name_index is None or name_index == 0:
-            continue
-        name = declaration_tokens[name_index].value
-        type_expression = _raw_from_values(declaration_tokens[:name_index])
-        if not type_expression:
-            continue
-        item: dict[str, Any] = {
-            "scope": "parameter",
-            "name": name,
-            "type_expression": type_expression,
-            "declaration": _raw_from_values(group),
-            "position": position,
-            "callable": {
-                "function_id": part["function_id"],
-                "kind": part["kind"],
-                "owner": part["owner"],
-                "name": part["name"],
-                "parameter_signature": part["parameter_signature"],
-                "identity_qualifiers": list(part["_identity"][4]),
-            },
-            "evidence": part["evidence"],
-        }
-        if default_index < len(group):
-            item["initializer"] = _raw_from_values(group[default_index + 1 :])
-        results.append(item)
-    return results
 
 
 def _excluded_token_ranges(
@@ -1467,7 +1499,6 @@ def _declaration_variables(
     *,
     scope: str,
     owner: str | None,
-    callable_fact: dict[str, Any] | None,
     project_root: Path,
     engine_root: Path | None,
     excluded_ranges: list[tuple[int, int]] | None = None,
@@ -1485,15 +1516,6 @@ def _declaration_variables(
         statement_start = _statement_start(tokens, start, semicolon)
         if statement_start >= semicolon:
             continue
-        while (
-            statement_start + 1 < semicolon
-            and tokens[statement_start].kind == "identifier"
-            and re.fullmatch(r"[A-Z][A-Z0-9_]*", tokens[statement_start].value)
-            and tokens[statement_start + 1].value == "("
-            and statement_start + 1 in parsed["forward"]
-            and parsed["forward"][statement_start + 1] < semicolon
-        ):
-            statement_start = parsed["forward"][statement_start + 1] + 1
         last_directive = next(
             (
                 index
@@ -1510,13 +1532,40 @@ def _declaration_variables(
                 and tokens[statement_start].line == directive_line
             ):
                 statement_start += 1
-        if (
-            statement_start + 1 < semicolon
-            and tokens[statement_start].value
-            in {"public", "protected", "private"}
-            and tokens[statement_start + 1].value == ":"
-        ):
-            statement_start += 2
+        declaration_macros: list[str] = []
+        while statement_start < semicolon:
+            if (
+                statement_start + 1 < semicolon
+                and tokens[statement_start].value
+                in {"public", "protected", "private"}
+                and tokens[statement_start + 1].value == ":"
+            ):
+                statement_start += 2
+                continue
+            if (
+                statement_start + 1 < semicolon
+                and tokens[statement_start].kind == "identifier"
+                and re.fullmatch(
+                    r"[A-Z][A-Z0-9_]*",
+                    tokens[statement_start].value,
+                )
+                and tokens[statement_start + 1].value == "("
+                and statement_start + 1 in parsed["forward"]
+                and parsed["forward"][statement_start + 1] < semicolon
+            ):
+                close = parsed["forward"][statement_start + 1]
+                if tokens[statement_start].value == "UPROPERTY":
+                    declaration_macros.append(
+                        _raw(
+                            text,
+                            tokens,
+                            statement_start,
+                            close + 1,
+                        )
+                    )
+                statement_start = close + 1
+                continue
+            break
         if statement_start >= semicolon:
             continue
         if any(
@@ -1551,8 +1600,6 @@ def _declaration_variables(
             }
             if owner is not None:
                 item["owner"] = owner
-            if callable_fact is not None:
-                item["callable"] = callable_fact
             unresolved.append(item)
             continue
         name = classification["name"]
@@ -1585,9 +1632,6 @@ def _declaration_variables(
             "scope": scope,
             "name": name,
             "type_expression": _normalized_text(type_expression),
-            "declaration": _normalized_text(
-                _raw(text, tokens, statement_start, semicolon)
-            ),
             "evidence": _file_evidence(
                 path,
                 tokens[statement_start].line,
@@ -1595,31 +1639,21 @@ def _declaration_variables(
                 engine_root,
                 end_line=tokens[semicolon].line,
             ),
+            "_macros": declaration_macros,
         }
         if owner is not None:
             item["owner"] = owner
-        if callable_fact is not None:
-            item["callable"] = callable_fact
-        if assignment < semicolon:
-            item["initializer"] = _raw(
-                text, tokens, assignment + 1, semicolon
-            )
         results.append(item)
     return results, unresolved
 
 
-def _variable_facts(
+def _source_declaration_facts(
     loaded: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     project_root = loaded["project_root"]
     engine_root = loaded["engine_root"]
     results: list[dict[str, Any]] = []
     unresolved: list[dict[str, Any]] = []
-    definition_parts = [
-        part for part in loaded["parts"] if part["role"] == "definition"
-    ]
-    for part in definition_parts:
-        results.extend(_parameter_variables(part))
     for path, parsed in loaded["parsed_files"]:
         global_excluded = _excluded_token_ranges(
             parsed, include_classes=True, include_callables=True
@@ -1631,7 +1665,6 @@ def _variable_facts(
             len(parsed["tokens"]),
             scope="file",
             owner=None,
-            callable_fact=None,
             project_root=project_root,
             engine_root=engine_root,
             excluded_ranges=global_excluded,
@@ -1651,39 +1684,12 @@ def _variable_facts(
                 class_item["body_range"][1],
                 scope="member",
                 owner=class_item["name"],
-                callable_fact=None,
                 project_root=project_root,
                 engine_root=engine_root,
                 excluded_ranges=member_excluded,
             )
             results.extend(member_variables)
             unresolved.extend(member_unresolved)
-    for part in definition_parts:
-        body_range = part["_body_range"]
-        if body_range is None:
-            continue
-        parsed = loaded["parsed_by_path"][part["_path"]]
-        callable_fact = {
-            "function_id": part["function_id"],
-            "kind": part["kind"],
-            "owner": part["owner"],
-            "name": part["name"],
-            "parameter_signature": part["parameter_signature"],
-            "identity_qualifiers": list(part["_identity"][4]),
-        }
-        local_variables, local_unresolved = _declaration_variables(
-            parsed,
-            part["_path"],
-            body_range[0],
-            body_range[1],
-            scope="local",
-            owner=None,
-            callable_fact=callable_fact,
-            project_root=project_root,
-            engine_root=engine_root,
-        )
-        results.extend(local_variables)
-        unresolved.extend(local_unresolved)
     unique = {
         (
             item["scope"],
@@ -1691,7 +1697,6 @@ def _variable_facts(
             item["evidence"]["root"],
             item["evidence"]["path"],
             item["evidence"]["line"],
-            str(item.get("callable")),
         ): item
         for item in results
     }
@@ -1726,46 +1731,6 @@ def _variable_facts(
         ),
     )
     return sorted_variables, sorted_unresolved
-
-
-def list_source_variables(
-    source_file: Path,
-    header_file: Path | None = None,
-    engine_override: Path | None = None,
-) -> dict[str, Any]:
-    loaded = _load_source_unit(source_file, header_file, engine_override)
-    variables, unresolved = _variable_facts(loaded)
-    variable_macros = [
-        macro for macro in loaded["macros"] if macro["name"] == "UPROPERTY"
-    ]
-    return _source_result(
-        "ue-itps.source-variables.v1",
-        loaded,
-        {
-            "variables": variables,
-            "unresolved_declarations": unresolved,
-            "variable_macros": variable_macros,
-        },
-        responsibility="Index conservatively recognized file, member, parameter, and local variable declarations.",
-        boundaries=[
-            "C++ declarations that cannot be distinguished lexically are reported as unresolved rather than guessed.",
-            "Comma-separated, structured-binding, macro-generated, and complex declarator forms may be incomplete.",
-            "Initializers are source expressions and are not evaluated.",
-        ],
-        additional_problems=[
-            {
-                "severity": "warning",
-                "code": "source-variable-declaration-unresolved",
-                "count": len(unresolved),
-                "message": (
-                    "One or more declaration-shaped statements could not be "
-                    "classified conservatively"
-                ),
-            }
-        ]
-        if unresolved
-        else None,
-    )
 
 
 def _function_facts(parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1834,12 +1799,11 @@ def _function_facts(parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def list_source_functions(
     source_file: Path,
-    header_file: Path | None = None,
     engine_override: Path | None = None,
 ) -> dict[str, Any]:
-    loaded = _load_source_unit(source_file, header_file, engine_override)
+    loaded = _load_source_unit(source_file, engine_override)
     functions = _function_facts(loaded["parts"])
-    _, all_unresolved = _variable_facts(loaded)
+    _, all_unresolved = _source_declaration_facts(loaded)
     unresolved = [
         item
         for item in all_unresolved
@@ -1849,7 +1813,13 @@ def list_source_functions(
         item for item in functions if item["name"] in _TYPE_KEYWORDS
     ]
     function_macros = [
-        macro for macro in loaded["macros"] if macro["name"] == "UFUNCTION"
+        {
+            key: value
+            for key, value in macro.items()
+            if not key.startswith("_")
+        }
+        for macro in loaded["macros"]
+        if macro["name"] == "UFUNCTION"
     ]
     return _source_result(
         "ue-itps.source-functions.v1",
@@ -1899,123 +1869,44 @@ def list_source_functions(
 
 def inspect_source_function(
     source_file: Path,
-    function_name: str | None = None,
+    function_name: str,
     *,
-    function_id: str | None = None,
-    owner: str | None = None,
-    parameters: str | None = None,
-    header_file: Path | None = None,
     engine_override: Path | None = None,
 ) -> dict[str, Any]:
-    loaded = _load_source_unit(source_file, header_file, engine_override)
-    if function_name is None and function_id is None:
-        raise ValueError("Pass function_name or function_id")
-    if function_name is not None and function_id is not None:
-        raise ValueError("Pass only one of function_name or function_id")
+    loaded = _load_source_unit(source_file, engine_override)
     candidates = [
         part
         for part in loaded["parts"]
         if part["role"] == "definition"
-        and (
-            (function_id is not None and part["function_id"] == function_id)
-            or (
-                function_id is None
-                and part["name"] == function_name
-            )
-        )
-        and (owner is None or part["owner"] == owner)
-        and (
-            parameters is None
-            or _normalized_text(part["parameters"])
-            == _normalized_text(parameters)
-        )
+        and part["name"] == function_name
     ]
     if not candidates:
-        selection = (
-            function_id
-            if function_id is not None
-            else f"{owner + '::' if owner else ''}{function_name}"
-        )
         return _source_result(
             "ue-itps.source-function.v1",
             loaded,
             {
-                "selection": {
-                    "function_id": function_id,
-                    "name": function_name,
-                    "owner": owner,
-                    "parameters": parameters,
-                },
-                "function_id": function_id,
-                "function": None,
-                "relation": None,
-                "operations": [],
+                "selection": {"name": function_name},
+                "match_count": 0,
+                "matches": [],
             },
-            responsibility="Report operations and control facts for one explicitly selected function definition.",
+            responsibility="Report external type and method references for all definitions matching one function name.",
             boundaries=[
-                "Only the selected function body is projected; called functions are not followed.",
-                "Calls retain source expressions and are not assigned external meaning without unique evidence.",
-                "Operations are conservative lexical facts, not runtime order, effects, or feature interpretation.",
+                "External means not defined by the selected .cpp or its companion header.",
+                "Type names are derived from local declaration syntax; wrapped template types remain one expression.",
+                "Member-call receivers are replaced with locally declared type expressions when available.",
+                "Called methods, inheritance, overloads, and included source are not followed.",
             ],
             additional_problems=[
                 {
                     "severity": "error",
                     "code": "function-not-found",
-                    "selection": selection,
+                    "selection": function_name,
                     "message": "No matching function definition was found",
                 }
             ],
         )
-    if len(candidates) > 1:
-        return _source_result(
-            "ue-itps.source-function.v1",
-            loaded,
-            {
-                "selection": {
-                    "function_id": function_id,
-                    "name": function_name,
-                    "owner": owner,
-                    "parameters": parameters,
-                },
-                "function_id": function_id,
-                "function": None,
-                "relation": None,
-                "operations": [],
-                "candidates": [
-                    {
-                        "function_id": part["function_id"],
-                        "owner": part["owner"],
-                        "name": part["name"],
-                        "parameters": part["parameters"],
-                        "qualifiers": part["qualifiers"],
-                        "evidence": part["evidence"],
-                    }
-                    for part in candidates
-                ],
-            },
-            responsibility="Report operations and control facts for one explicitly selected function definition.",
-            boundaries=[
-                "Only the selected function body is projected; called functions are not followed.",
-                "Calls retain source expressions and are not assigned external meaning without unique evidence.",
-                "Operations are conservative lexical facts, not runtime order, effects, or feature interpretation.",
-            ],
-            additional_problems=[
-                {
-                    "severity": "error",
-                    "code": "function-selection-ambiguous",
-                    "candidate_count": len(candidates),
-                    "message": (
-                        "Multiple function definitions matched; use "
-                        "function_id or additional selectors"
-                    ),
-                }
-            ],
-        )
-    selected = candidates[0]
-    relation = next(
-        item
-        for item in _relations(loaded["parts"])
-        if (
+    relations = {
+        (
             item["callable"]["kind"],
             item["callable"]["owner"] or "",
             item["callable"]["name"],
@@ -2024,24 +1915,43 @@ def inspect_source_function(
                 for group in item["callable"]["parameter_signature"]
             ),
             tuple(item["callable"]["identity_qualifiers"]),
+        ): item
+        for item in _relations(loaded["parts"])
+    }
+    matches: list[dict[str, Any]] = []
+    for candidate in candidates:
+        symbol_types, candidate_type_names = _function_symbol_types(
+            candidate, loaded
         )
-        == selected["_identity"]
-    )
+        methods = _external_methods(candidate, loaded, symbol_types)
+        matches.append(
+            {
+                "function_id": candidate["function_id"],
+                "function": _public_callable(candidate),
+                "relation": _public_relation(
+                    relations[candidate["_identity"]]
+                ),
+                "external_types": _external_type_facts(
+                    candidate,
+                    loaded,
+                    candidate_type_names,
+                ),
+                "external_methods": methods,
+            }
+        )
     return _source_result(
         "ue-itps.source-function.v1",
         loaded,
         {
-            "function_id": selected["function_id"],
-            "function": _public_callable(selected),
-            "relation": relation,
-            "operations": _operations(
-                [selected], loaded["parsed_by_path"]
-            ),
+            "selection": {"name": function_name},
+            "match_count": len(matches),
+            "matches": matches,
         },
-        responsibility="Report operations and control facts for one explicitly selected function definition.",
+        responsibility="Report external type and method references for all definitions matching one function name.",
         boundaries=[
-            "Only the selected function body is projected; called functions are not followed.",
-            "Calls retain source expressions and are not assigned external meaning without unique evidence.",
-            "Operations are conservative lexical facts, not runtime order, effects, or feature interpretation.",
+            "External means not defined by the selected .cpp or its companion header.",
+            "Type names are derived from local declaration syntax; wrapped template types remain one expression.",
+            "Member-call receivers are replaced with locally declared type expressions when available.",
+            "Called methods, inheritance, overloads, and included source are not followed.",
         ],
     )

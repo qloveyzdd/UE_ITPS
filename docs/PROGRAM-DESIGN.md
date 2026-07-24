@@ -1,7 +1,7 @@
 <!-- generated-by: gsd-doc-writer -->
 # UE-ITPS 工具程序设计说明
 
-本文描述仓库 `tools/` 当前可验证实现，供代码检查、架构讨论和后续优化使用。项目级 v1 由七个只读检查 CLI 组成；源码规则与模块入口 v2 新增四个聚焦 CLI；源码事实包 v3 新增五个按类别读取源码的 CLI。v3 不修改 v1/v2 Schema，也不把源码事实提升为功能决策或验收结论。里程碑版本与各工具的独立 Schema 版本分开管理，因此新增工具从自己的 v1 契约开始。本文描述实际代码，不是最终产品承诺。
+本文描述仓库 `tools/` 当前可验证实现，供代码检查、架构讨论和后续优化使用。项目级 v1 由七个只读检查 CLI 组成；源码规则与模块入口 v2 新增四个聚焦 CLI；源码事实包 v3 提供三个按类别读取源码的 CLI。v3 不修改 v1/v2 Schema，也不把源码事实提升为功能决策或验收结论。里程碑版本与各工具的独立 Schema 版本分开管理，因此新增工具从自己的 v1 契约开始。本文描述实际代码，不是最终产品承诺。
 
 ## 1. 当前目标与完成状态
 
@@ -27,12 +27,12 @@ EngineAssociation 对应哪套真实 Engine？
 源码事实包增加由大模型控制的第三层显式深入：
 
 ```text
-显式选择的 `.cpp` 与配套 `.h` 声明、定义和操作事实是什么？
+显式选择的 `.cpp` 与配套 `.h` 声明、定义和外部引用事实是什么？
 直接 include 能唯一定位到哪个 Project/Engine、Module 和 Plugin 来源？
 哪些关系能够确定，哪些仍然歧义或未建模？
 ```
 
-当前交付包括十六个只读 CLI、共享服务层、统一结果信封、严格输入校验、中英文 CLI 帮助、UTF-8 输出、仓库级 Codex Skill 和 79 项单元测试。这些结果可以成为后续 Code Graph 和 Authority Context 的底层证据，但不会自动生成 Feature Graph、判断功能权威、修改 UE 项目、执行 UBT 规则或证明运行行为。
+当前交付包括十四个只读 CLI、共享服务层、统一结果信封、严格输入校验、中英文 CLI 帮助、UTF-8 输出和仓库级 Codex Skill。这些结果可以成为后续 Code Graph 和 Authority Context 的底层证据，但不会自动生成 Feature Graph、判断功能权威、修改 UE 项目、执行 UBT 规则或证明运行行为。
 
 ## 2. 设计原则
 
@@ -42,7 +42,7 @@ Codex 不应为了回答“引擎版本是什么”而扫描所有 Module 和 En
 
 ### 确定性优先
 
-JSON 解析、注册表查询、路径定位、目录分类和受限源码结构分析由程序完成。LLM 负责选择要读取的源码、选择事实类别和具体函数、连接事实、作出实现决策和提出下一步。v3 只提供所选源码单元的分类事实和文件来源，不判断需要什么依赖、功能含义或 Build.cs 改法。文件内容哈希只由基线指纹和运行证据工具生成，不进入十六个聚焦检查结果。
+JSON 解析、注册表查询、路径定位、目录分类和受限源码结构分析由程序完成。LLM 负责选择要读取的源码、选择事实类别和具体函数、连接事实、作出实现决策和提出下一步。v3 只提供所选源码单元的分类事实和文件来源，不判断需要什么依赖、功能含义或 Build.cs 改法。文件内容哈希只由基线指纹和运行证据工具生成，不进入十四个聚焦检查结果。
 
 ### 事实与结论分级
 
@@ -52,7 +52,7 @@ JSON 解析、注册表查询、路径定位、目录分类和受限源码结构
 - 文件系统定位结果；
 - Profile 下的适用性判断；
 - Build.cs、Target.cs 和模块入口中的静态源码操作；
-- 显式源码单元中相互独立的 include、类型、变量、函数索引和单函数操作事实；
+- 显式源码单元中相互独立的 include、类型和同名函数外部引用事实；
 - 尚未实现或无法证明的运行语义。
 
 `validation: ok` 只表示该次静态扫描未发现问题；`warning` 表示发现非阻断问题；两者都不表示项目已经编译、运行或通过测试。
@@ -63,7 +63,7 @@ JSON 解析、注册表查询、路径定位、目录分类和受限源码结构
 
 ### 默认只读
 
-十六个聚焦检查工具只读项目、Engine、源码和注册表，并向标准输出写 JSON。证据生成工具是单独的有写入能力工具。
+十四个聚焦检查工具只读项目、Engine、源码和注册表，并向标准输出写 JSON。证据生成工具是单独的有写入能力工具。
 
 ## 3. 程序结构
 
@@ -102,11 +102,9 @@ Codex / 用户
 | `ue_inspect_module_entry.py` | 提取单个模块的回调绑定和生命周期状态变化 | Build.cs | `ue-itps.module-entry-state.v12` |
 | `ue_list_source_includes.py` | 读取直接 include 与唯一文件来源事实 | `.cpp`、可选 `.h`/Engine override | `ue-itps.source-includes.v1` |
 | `ue_list_source_types.py` | 读取类型、继承、成员名称索引与类型宏事实 | `.cpp`、可选 `.h`/Engine override | `ue-itps.source-types.v1` |
-| `ue_list_source_variables.py` | 读取文件、成员、参数和局部变量声明事实 | `.cpp`、可选 `.h`/Engine override | `ue-itps.source-variables.v1` |
-| `ue_list_source_functions.py` | 读取函数签名索引和声明—定义关系 | `.cpp`、可选 `.h`/Engine override | `ue-itps.source-functions.v1` |
-| `ue_inspect_source_function.py` | 读取一个显式选择函数的操作与控制事实 | `.cpp`、函数选择器、可选 `.h`/Engine override | `ue-itps.source-function.v1` |
+| `ue_inspect_source_function.py` | 读取指定名称的全部函数定义及外部类型、方法引用 | `.cpp`、函数名、Engine override | `ue-itps.source-function.v1` |
 
-CLI 只处理参数、调用服务、序列化结果和退出码，不应包含新的 UE 领域判断。十六个入口的正常扫描输出统一为 `schema_version → 模块事实 → validation → limits`；`validation` 使用 `ok | warning | error`，`limits` 以 `responsibility` 和 `boundaries` 明示职责边界。`--help`、参数说明、输出契约和退出码均为中英文双语，stdout/stderr 固定使用 UTF-8。
+CLI 只处理参数、调用服务、序列化结果和退出码，不应包含新的 UE 领域判断。十四个入口的正常扫描输出统一为 `schema_version → 模块事实 → validation → limits`；`validation` 使用 `ok | warning | error`，`limits` 以 `responsibility` 和 `boundaries` 明示职责边界。`--help`、参数说明、输出契约和退出码均为中英文双语，stdout/stderr 固定使用 UTF-8。
 
 ### 3.2 服务层
 
@@ -124,7 +122,7 @@ CLI 只处理参数、调用服务、序列化结果和退出码，不应包含�
 | `source_parser.py`、`source_*.py` | `source_parser.py` 保留稳定入口；内部模块分别处理词法、声明、控制流、预处理器、操作、位置和未求值表达式事实 |
 | `rule_source.py` | 将 Build.cs 内部语法事实投影为相关性，并为 Target.cs 保留独立源码契约 |
 | `module_entry.py`、`module_entry_*.py` | `module_entry.py` 负责编排；内部模块分别处理调用上下文、回调绑定与解绑配对、状态压缩和可观察默认覆盖 |
-| `source_unit.py` | 共享源码加载、配套头文件选择，并分别投影 include、类型、变量、函数和单函数 v1 Schema |
+| `source_unit.py` | 共享源码加载、配套头文件选择，并分别投影 include、类型、函数和同名函数 v1 Schema |
 | `source_includes.py` | 提取直接 include，定位唯一文件来源，并从 Build.cs 路径边界陈述 Module/Plugin 归属 |
 
 Target 位置校验区分四种状态：`Source` 下没有 Target 为错误；只有子目录 Target 为根 Target 缺失警告；根目录与子目录同时存在 Target 为混合位置警告；只有根目录 Target 为正常。子目录 Target 可被 UBT 发现，因此不直接判为非法。
@@ -248,7 +246,7 @@ Plugin 工具只接受 `operation / platform / target_type`；`configuration` �
 2 = 输入、发现或 JSON 解析失败
 ```
 
-发现工具的 `not-found` 和 `ambiguous` 属于阻断诊断并返回 1。诊断 `code` 使用稳定英文机器码；argparse 帮助为中英文双语，纯命令行语法错误仍使用标准 stderr 文本。五个源码 CLI 的输入或读取失败使用对应 Schema 的 JSON 并返回 2；函数不存在或选择歧义作为已完成扫描的阻断诊断返回 1。
+发现工具的 `not-found` 和 `ambiguous` 属于阻断诊断并返回 1。诊断 `code` 使用稳定英文机器码；argparse 帮助为中英文双语，纯命令行语法错误仍使用标准 stderr 文本。三个源码 CLI 的输入或读取失败使用对应 Schema 的 JSON 并返回 2；找不到同名函数定义作为已完成扫描的阻断诊断返回 1。
 
 ## 7. 路径与安全策略
 
@@ -273,18 +271,18 @@ Plugin 工具只接受 `operation / platform / target_type`；`configuration` �
 - 单模块入口工具以所选 Build.cs 的父目录作为唯一源码边界；只返回扫描文件数量，所有证据路径相对该目录。
 - 模块入口内部 IR 可以保留调用与赋值细节，但公开 v12 不输出完整方法、参数、调用、赋值操作、RHS 或具体覆盖值。
 - `.uplugin` 读取器支持 UE 描述符中实际出现的注释和尾逗号，并把重复字段作为警告；现有 `.uproject` 严格 JSON 读取器保持不变。
-- 五个源码事实工具只读取显式 `.cpp` 与显式或唯一证据确定的配套 `.h/.hpp`。依赖文件仅定位，不递归读取。
-- 函数索引不读取或输出所有函数体操作；只有大模型再次显式选择的单个函数进入操作投影。
-- 类型工具不输出语义概括，变量工具不推断用途，程序不替大模型形成高层功能结论。
-- 类型、变量和函数投影复用同一声明分类；可调用模板字段、函数指针和成员函数指针保持变量身份。无法保守分类的声明进入 `unresolved_declarations` 并触发 warning。
+- 三个源码事实工具只读取显式 `.cpp` 与显式或唯一证据确定的配套 `.h/.hpp`。依赖文件仅定位，不递归读取。
+- 只有大模型显式选择的单个函数进入操作投影。
+- 类型工具不输出语义概括，程序不替大模型形成高层功能结论。
+- 类型投影和同名函数选择复用同一声明分类；可调用模板字段、函数指针和成员函数指针保持变量身份。无法保守分类的文件或成员声明进入 `unresolved_declarations` 并触发 warning。
 - 类型定义排除函数参数中的前置 `class/struct`，模板特化使用模板本体名称；普通数组与结构化绑定保持不同声明身份。
 - 类外函数定义只从全局或命名空间作用域识别；函数体中的限定调用不进入定义索引，析构函数保持所属类型与稳定身份。
-- 控制关键字不会进入 callable 索引或单函数选择候选。
+- 控制关键字不会进入 callable 索引或同名函数选择候选。
 - callable 使用参数及必要 cv/ref 限定生成稳定 `function_id`；声明—定义关系区分匹配、头文件内联定义、仅源码定义、仅声明和歧义。
-- 单函数操作保留嵌套父子关系与表达式角色，标量求值和 call 分类使用源码事实包专用投影，不改变既有规则工具和模块入口 Schema。
+- 每个同名函数匹配项分别保留规范化外部类型表达式和成员调用字符串。成员字段类型只在当前函数体引用对应成员名且未被参数或局部声明遮蔽时纳入；模板类型保持整体；方法接收者能从当前可见声明确定时替换为完整类型表达式。
 - 自动头文件选择要求 `.cpp` 直接 include、同名、同源码边界且唯一；无候选继续 source-only，多个候选报告 warning 并交回调用者选择。
 - include 使用 `origin_unit` 标记来源于 `.cpp` 或配套头文件；`resolved` 表示在约定 Project/Engine Module 根中得到唯一文件候选，不表示 UBT/编译器的有效 include 路径已经求值。
-- 源码事实公开类型、UE 宏、callable、声明—定义关系和通用操作，不输出功能标签、所需依赖、Build.cs 修改或实现正确性判断。
+- 源码事实公开类型、UE 宏、callable、声明—定义关系以及函数的外部类型和方法引用，不输出功能标签、所需依赖、Build.cs 修改或实现正确性判断。
 
 ## 8. 其他证据工具
 
@@ -304,7 +302,7 @@ Plugin 工具只接受 `operation / platform / target_type`；`configuration` �
 
 项目级 v1 的代码级验收包括：七个既有 CLI 和 Schema 保持不变；`validation` 与 `limits` 明确分离事实、诊断和解释边界；输入与项目结构异常按职责失败关闭。
 
-源码规则、模块入口和源码事实包验收包括：九个源码 CLI 使用相同结果信封但拥有独立 Schema；各层结果互不嵌套；Build.cs 只公开设置变更相关性；模块入口只公开状态结论；v3 的 include、类型、变量和函数索引互不混入，单函数工具只公开被选函数的操作事实。当前 79 项单元测试覆盖十六个 CLI 的双语帮助、既有项目契约、头文件选择、非递归读取、来源归属、复杂声明分类、未解析声明诊断、稳定函数 ID、精确声明—定义关系、结构化失败和单函数操作层级。
+源码规则、模块入口和源码事实包验收包括：七个源码 CLI 使用相同结果信封但拥有独立 Schema；各层结果互不嵌套；Build.cs 只公开设置变更相关性；模块入口只公开状态结论；v3 的 include、类型和同名函数工具互不混入，同名函数工具只公开匹配定义的外部类型和方法引用。单元测试覆盖十四个 CLI 的双语帮助、既有项目契约、头文件选择、非递归读取、来源归属、复杂声明分类、未解析声明诊断、稳定函数 ID、精确声明—定义关系、结构化失败和同名函数外部引用。
 
 Lyra 实际回归已验证：`CommonLoadingScreen.uplugin` 的两个声明模块均定位到唯一 Build.cs 和入口；`LyraGame.Target.cs`、`LyraEditor.Build.cs` 均解析到规则类；`FLyraEditorModule` 的入口结果识别生命周期回调。v3 真实样例覆盖 `LyraAbilitySet.cpp` 和项目 Plugin 的 `LoadingScreenManager.cpp`，均由源码向上定位所属项目、确定正确源码边界并选择唯一配套头文件。所有结果仍是静态证据，不替代 UBT、Editor 或运行验证。
 

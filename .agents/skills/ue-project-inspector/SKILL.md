@@ -1,6 +1,6 @@
 ---
 name: ue-project-inspector
-description: Inspect Unreal Engine projects and explicitly selected source entry files through the repository's deterministic, read-only tools. Use when Codex needs to find or read .uproject files; resolve Engine identity; locate direct Plugin references; inspect one .uplugin; navigate one plugin's declared modules; read one Build.cs or Target.cs; inspect one module's lifecycle entry source; list includes, types, variables, or functions from one selected .cpp; inspect one selected function body; classify project directories; or summarize focused results. Do not use for runtime behavior, asset reachability, general class/call graphs, code generation, builds, tests, or project modification.
+description: Inspect Unreal Engine projects and explicitly selected source entry files through the repository's deterministic, read-only tools. Use when Codex needs to find or read .uproject files; resolve Engine identity; locate direct Plugin references; inspect one .uplugin; navigate one plugin's declared modules; read one Build.cs or Target.cs; inspect one module's lifecycle entry source; list includes or types from one selected .cpp; inspect all function definitions matching one selected name; classify project directories; or summarize focused results. Do not use for runtime behavior, asset reachability, general class/call graphs, code generation, builds, tests, or project modification.
 ---
 
 # UE Project Inspector
@@ -30,9 +30,7 @@ If the scripts are missing, report that this repository does not contain the exp
 | Inspect one module's registration and lifecycle state transitions | `ue_inspect_module_entry.py` |
 | List direct include provenance from one selected `.cpp` | `ue_list_source_includes.py` |
 | List type and member-name facts from one selected `.cpp` | `ue_list_source_types.py` |
-| List variable declarations and scopes from one selected `.cpp` | `ue_list_source_variables.py` |
-| List callable signatures and declaration-definition relations | `ue_list_source_functions.py` |
-| Inspect operations in one explicitly selected function definition | `ue_inspect_source_function.py` |
+| Inspect external type and method references in all definitions matching one function name | `ue_inspect_source_function.py` |
 
 When the user explicitly requests all categories, run the relevant focused tools independently, validate each result, and summarize them without inventing a merged schema. For every other request, use only the smallest tool that answers the question.
 
@@ -56,9 +54,9 @@ When the user needs to modify or understand one plugin, drill down instead of me
 3. Select one resolved `.uplugin` and read it with `ue_read_plugin_descriptor.py`.
 4. Select one resolved Build.cs path from the descriptor result and run only the source tool needed next: `ue_inspect_module_rules.py` for UBT declarations or `ue_inspect_module_entry.py` for C++ module registration and lifecycle evidence.
 
-When the user or model explicitly selects one `.cpp`, run only the smallest source fact tool that answers the request. Pass only that source; every source tool discovers the nearest unique `.uproject` from the source's ancestor directories. Report missing or ambiguous project discovery instead of choosing for the model. Supply `--header` only when the companion header is already explicit. Otherwise let the tool select a header only from unique direct-include evidence.
+When the user or model explicitly selects one `.cpp`, run only the smallest source fact tool that answers the request. Pass only that source; every source tool discovers the nearest unique `.uproject` from the source's ancestor directories. Report missing or ambiguous project discovery instead of choosing for the model. Source tools do not accept a manual header. They derive same-name `.h/.hpp` candidates from the source directory and conventional module `Private` to `Public` or `Classes` mappings. One candidate becomes `source_unit.header`; zero candidates produce `null`; multiple candidates produce `null` plus a validation warning.
 
-Use `ue_list_source_functions.py` before function-body inspection. The model must explicitly choose one returned definition, then pass its stable `function_id` to `ue_inspect_source_function.py`; name, owner, and parameter text remain fallback selectors. Do not automatically inspect all function bodies or any dependency source returned by an include result. The model must explicitly choose every deeper source unit or function.
+Use `ue_list_source_types.py` to discover member-function names when type context is needed. The model must explicitly choose one function name, then call `ue_inspect_source_function.py` with that name. The function tool returns every same-name definition found in the selected `.cpp` and its automatically derived companion header; owner, parameters, qualifiers, and `function_id` are output facts and never selectors. Each match reports external type expressions and member calls using only local declaration syntax. Wrapped template types remain one expression, and member-call receivers are replaced with their locally declared type expression when available. Do not inspect other function names or dependency source.
 
 Do not embed or reinterpret later source-tool results as fields of the earlier `.uproject` result. Each tool keeps its own schema, validation, and limits.
 
@@ -83,11 +81,9 @@ python tools/ue_read_plugin_descriptor.py --plugin <plugin>
 python tools/ue_inspect_module_rules.py --rules <rules>
 python tools/ue_inspect_target_rules.py --target <target>
 python tools/ue_inspect_module_entry.py --rules <rules>
-python tools/ue_list_source_includes.py --source <source> [--header <header>]
-python tools/ue_list_source_types.py --source <source> [--header <header>]
-python tools/ue_list_source_variables.py --source <source> [--header <header>]
-python tools/ue_list_source_functions.py --source <source> [--header <header>]
-python tools/ue_inspect_source_function.py --source <source> (--function <name> | --function-id <id>) [--owner <type>] [--parameters <text>] [--header <header>]
+python tools/ue_list_source_includes.py --source <source>
+python tools/ue_list_source_types.py --source <source>
+python tools/ue_inspect_source_function.py --source <source> --function <name>
 ```
 
 Plugin resolution derives the Engine root from the project's `EngineAssociation` by default. Pass `--engine-root` only as an explicit override:
@@ -177,13 +173,11 @@ Treat `ue-itps.target-rule-relations.v1` as a TargetRules relevance projection, 
 
 ## Interpret source fact v1 schemas
 
-- Every source tool requires one explicitly selected `.cpp/.cc`. An explicit `--header` is read as supplied; otherwise only one directly included, same-stem header in the same source boundary may be selected automatically.
-- `source-includes.v1` reports direct spellings and unique filesystem provenance. `origin_unit` distinguishes the selected source from its companion header. `resolved` is not effective UBT or compiler include-path proof. Physical Build.cs and `.uplugin` ancestry does not prove that a dependency is required, correctly declared, public/private, or suitable for the user's goal.
-- `source-types.v1` reports class, struct, enum, inheritance, member-name indexes, per-member evidence in `member_details`, and type-related UE macros. It does not generate a semantic type summary. Macros retain independent evidence and are not attached to a type by proximity guesses.
-- `source-variables.v1` separates `file`, `member`, `parameter`, and `local` scopes. Initializers are retained as source expressions and are not evaluated. Callable-template members and supported function-pointer declarators remain variables. Ambiguous C++ declarations are reported in `unresolved_declarations` with a validation warning instead of being silently omitted.
-- `source-functions.v1` is a signature index with conservative declaration-definition relations. Each callable owns a stable `function_id` that includes parameters and required cv/ref identity qualifiers. Relation statuses distinguish `matched`, `inline_definition`, `source_only`, `declaration_only`, and `ambiguous`. The index deliberately omits function-body operations.
-- `source-function.v1` projects operations from exactly one selected definition. Calls are not followed. Prefer the returned `function_id` for exact selection; name, owner, and parameter selectors remain available. Operations expose stable per-result IDs, parent/depth relationships, expression roles, conservative call kinds, and scalar literal evaluation.
-- Pure command-line syntax errors use argparse stderr and exit 2. Source input/read failures return schema-shaped JSON and exit 2. A missing or ambiguous function selection returns `validation: error` JSON and exit 1.
+- Every source tool requires one explicitly selected `.cpp/.cc` and automatically derives same-name `.h/.hpp` candidates; callers cannot supply a header. Derivation checks the source directory and conventional module `Private` to `Public` or `Classes` mirror paths. Only one candidate becomes the companion header; zero or multiple candidates leave `source_unit.header` null, with multiple candidates reported in validation.
+- `source-includes.v1` reports direct spellings and unique filesystem provenance except for the source's own companion-header include, which is represented by `source_unit.header`. Each include uses `evidence.unit` (`cpp` or `header`) plus `line`; include syntax is retained internally for resolution but omitted from the public result. Uniquely resolved entries omit `resolution.status`, and their `owner` retains only `kind`. `generated_header`, `generated_source`, and `system_or_sdk_unresolved` remain in `includes` with their status. `ambiguous`, `not_found`, and `macro_unresolved` entries move to validation with the original include fact. Unique filesystem provenance is not effective UBT or compiler include-path proof, and physical Build.cs or `.uplugin` ancestry does not prove that a dependency is required, correctly declared, public/private, or suitable for the user's goal.
+- `source-types.v1` reports class, struct, enum, inheritance, and separated `member_details.variables` / `member_details.functions`. Type and member evidence uses `unit` (`cpp` or `header`) plus source lines. Type and reflection macros are attached to their lexical type or member as source-expression strings; this is not UHT semantic analysis. It does not generate a semantic type summary.
+- `source-function.v1` returns every definition matching one selected function name. Results are grouped under `matches`; each match retains its owner, signature, `function_id`, compact declaration-definition relation, `external_types`, and `external_methods`. External types are normalized type-expression strings derived from locally visible declarations; member-field types are included only when that member name is referenced by the selected function body and is not shadowed by a parameter or local declaration. Template wrappers and arguments remain together, while top-level cv/pointer/reference modifiers are removed. External methods are member-call strings whose receiver is replaced with its local declared type expression when available. Calls with unresolved receivers retain their source expression. No included source, inheritance, overload, or called method is followed.
+- Pure command-line syntax errors use argparse stderr and exit 2. Source input/read failures return schema-shaped JSON and exit 2. A function name with no matching definition returns `validation: error` JSON and exit 1; multiple matches are a normal successful result.
 - Referenced C++ files are never recursively read. The model must explicitly select another source unit for deeper inspection.
 - The tools do not generate feature labels, variable purposes, implementation advice, Build.cs changes, or acceptance conclusions. The model remains responsible for connecting facts and making decisions.
 

@@ -35,8 +35,12 @@ CLI_SCRIPTS = (
     "ue_inspect_module_entry.py",
     "ue_list_source_includes.py",
     "ue_list_source_types.py",
-    "ue_list_source_variables.py",
-    "ue_list_source_functions.py",
+    "ue_inspect_source_function.py",
+)
+
+SOURCE_CLI_SCRIPTS = (
+    "ue_list_source_includes.py",
+    "ue_list_source_types.py",
     "ue_inspect_source_function.py",
 )
 
@@ -587,6 +591,40 @@ class CliOutputContractTests(unittest.TestCase):
                 self.assertIn("Output contract", completed.stdout)
                 self.assertIn("退出码", completed.stdout)
                 self.assertIn("Exit codes", completed.stdout)
+
+    def test_source_clis_do_not_accept_manual_headers(self) -> None:
+        for script in SOURCE_CLI_SCRIPTS:
+            with self.subTest(script=script):
+                completed = subprocess.run(
+                    [sys.executable, str(TOOLS_ROOT / script), "--help"],
+                    cwd=REPOSITORY_ROOT,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    check=False,
+                )
+                self.assertEqual(completed.returncode, 0)
+                self.assertNotIn("--header", completed.stdout)
+
+    def test_source_function_cli_selects_by_name_only(self) -> None:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(TOOLS_ROOT / "ue_inspect_source_function.py"),
+                "--help",
+            ],
+            cwd=REPOSITORY_ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+
+        self.assertEqual(completed.returncode, 0)
+        self.assertIn("--function NAME", completed.stdout)
+        self.assertNotIn("--function-id", completed.stdout)
+        self.assertNotIn("--owner", completed.stdout)
+        self.assertNotIn("--parameters", completed.stdout)
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,7 +2,7 @@
 
 面向 Unreal Engine 项目的可验证功能复用、工程知识管理与增量信任编程系统。
 
-项目级 **v1**、源码规则与模块入口 **v2**、源码事实包 **v3** 均已完成。v1 提供七个确定性、只读的 UE 项目检查 CLI；v2 在不修改项目级 Schema 的前提下新增四个 CLI，覆盖单个 `.uplugin`、Build.cs、Target.cs 和模块入口；v3 新增五个聚焦源码 CLI，分别提供直接 include、类型、变量、函数索引和单函数操作事实。它们只读取选中的 `.cpp` 与显式或唯一证据确定的配套头文件。里程碑版本与各工具独立的 Schema 版本分开管理。
+项目级 **v1**、源码规则与模块入口 **v2**、源码事实包 **v3** 均已完成。v1 提供七个确定性、只读的 UE 项目检查 CLI；v2 在不修改项目级 Schema 的前提下新增四个 CLI，覆盖单个 `.uplugin`、Build.cs、Target.cs 和模块入口；v3 提供三个聚焦源码 CLI，分别覆盖直接 include、类型和同名函数的外部类型与方法引用。它们只读取选中的 `.cpp` 与显式或唯一证据确定的配套头文件。里程碑版本与各工具独立的 Schema 版本分开管理。
 
 当前仍不开发具体玩法或信任系统。UE 5.6.1 与 Epic 可追溯 Lyra 快照作为 v1 的首个回归对象，用于验证工程组成、项目入口、Engine、Module、Target、直接 Plugin 引用和项目根目录分类。
 
@@ -18,7 +18,7 @@
 - [L0/L1 运行证据捕获规范](.planning/codebase/RUNTIME-EVIDENCE.md)
 - [最小运行边界](.planning/codebase/MINIMAL-RUNTIME.md)
 
-当前已完成 UE 5.6.1 本机编译，冻结 9,656 个权威文件的 SHA-256 清单，并归档 Engine/Lyra 来源、Target、Module、Plugin、目录职责、核心 Asset Registry 关系，以及 PIE 启动、Frontend、Session/Travel、四种网络模式、Hard/Seamless 对象存续、失败恢复、Experience、PlayerState、Pawn、ASC、InitState 和输入的静态主链。十六个检查 CLI 的公共契约、严格校验、双语帮助、UTF-8 输出和 79 项单元测试已经稳定；原始日志不可覆盖复制与 SHA-256 manifest 工具也已就绪。
+当前已完成 UE 5.6.1 本机编译，冻结 9,656 个权威文件的 SHA-256 清单，并归档 Engine/Lyra 来源、Target、Module、Plugin、目录职责、核心 Asset Registry 关系，以及 PIE 启动、Frontend、Session/Travel、四种网络模式、Hard/Seamless 对象存续、失败恢复、Experience、PlayerState、Pawn、ASC、InitState 和输入的静态主链。十四个检查 CLI 的公共契约、严格校验、双语帮助和 UTF-8 输出已经稳定；原始日志不可覆盖复制与 SHA-256 manifest 工具也已就绪。
 
 当前本地 Lyra 工程壳可追溯到 Epic UnrealEngine 历史提交，但不是 `5.6.1-release` 标签的逐字节副本。L0 曾在本机观察通过，但原始运行日志已被 UE 日志轮转清理，必须重跑并受控留存后才能恢复为可审计权威证据；完整边界见基线文档。当前仍不执行 L1，也不修改或删减 Lyra。
 
@@ -70,7 +70,7 @@ Skill 默认选择能回答问题的最小工具。只有明确要求全部类�
 
 ## 统一 CLI 输出契约
 
-十六个只读检查 CLI 的正常扫描结果使用同一顶层顺序：
+十四个只读检查 CLI 的正常扫描结果使用同一顶层顺序：
 
 ```json
 {
@@ -105,8 +105,6 @@ Skill 默认选择能回答问题的最小工具。只有明确要求全部类�
 | `ue_inspect_module_entry.py` | `ue-itps.module-entry-state.v12` |
 | `ue_list_source_includes.py` | `ue-itps.source-includes.v1` |
 | `ue_list_source_types.py` | `ue-itps.source-types.v1` |
-| `ue_list_source_variables.py` | `ue-itps.source-variables.v1` |
-| `ue_list_source_functions.py` | `ue-itps.source-functions.v1` |
 | `ue_inspect_source_function.py` | `ue-itps.source-function.v1` |
 
 `validation` 只放该模块检测到的问题；已确认事实保留在中间的模块字段中。`limits` 固定为最后一个字段，供用户和大语言模型判断职责与解释边界。标准输出和标准错误固定使用 UTF-8。
@@ -238,23 +236,16 @@ python tools\ue_list_source_includes.py `
 python tools\ue_list_source_types.py `
   --source E:\UE_ITPS\LyraStarterGame\Source\LyraGame\AbilitySystem\LyraAbilitySet.cpp
 
-python tools\ue_list_source_variables.py `
-  --source E:\UE_ITPS\LyraStarterGame\Source\LyraGame\AbilitySystem\LyraAbilitySet.cpp
-
-python tools\ue_list_source_functions.py `
-  --source E:\UE_ITPS\LyraStarterGame\Source\LyraGame\AbilitySystem\LyraAbilitySet.cpp
-
 python tools\ue_inspect_source_function.py `
   --source E:\UE_ITPS\LyraStarterGame\Source\LyraGame\AbilitySystem\LyraAbilitySet.cpp `
-  --function GiveToAbilitySystem `
-  --owner ULyraAbilitySet
+  --function GiveToAbilitySystem
 ```
 
-`--source` 必须是用户或大模型显式选择的 `.cpp/.cc`。五个工具都从源码所在目录逐级向上查找最近且唯一的 `.uproject`，不要求调用方重复提供项目；找不到或最近一层存在多个候选时直接报错。可用 `--header` 显式选择配套 `.h/.hpp`；未提供时，只有 `.cpp` 直接 include 的同源码边界、同名头文件能够唯一定位，工具才读取它。
+`--source` 必须是用户或大模型显式选择的 `.cpp/.cc`。三个工具都从源码所在目录逐级向上查找最近且唯一的 `.uproject`，不要求调用方重复提供项目；找不到或最近一层存在多个候选时直接报错。工具不接受手动头文件参数，而是从 `.cpp` 自动推导配套 `.h/.hpp`：检查同目录同名头文件，以及模块 `Private` 到 `Public`、`Classes` 的相对路径映射。唯一结果直接写入 `source_unit.header`，没有候选时为 `null`，多个候选时为 `null` 并将候选位置写入 `validation`。
 
-include、类型、变量和函数命令是互不嵌套的事实索引。include 使用 `origin_unit` 区分 `.cpp` 与配套头文件；类型结果保留成员名称数组并增加带行号的 `member_details`，参数中的前置 `class/struct` 不作为类型定义，模板特化名称不使用模板实参。普通数组保持变量身份，只有 `auto [A, B]` 一类声明进入结构化绑定边界；无法可靠分类的声明进入 `unresolved_declarations` 并触发 warning，不再静默丢弃。函数索引不输出函数体，只在全局或命名空间作用域识别类外定义，析构函数保持所属类型，控制关键字不能成为 callable；每个 callable 提供包含必要 cv/ref 限定的稳定 `function_id`，并区分 `matched`、`inline_definition`、`source_only`、`declaration_only` 和 `ambiguous`。大模型选定函数后，再用 `ue_inspect_source_function.py --function-id` 读取调用、条件、赋值、构造和返回事实；原有 `--function`、`--owner` 和 `--parameters` 仍可使用。
+include 和类型命令是互不嵌套的事实索引。include 结果排除 `.cpp` 对配套头文件本身的引用，并用 `evidence.unit: cpp | header` 与 `line` 标识其所在源码单元；公开结果不重复输出 include 语法。唯一解析的 include 省略 `resolution.status`，其 `owner` 只保留物理来源 `kind`；`generated_header`、`generated_source` 和 `system_or_sdk_unresolved` 仍保留在 `includes` 并携带分类状态，`ambiguous`、`not_found` 和 `macro_unresolved` 则连同原 include 事实移入 `validation`。类型结果将成员放入 `member_details.variables` 和 `member_details.functions`，类型与成员证据使用 `unit: cpp | header` 和行号；`UCLASS`、`USTRUCT`、`GENERATED_BODY`、`UPROPERTY`、`UFUNCTION` 等宏以源码表达式字符串归属到对应类型或成员。参数中的前置 `class/struct` 不作为类型定义，模板特化名称不使用模板实参；无法可靠分类的文件或成员声明进入 `unresolved_declarations` 并触发 warning。`ue_inspect_source_function.py --function` 只按函数名选择，在 `.cpp` 与自动关联头文件中返回所有同名定义；所属类型、参数和 `function_id` 仅作为结果事实，不参与筛选。
 
-单函数操作使用 `operation_id`、`parent_operation_id`、`depth` 和 `expression_role` 表达嵌套关系，标记已知宏与保守的构造候选，并识别数字、布尔和空值字面量。工具仍不生成类型概括、变量用途或功能结论。被 include 的其他源码只做路径归属定位，不递归读取；`resolved` 只表示文件系统唯一来源，不等同于编译器有效 include 求值。
+同名函数结果按 `matches` 分组，每个匹配项分别返回 `external_types` 和 `external_methods`。外部类型是从当前函数可见声明中提取的规范化类型表达式字符串；成员字段类型只有在当前函数体实际引用该成员名且未被参数或局部声明遮蔽时才会进入结果。模板包装及其参数保持整体，仅移除顶层 cv、指针和引用修饰。外部方法是成员调用字符串，能确定接收者声明类型时用完整类型表达式替换变量名，例如 `Ability->GetDefaultObject<UGameplayAbility>()` 输出为 `TSubclassOf<UGameplayAbility>->GetDefaultObject<UGameplayAbility>()`；无法确定时保留原表达式。工具不读取 include 内容、展开调用或推断继承与重载。
 
 Target.cs 同样要求显式选择单个文件：
 
@@ -302,9 +293,9 @@ TargetRules 和 ModuleRules 复用底层词法、位置、控制结构和表达�
 
 ## 输出与安全边界
 
-- 十六个聚焦检查 CLI 默认只读，并将 JSON 写到标准输出。
-- 十六个检查 CLI 不计算或输出文件内容哈希；基线指纹工具保持独立职责。
-- `--help`、参数说明、输出契约和退出码采用中英文双语；纯命令行语法错误仍由 argparse 写入标准错误。五个源码 CLI 的文件、项目发现和读取失败返回对应 Schema 的 JSON 与退出码 2；函数不存在或选择歧义返回 `validation: error` 与退出码 1。
+- 十四个聚焦检查 CLI 默认只读，并将 JSON 写到标准输出。
+- 十四个检查 CLI 不计算或输出文件内容哈希；基线指纹工具保持独立职责。
+- `--help`、参数说明、输出契约和退出码采用中英文双语；纯命令行语法错误仍由 argparse 写入标准错误。三个源码 CLI 的文件、项目发现和读取失败返回对应 Schema 的 JSON 与退出码 2；找不到同名函数定义时返回 `validation: error` 与退出码 1。
 - 基线指纹、运行日志归档和 Asset Registry 查询属于证据生成工具，会写入 `.planning/evidence/`。
 - 项目检查结果只证明静态声明和文件定位，不证明项目已经编译、启动、联网或通过测试。
 - 当前工具固定以 UE 5.6.1 Lyra 为首个回归基准，但长期数据模型不应绑定 Lyra 架构。
@@ -317,7 +308,7 @@ TargetRules 和 ModuleRules 复用底层词法、位置、控制结构和表达�
 python -m unittest discover -s tests -v
 ```
 
-单元测试覆盖统一结果信封、双语 CLI、严格 JSON、描述符压缩、Module 对账、Target 分类、Plugin 定位、路径分类、ModuleRules/TargetRules 相关性投影、模块入口状态模型，以及五个源码工具的头文件选择、非递归边界、来源归属、变量作用域、声明—定义关系和单函数操作事实。静态检查通过不等于 UE 项目已经构建或运行；Lyra 构建与运行证据仍按 `.planning/evidence/` 中的独立流程管理。
+单元测试覆盖统一结果信封、双语 CLI、严格 JSON、描述符压缩、Module 对账、Target 分类、Plugin 定位、路径分类、ModuleRules/TargetRules 相关性投影、模块入口状态模型，以及三个源码工具的头文件选择、非递归边界、来源归属、成员投影、声明—定义关系和同名函数外部引用。静态检查通过不等于 UE 项目已经构建或运行；Lyra 构建与运行证据仍按 `.planning/evidence/` 中的独立流程管理。
 
 ## 当前回归基线
 
