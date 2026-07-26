@@ -165,4 +165,4 @@ class SourceIncludeTests(EnvelopeAssertions):
             ):
                 result = list_source_includes(fixture.source_file)
 
-        self.assertEqual(result["schema_version"], "ue-itps.source-includes.v1")
+        self.assertEqual(result["schema_version"], "ue-itps.cxx-includes.v1")

@@ -1128,7 +1128,7 @@ def list_source_includes(
         load_declaration_analysis=False,
     )
     return _source_result(
-        "ue-itps.source-includes.v1",
+        "ue-itps.cxx-includes.v1",
         loaded,
         {"includes": loaded["includes"]},
         responsibility="Report non-companion direct include spellings and deterministic filesystem provenance.",
@@ -1381,7 +1381,7 @@ def list_source_types(
     variables, unresolved = _source_declaration_facts(loaded)
     types, type_problems = _type_facts(loaded, variables)
     return _source_result(
-        "ue-itps.source-types.v1",
+        "ue-itps.cxx-types.v1",
         loaded,
         {
             "types": types,
@@ -1834,7 +1834,7 @@ def list_source_functions(
         if macro["name"] == "UFUNCTION"
     ]
     return _source_result(
-        "ue-itps.source-functions.v1",
+        "ue-itps.cxx-functions.v1",
         loaded,
         {
             "functions": functions,
@@ -1894,7 +1894,7 @@ def inspect_source_function(
     ]
     if not candidates:
         return _source_result(
-            "ue-itps.source-function.v1",
+            "ue-itps.cxx-function.v1",
             loaded,
             {
                 "selection": {"name": function_name},
@@ -1952,7 +1952,7 @@ def inspect_source_function(
             }
         )
     return _source_result(
-        "ue-itps.source-function.v1",
+        "ue-itps.cxx-function.v1",
         loaded,
         {
             "selection": {"name": function_name},

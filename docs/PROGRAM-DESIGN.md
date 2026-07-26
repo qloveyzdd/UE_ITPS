@@ -113,9 +113,9 @@ Build.cs / Target.cs / .cs    .cpp + 唯一自动配套头文件
 | `ue_inspect_target_rules.py` | `--target` | 索引一个 Target.cs 的 TargetRules 类、继承、成员变量和函数。 | `ue-itps.target-rule-relations.v1` |
 | `ue_inspect_module_entry.py` | `--rules` | 提取一个模块的注册、回调绑定/清理和非回调生命周期状态。 | `ue-itps.module-entry-state.v12` |
 | `ue_inspect_cs_function.py` | `--source`、`--function` | 返回任意 `.cs` 中指定名称的全部类成员函数及外部类型与方法引用。 | `ue-itps.cs-function.v1` |
-| `ue_list_source_includes.py` | `--source`，可选 `--engine-root` | 列出显式源码单元的非配套头文件直接 include 与物理来源。 | `ue-itps.source-includes.v1` |
-| `ue_list_source_types.py` | `--source`，可选 `--engine-root` | 索引类型、继承、成员名称和 UE 宏的词法事实。 | `ue-itps.source-types.v1` |
-| `ue_inspect_source_function.py` | `--source`、`--function`，可选 Engine | 返回指定名称的全部定义及各自的外部类型与成员调用。 | `ue-itps.source-function.v1` |
+| `ue_list_cxx_includes.py` | `--source`，可选 `--engine-root` | 列出显式 C++ 源码单元的非配套头文件直接 include 与物理来源。 | `ue-itps.cxx-includes.v1` |
+| `ue_list_cxx_types.py` | `--source`，可选 `--engine-root` | 索引类型、继承、成员名称和 UE 宏的词法事实。 | `ue-itps.cxx-types.v1` |
+| `ue_inspect_cxx_function.py` | `--source`、`--function`，可选 Engine | 返回指定名称的全部定义及各自的外部类型与成员调用。 | `ue-itps.cxx-function.v1` |
 
 `ue_resolve_plugins.py` 的默认 Profile 是 `operation=scan`、`platform=Win64`、`target_type=Editor`。三个 C++ 源码 CLI 不接受手动头文件参数；配套 `.h/.hpp` 必须由同目录同名或 Module `Private` 到 `Public`/`Classes` 的唯一映射自动确定。通用 C# 函数 CLI 只读取显式选择的一个 `.cs`。
 
@@ -179,10 +179,10 @@ Build.cs / Target.cs / .cs    .cpp + 唯一自动配套头文件
                     -> 最近唯一祖先 .uproject
                     -> Engine 与 Module 物理来源上下文
                     -> 自动选择零个或一个配套头文件
-                    -> ue_list_source_includes
-                    -> ue_list_source_types
+                    -> ue_list_cxx_includes
+                    -> ue_list_cxx_types
                     -> 从类型成员名显式选择函数名
-                    -> ue_inspect_source_function
+                    -> ue_inspect_cxx_function
 
 显式选择一个 .cs
   -> 显式选择函数名
@@ -269,7 +269,7 @@ C# 扫描器使用自有轻量词法层，不执行 C#：
 
 退出码 2 的当前行为必须精确区分：
 
-- `ue_list_source_includes.py`、`ue_list_source_types.py`、`ue_inspect_source_function.py`、`ue_inspect_cs_function.py` 捕获输入/读取异常，在 stdout 返回各自 Schema 的结构化错误 JSON：`request.status=failed`、`validation.status=error`，stderr 为空。
+- `ue_list_cxx_includes.py`、`ue_list_cxx_types.py`、`ue_inspect_cxx_function.py`、`ue_inspect_cs_function.py` 捕获输入/读取异常，在 stdout 返回各自 Schema 的结构化错误 JSON：`request.status=failed`、`validation.status=error`，stderr 为空。
 - 其余 11 个 CLI 的输入/读取异常调用 `argparse.ArgumentParser.error()`，在 stderr 输出用法和文本错误，不输出正常扫描 JSON。
 - 所有 15 个 CLI 的命令行语法错误都由 argparse 处理，使用 stderr 文本并退出 2。
 

@@ -77,9 +77,9 @@ class CliContractTests(EnvelopeAssertions):
 
     def test_source_clis_return_schema_json_for_missing_input(self) -> None:
         cases = {
-            "ue_list_source_includes.py": "ue-itps.source-includes.v1",
-            "ue_list_source_types.py": "ue-itps.source-types.v1",
-            "ue_inspect_source_function.py": "ue-itps.source-function.v1",
+            "ue_list_cxx_includes.py": "ue-itps.cxx-includes.v1",
+            "ue_list_cxx_types.py": "ue-itps.cxx-types.v1",
+            "ue_inspect_cxx_function.py": "ue-itps.cxx-function.v1",
             "ue_inspect_cs_function.py": "ue-itps.cs-function.v1",
         }
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -88,7 +88,7 @@ class CliContractTests(EnvelopeAssertions):
                 missing = Path(temporary_directory) / f"Missing{suffix}"
                 arguments = ["--source", str(missing)]
                 if script in {
-                    "ue_inspect_source_function.py",
+                    "ue_inspect_cxx_function.py",
                     "ue_inspect_cs_function.py",
                 }:
                     arguments.extend(["--function", "Missing"])

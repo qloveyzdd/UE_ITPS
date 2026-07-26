@@ -29,9 +29,9 @@ If the scripts are missing, report that this repository does not contain the exp
 | Index TargetRules classes, member variables, and functions from one Target.cs | `ue_inspect_target_rules.py` |
 | Inspect all class members matching one function name in one `.cs` | `ue_inspect_cs_function.py` |
 | Inspect one module's registration and lifecycle state transitions | `ue_inspect_module_entry.py` |
-| List direct include provenance from one selected `.cpp` | `ue_list_source_includes.py` |
-| List type and member-name facts from one selected `.cpp` | `ue_list_source_types.py` |
-| Inspect external type and method references in all definitions matching one function name | `ue_inspect_source_function.py` |
+| List direct include provenance from one selected `.cpp` | `ue_list_cxx_includes.py` |
+| List type and member-name facts from one selected `.cpp` | `ue_list_cxx_types.py` |
+| Inspect external type and method references in all definitions matching one function name | `ue_inspect_cxx_function.py` |
 
 When the user explicitly requests all categories, run the relevant focused tools independently, validate each result, and summarize them without inventing a merged schema. For every other request, use only the smallest tool that answers the question.
 
@@ -57,7 +57,7 @@ When the user needs to modify or understand one plugin, drill down instead of me
 
 When the user or model explicitly selects one `.cpp`, run only the smallest source fact tool that answers the request. Pass only that source; every source tool discovers the nearest unique `.uproject` from the source's ancestor directories. Report missing or ambiguous project discovery instead of choosing for the model. Source tools do not accept a manual header. They derive same-name `.h/.hpp` candidates from the source directory and conventional module `Private` to `Public` or `Classes` mappings. One candidate becomes `source_unit.header`; zero candidates produce `null`; multiple candidates produce `null` plus a validation warning.
 
-Use `ue_list_source_types.py` to discover member-function names when type context is needed. The model must explicitly choose one function name, then call `ue_inspect_source_function.py` with that name. The function tool returns every same-name definition found in the selected `.cpp` and its automatically derived companion header; owner, parameters, qualifiers, and `function_id` are output facts and never selectors. Each match reports external type expressions and member calls using only local declaration syntax. Wrapped template types remain one expression, and member-call receivers are replaced with their locally declared type expression when available. Do not inspect other function names or dependency source.
+Use `ue_list_cxx_types.py` to discover member-function names when type context is needed. The model must explicitly choose one function name, then call `ue_inspect_cxx_function.py` with that name. The function tool returns every same-name definition found in the selected `.cpp` and its automatically derived companion header; owner, parameters, qualifiers, and `function_id` are output facts and never selectors. Each match reports external type expressions and member calls using only local declaration syntax. Wrapped template types remain one expression, and member-call receivers are replaced with their locally declared type expression when available. Do not inspect other function names or dependency source.
 
 Use `ue_inspect_target_rules.py` to discover member-function names in one selected `Target.cs`. The model must explicitly choose one function name, then call `ue_inspect_cs_function.py` with the same file and selected name. The C# function tool can also inspect an explicitly selected ordinary `.cs` or `Build.cs` directly. It returns every same-name class or struct member in that file and never follows called functions.
 
@@ -85,9 +85,9 @@ python tools/ue_inspect_module_rules.py --rules <rules>
 python tools/ue_inspect_target_rules.py --target <target>
 python tools/ue_inspect_cs_function.py --source <cs-source> --function <name>
 python tools/ue_inspect_module_entry.py --rules <rules>
-python tools/ue_list_source_includes.py --source <source>
-python tools/ue_list_source_types.py --source <source>
-python tools/ue_inspect_source_function.py --source <source> --function <name>
+python tools/ue_list_cxx_includes.py --source <source>
+python tools/ue_list_cxx_types.py --source <source>
+python tools/ue_inspect_cxx_function.py --source <source> --function <name>
 ```
 
 Plugin resolution derives the Engine root from the project's `EngineAssociation` by default. Pass `--engine-root` only as an explicit override:

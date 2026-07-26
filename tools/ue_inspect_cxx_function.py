@@ -1,29 +1,36 @@
 #!/usr/bin/env python3
-"""List direct include facts from one explicitly selected C++ source unit."""
+"""Inspect all C++ function definitions matching one selected name."""
 
 from pathlib import Path
 
 from ue_project_tools.common import cli_error_document, cli_parser, json_text
-from ue_project_tools.source_unit import list_source_includes
+from ue_project_tools.source_unit import inspect_source_function
 
 
-SCHEMA_VERSION = "ue-itps.source-includes.v1"
+SCHEMA_VERSION = "ue-itps.cxx-function.v1"
 RESPONSIBILITY = (
-    "Report non-companion direct include spellings and deterministic filesystem provenance."
+    "Report external type and method references for all definitions matching one function name."
 )
 
 
 def main() -> int:
     parser = cli_parser(
-        "列出一个显式选择的 C++ 源码单元中的直接引用事实。",
-        "List direct include facts from one explicitly selected C++ source unit.",
+        "读取指定名称的全部 C++ 函数定义及其外部类型和方法引用。",
+        "Read external type and method references from all C++ function definitions matching one name.",
     )
     parser.add_argument("--source", required=True, metavar="FILE", help="显式选择的 .cpp/.cc 文件 / Explicitly selected .cpp/.cc file")
+    parser.add_argument(
+        "--function",
+        required=True,
+        metavar="NAME",
+        help="函数名称；返回所有同名定义 / Function name; return all matching definitions",
+    )
     parser.add_argument("--engine-root", metavar="PATH", help="显式 Engine 根目录覆盖 / Explicit Engine root override")
     args = parser.parse_args()
     try:
-        result = list_source_includes(
+        result = inspect_source_function(
             Path(args.source),
+            args.function,
             engine_override=Path(args.engine_root) if args.engine_root else None,
         )
     except (OSError, ValueError) as exc:

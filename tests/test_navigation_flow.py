@@ -65,15 +65,15 @@ class NavigationFlowTests(EnvelopeAssertions):
                     "--rules",
                     str(fixture.plugin_rules),
                 ],
-                "ue_list_source_includes.py": [
+                "ue_list_cxx_includes.py": [
                     "--source",
                     str(fixture.source_file),
                 ],
-                "ue_list_source_types.py": [
+                "ue_list_cxx_types.py": [
                     "--source",
                     str(fixture.source_file),
                 ],
-                "ue_inspect_source_function.py": [
+                "ue_inspect_cxx_function.py": [
                     "--source",
                     str(fixture.source_file),
                     "--function",
@@ -141,16 +141,16 @@ class NavigationFlowTests(EnvelopeAssertions):
 
         type_functions = {
             member["name"]
-            for item in results["ue_list_source_types.py"]["types"]
+            for item in results["ue_list_cxx_types.py"]["types"]
             for member in item["member_details"]["functions"]
         }
         self.assertIn("Execute", type_functions)
         self.assertEqual(
-            results["ue_inspect_source_function.py"]["selection"]["name"],
+            results["ue_inspect_cxx_function.py"]["selection"]["name"],
             "Execute",
         )
         self.assertEqual(
-            results["ue_inspect_source_function.py"]["match_count"],
+            results["ue_inspect_cxx_function.py"]["match_count"],
             1,
         )
         self.assertEqual(

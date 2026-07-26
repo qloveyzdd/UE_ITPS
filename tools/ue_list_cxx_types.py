@@ -7,7 +7,7 @@ from ue_project_tools.common import cli_error_document, cli_parser, json_text
 from ue_project_tools.source_unit import list_source_types
 
 
-SCHEMA_VERSION = "ue-itps.source-types.v1"
+SCHEMA_VERSION = "ue-itps.cxx-types.v1"
 RESPONSIBILITY = (
     "Index class, struct, enum, inheritance, member-name, and UE type-macro facts."
 )

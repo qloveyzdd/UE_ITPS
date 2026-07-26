@@ -70,9 +70,9 @@ python tools/ue_inspect_module_entry.py --help
 | v2 | `ue_inspect_target_rules.py` | `--target FILE` | 索引一个 `Target.cs` 中的 TargetRules 类、继承、成员变量和函数 | `ue-itps.target-rule-relations.v1` |
 | v2 | `ue_inspect_module_entry.py` | `--rules FILE` | 从 Module 的 `Build.cs` 导航到入口源码，报告注册、回调绑定/清理和紧凑生命周期状态 | `ue-itps.module-entry-state.v12` |
 | v3 | `ue_inspect_cs_function.py` | `--source FILE --function NAME` | 返回任意 `.cs` 中该名称的全部类成员函数、外部类型与方法引用 | `ue-itps.cs-function.v1` |
-| v3 | `ue_list_source_includes.py` | `--source FILE`，可选 `--engine-root PATH` | 列出一个显式源码单元的直接 include、条件和唯一文件系统来源 | `ue-itps.source-includes.v1` |
-| v3 | `ue_list_source_types.py` | `--source FILE`，可选 `--engine-root PATH` | 列出 class、struct、enum、继承、成员名称及 UE 类型/成员宏 | `ue-itps.source-types.v1` |
-| v3 | `ue_inspect_source_function.py` | `--source FILE --function NAME`，可选 `--engine-root PATH` | 返回该名称的全部函数定义、声明关系、稳定 `function_id`、外部类型与成员调用 | `ue-itps.source-function.v1` |
+| v3 | `ue_list_cxx_includes.py` | `--source FILE`，可选 `--engine-root PATH` | 列出一个显式 C++ 源码单元的直接 include、条件和唯一文件系统来源 | `ue-itps.cxx-includes.v1` |
+| v3 | `ue_list_cxx_types.py` | `--source FILE`，可选 `--engine-root PATH` | 列出 class、struct、enum、继承、成员名称及 UE 类型/成员宏 | `ue-itps.cxx-types.v1` |
+| v3 | `ue_inspect_cxx_function.py` | `--source FILE --function NAME`，可选 `--engine-root PATH` | 返回该名称的全部函数定义、声明关系、稳定 `function_id`、外部类型与成员调用 | `ue-itps.cxx-function.v1` |
 
 `ue_resolve_plugins.py` 的 Profile 参数为：
 
@@ -107,10 +107,10 @@ python tools/ue_inspect_module_entry.py --help
       └─ ue_classify_project_paths.py
 
 显式选择一个 .cpp/.cc
-├─ ue_list_source_includes.py
-└─ ue_list_source_types.py
+├─ ue_list_cxx_includes.py
+└─ ue_list_cxx_types.py
    └─ 从成员事实中选择一个函数名
-      └─ ue_inspect_source_function.py
+      └─ ue_inspect_cxx_function.py
 
 显式选择一个 .cs
 └─ 按名称选择类成员函数
@@ -123,7 +123,7 @@ python tools/ue_inspect_module_entry.py --help
 2. Plugin 定位默认使用项目的 `EngineAssociation`；只有调用方已有明确 Engine 根目录时才传 `--engine-root`。
 3. Module、Target、Plugin 和函数必须从用户输入或前一步输出的证据中显式选择。
 4. 三个 C++ 源码工具只接受 `.cpp/.cc`；它们自动查找同目录或常规 `Private` → `Public`/`Classes` 映射中的同名头文件。零个候选时 `header` 为 `null`，多个候选时同时返回 warning。
-5. `ue_inspect_source_function.py` 按函数名返回所有同名定义；owner、参数、限定符和 `function_id` 是输出事实，不是输入选择器。
+5. `ue_inspect_cxx_function.py` 按函数名返回所有同名定义；owner、参数、限定符和 `function_id` 是输出事实，不是输入选择器。
 6. `ue_inspect_cs_function.py` 接受任意 `.cs`，按函数名返回全部同名类成员及其外部类型和方法引用；同类调用也会返回，但不会递归展开。
 
 ## 输出、验证与退出码契约
@@ -164,8 +164,8 @@ python tools/ue_inspect_module_rules.py --rules D:/Projects/MyGame/Plugins/MyPlu
 ### 从类型索引导航到指定函数
 
 ```bash
-python tools/ue_list_source_types.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp
-python tools/ue_inspect_source_function.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp --function BeginPlay
+python tools/ue_list_cxx_types.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp
+python tools/ue_inspect_cxx_function.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp --function BeginPlay
 ```
 
 第二条命令的结果包含所有 `BeginPlay` 定义；没有匹配定义时返回结构化 `function-not-found` 错误并退出 `1`。

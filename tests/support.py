@@ -29,9 +29,9 @@ CLI_SCRIPTS = (
     "ue_inspect_target_rules.py",
     "ue_inspect_cs_function.py",
     "ue_inspect_module_entry.py",
-    "ue_list_source_includes.py",
-    "ue_list_source_types.py",
-    "ue_inspect_source_function.py",
+    "ue_list_cxx_includes.py",
+    "ue_list_cxx_types.py",
+    "ue_inspect_cxx_function.py",
 )
 
 
