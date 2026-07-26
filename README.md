@@ -1,328 +1,251 @@
-# UE-ITPS
+<!-- generated-by: gsd-doc-writer -->
+# UE ITPS
 
-面向 Unreal Engine 项目的可验证功能复用、工程知识管理与增量信任编程系统。
+UE ITPS 是一组面向用户与 AI Agent 的确定性、只读 Unreal Engine 项目检查器：14 个聚焦 CLI 分别读取一个明确输入，并输出适合程序消费的 JSON 事实、验证问题和能力边界。
 
-项目级 **v1**、源码规则与模块入口 **v2**、源码事实包 **v3** 均已完成。v1 提供七个确定性、只读的 UE 项目检查 CLI；v2 在不修改项目级 Schema 的前提下新增四个 CLI，覆盖单个 `.uplugin`、Build.cs、Target.cs 和模块入口；v3 提供三个聚焦源码 CLI，分别覆盖直接 include、类型和同名函数的外部类型与方法引用。它们只读取选中的 `.cpp` 与显式或唯一证据确定的配套头文件。里程碑版本与各工具独立的 Schema 版本分开管理。
+## 当前范围
 
-当前仍不开发具体玩法或信任系统。UE 5.6.1 与 Epic 可追溯 Lyra 快照作为 v1 的首个回归对象，用于验证工程组成、项目入口、Engine、Module、Target、直接 Plugin 引用和项目根目录分类。
+项目按导航深度分为三个范围；这里的 v1/v2/v3 表示能力层级，不等同于每个工具各自的 `schema_version`。
 
-当前入口：
+- **v1 — 项目级发现与对账**：发现 `.uproject`，读取项目描述符，解析实际 Engine，定位项目 Module、Target、直接 Plugin 引用，并分类项目根目录。
+- **v2 — Plugin、构建规则与模块入口下钻**：读取一个 `.uplugin`，检查一个 `Build.cs` 或 `Target.cs` 的静态规则关系，并检查一个模块入口的注册、回调清理和生命周期状态。
+- **v3 — 单个 C++ 源码单元下钻**：从一个显式选择的 `.cpp/.cc` 自动确定最近的项目与唯一伴随头文件，分别列出直接 include、类型/成员事实，以及指定函数名的全部定义和外部引用。
 
-- [基线与复现状态](.planning/codebase/BASELINE.md)
-- [工程栈与依赖全景](.planning/codebase/STACK.md)
-- [目录结构与职责边界](.planning/codebase/STRUCTURE.md)
-- [Lyra 顶层架构与启动主链](.planning/codebase/ARCHITECTURE.md)
-- [启动、Experience 与玩家初始化管线](.planning/codebase/PIPELINES.md)
-- [前端、会话与地图旅行管线](.planning/codebase/TRAVEL.md)
-- [网络模式、旅行存续与失败边界](.planning/codebase/NETWORK-MODES.md)
-- [L0/L1 运行证据捕获规范](.planning/codebase/RUNTIME-EVIDENCE.md)
-- [最小运行边界](.planning/codebase/MINIMAL-RUNTIME.md)
+这些工具不会生成项目级“总报告”。每个结果保留独立的 Schema、验证结果和责任边界，调用方应沿证据路径逐步选择下一个输入。
 
-当前已完成 UE 5.6.1 本机编译，冻结 9,656 个权威文件的 SHA-256 清单，并归档 Engine/Lyra 来源、Target、Module、Plugin、目录职责、核心 Asset Registry 关系，以及 PIE 启动、Frontend、Session/Travel、四种网络模式、Hard/Seamless 对象存续、失败恢复、Experience、PlayerState、Pawn、ASC、InitState 和输入的静态主链。十四个检查 CLI 的公共契约、严格校验、双语帮助和 UTF-8 输出已经稳定；原始日志不可覆盖复制与 SHA-256 manifest 工具也已就绪。
+维护扫描器实现时，请参阅[扫描器核心程序设计](docs/PROGRAM-DESIGN.md)。
 
-当前本地 Lyra 工程壳可追溯到 Epic UnrealEngine 历史提交，但不是 `5.6.1-release` 标签的逐字节副本。L0 曾在本机观察通过，但原始运行日志已被 UE 日志轮转清理，必须重跑并受控留存后才能恢复为可审计权威证据；完整边界见基线文档。当前仍不执行 L1，也不修改或删减 Lyra。
+## 环境与安装
+
+- Python `>= 3.10`
+- 14 个核心 CLI 仅使用 Python 标准库，无需安装第三方包
+- 解析 Engine 安装时需要可访问的 Unreal Engine 目录；无法从 `EngineAssociation` 唯一解析时可显式传入 `--engine-root`
+
+```bash
+git clone https://github.com/qloveyzdd/UE_ITPS.git
+cd UE_ITPS
+python --version
+```
+
+## 快速开始
+
+1. 从一个搜索根目录发现 `.uproject`：
+
+   ```bash
+   python tools/ue_find_projects.py --search-root D:/Projects
+   ```
+
+2. 若结果中只有一个候选，将其作为后续工具的显式输入：
+
+   ```bash
+   python tools/ue_read_project_descriptor.py --project D:/Projects/MyGame/MyGame.uproject
+   ```
+
+3. 按需要继续检查，而不是一次运行所有工具：
+
+   ```bash
+   python tools/ue_inspect_modules.py --project D:/Projects/MyGame/MyGame.uproject
+   python tools/ue_resolve_plugins.py --project D:/Projects/MyGame/MyGame.uproject --operation scan --platform Win64 --target-type Editor
+   ```
+
+所有 CLI 都提供中英双语帮助：
+
+```bash
+python tools/ue_inspect_module_entry.py --help
+```
+
+## 14 个聚焦 CLI
+
+| 范围 | CLI | 主要输入 | 能力 | 输出 Schema |
+|---|---|---|---|---|
+| v1 | `ue_find_projects.py` | `--search-root PATH` | 发现 `.uproject` 候选；遇到多个候选时报告歧义，不擅自选择 | `ue-itps.project-discovery.v1` |
+| v1 | `ue_read_project_descriptor.py` | `--project FILE` | 读取一个 `.uproject` 的显式字段、Module 名称、Plugin 声明和未建模字段 | `ue-itps.project-descriptor.v1` |
+| v1 | `ue_resolve_engine.py` | `--project FILE`，可选 `--engine-root PATH` | 将 `EngineAssociation` 解析为唯一 Engine，并读取实际 `Build.version` | `ue-itps.engine-resolution.v1` |
+| v1 | `ue_inspect_modules.py` | `--project FILE` | 对账项目 Module 声明、`Build.cs` 候选和模块注册入口证据 | `ue-itps.project-modules.v1` |
+| v1 | `ue_inspect_targets.py` | `--project FILE` | 发现 `Target.cs` 并分类原生项目证据 | `ue-itps.project-targets.v1` |
+| v1 | `ue_resolve_plugins.py` | `--project FILE`，可选 Engine/Profile 参数 | 在一个显式 operation、platform、target-type Profile 下定位 `.uproject` 的直接 Plugin 引用 | `ue-itps.project-plugin-references.v1` |
+| v1 | `ue_classify_project_paths.py` | `--project FILE` | 根据项目描述符证据分类项目根目录及其文件系统状态 | `ue-itps.project-paths.v1` |
+| v2 | `ue_read_plugin_descriptor.py` | `--plugin FILE` | 读取并校验一个 `.uplugin`，对账其 Module、`Build.cs` 和直接 Plugin 依赖声明 | `ue-itps.plugin-descriptor.v2` |
+| v2 | `ue_inspect_module_rules.py` | `--rules FILE` | 提取一个 `Build.cs` 及同文件可达 helper 中的 ModuleRules 设置变更、引用和条件 | `ue-itps.module-rule-relations.v1` |
+| v2 | `ue_inspect_target_rules.py` | `--target FILE` | 提取一个 `Target.cs` 及同文件可达 helper 中的 TargetRules 设置变更、引用和控制条件 | `ue-itps.target-rule-relations.v1` |
+| v2 | `ue_inspect_module_entry.py` | `--rules FILE` | 从 Module 的 `Build.cs` 导航到入口源码，报告注册、回调绑定/清理和紧凑生命周期状态 | `ue-itps.module-entry-state.v12` |
+| v3 | `ue_list_source_includes.py` | `--source FILE`，可选 `--engine-root PATH` | 列出一个显式源码单元的直接 include、条件和唯一文件系统来源 | `ue-itps.source-includes.v1` |
+| v3 | `ue_list_source_types.py` | `--source FILE`，可选 `--engine-root PATH` | 列出 class、struct、enum、继承、成员名称及 UE 类型/成员宏 | `ue-itps.source-types.v1` |
+| v3 | `ue_inspect_source_function.py` | `--source FILE --function NAME`，可选 `--engine-root PATH` | 返回该名称的全部函数定义、声明关系、稳定 `function_id`、外部类型与成员调用 | `ue-itps.source-function.v1` |
+
+`ue_resolve_plugins.py` 的 Profile 参数为：
+
+- `--operation`：`scan`、`open_editor`、`build_editor`、`run_game` 或 `cook_package`，默认 `scan`
+- `--platform`：默认 `Win64`
+- `--target-type`：默认 `Editor`
+
+## 显式导航工作流
+
+```text
+搜索根目录
+└─ ue_find_projects.py
+   └─ 唯一 .uproject
+      ├─ ue_read_project_descriptor.py
+      ├─ ue_resolve_engine.py
+      ├─ ue_inspect_modules.py
+      │  └─ 选择一个 Build.cs
+      │     ├─ ue_inspect_module_rules.py
+      │     └─ ue_inspect_module_entry.py
+      ├─ ue_inspect_targets.py
+      │  └─ 选择一个 Target.cs
+      │     └─ ue_inspect_target_rules.py
+      ├─ ue_resolve_plugins.py
+      │  └─ 选择一个已解析的 .uplugin
+      │     └─ ue_read_plugin_descriptor.py
+      │        └─ 选择该 Plugin 的一个 Build.cs
+      │           ├─ ue_inspect_module_rules.py
+      │           └─ ue_inspect_module_entry.py
+      └─ ue_classify_project_paths.py
+
+显式选择一个 .cpp/.cc
+├─ ue_list_source_includes.py
+└─ ue_list_source_types.py
+   └─ 从成员事实中选择一个函数名
+      └─ ue_inspect_source_function.py
+```
+
+导航规则：
+
+1. 多个 `.uproject` 是歧义，不应由调用方随意取第一个。
+2. Plugin 定位默认使用项目的 `EngineAssociation`；只有调用方已有明确 Engine 根目录时才传 `--engine-root`。
+3. Module、Target、Plugin 和函数必须从用户输入或前一步输出的证据中显式选择。
+4. 源码工具只接受 `.cpp/.cc`；它们自动查找同目录或常规 `Private` → `Public`/`Classes` 映射中的同名头文件。零个候选时 `header` 为 `null`，多个候选时同时返回 warning。
+5. `ue_inspect_source_function.py` 按函数名返回所有同名定义；owner、参数、限定符和 `function_id` 是输出事实，不是输入选择器。
+
+## 输出、验证与退出码契约
+
+正常 JSON 结果保持以下顶层顺序：
+
+```text
+schema_version
+<该工具的事实字段>
+validation
+limits
+```
+
+- `validation.status` 为 `ok`、`warning` 或 `error`。
+- `validation.problem_count` 等于 `validation.problems` 的项目数；每个问题带有严重级别、稳定问题码和相关证据。
+- `limits.responsibility` 说明该工具负责回答什么；`limits.boundaries` 说明结果不能证明什么。
+- `warning` 表示扫描已完成且问题非阻断，退出码仍为 `0`。不要把它改写成 `ok`。
+
+| 退出码 | 含义 |
+|---|---|
+| `0` | 扫描完成，未发现阻断问题；结果可能为 `ok` 或 `warning` |
+| `1` | 扫描完成，但 `validation.status` 为 `error` |
+| `2` | 命令行参数、输入或读取失败 |
+
+语法错误通常由 `argparse` 写入 stderr。三个源码 CLI 在源码输入/读取失败时会在 stdout 返回带 Schema 的 JSON 错误文档并退出 `2`。因此自动化调用方应同时检查退出码、stdout JSON 和 stderr。
+
+## 常见用法
+
+### 读取一个 Plugin，再检查其构建规则
+
+```bash
+python tools/ue_read_plugin_descriptor.py --plugin D:/Projects/MyGame/Plugins/MyPlugin/MyPlugin.uplugin
+python tools/ue_inspect_module_rules.py --rules D:/Projects/MyGame/Plugins/MyPlugin/Source/MyPlugin/MyPlugin.Build.cs
+```
+
+第一条命令会给出 Plugin 声明、Module 与 `Build.cs` 候选；第二条只报告所选规则文件中的静态设置变更和条件，不计算 UnrealBuildTool 的最终有效配置。
+
+### 从类型索引导航到指定函数
+
+```bash
+python tools/ue_list_source_types.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp
+python tools/ue_inspect_source_function.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp --function BeginPlay
+```
+
+第二条命令的结果包含所有 `BeginPlay` 定义；没有匹配定义时返回结构化 `function-not-found` 错误并退出 `1`。
 
 ## 仓库结构
 
 ```text
-UE_ITPS/
-├─ tools/                         UE 项目检查、基线指纹与运行证据工具
-├─ docs/                          面向维护者的程序说明
-├─ .agents/skills/                仓库级 Codex Skill
-├─ .planning/codebase/            Lyra 架构研究归档
-├─ .planning/evidence/            指纹、Registry 查询与运行证据
-└─ LyraStarterGame/               当前 UE 5.6.1 Lyra 基准项目
+.
+├─ tools/
+│  ├─ ue_*.py                  # 14 个稳定 CLI 入口
+│  ├─ ue_project_tools/        # 扫描、解析、验证和 JSON 序列化实现
+│  └─ *_lyra_*.ps1/.py         # Lyra 基线、运行证据和资产查询辅助工具
+├─ tests/
+│  ├─ support.py               # 共享 CLI 清单、断言和临时 UE fixture
+│  └─ test_*.py                # 34 项单元与 CLI 导航测试
+├─ docs/PROGRAM-DESIGN.md       # 扫描器架构、契约、测试与扩展规则
+├─ .agents/skills/             # Agent 使用这些 CLI 时的仓库内操作约定
+└─ LyraStarterGame/            # 可选的本地外部烟雾测试项目；被 Git 忽略
 ```
 
-工具的实现边界、数据流、已知缺口和优化建议见 [程序设计说明](docs/PROGRAM-DESIGN.md)。
+`LyraStarterGame/` 不是仓库分发内容。没有该目录时，14 个核心 CLI 和测试套件仍可使用。
 
-`tools/ue_project_tools` 保留 `source_parser.py` 与 `module_entry.py` 作为稳定入口；词法、声明、控制流、操作、回调和状态模型分别由同名前缀的内部模块实现。v3 由 `source_unit.py` 编排源码事实投影，`source_includes.py` 负责直接 include、配套头文件选择和文件来源定位。
+## 测试
 
-## 在 Codex 中使用
+运行完整测试套件：
 
-仓库包含 `ue-project-inspector` Skill。打开本仓库后，可以显式调用：
-
-```text
-$ue-project-inspector 找出当前仓库的 .uproject，只读取项目声明。
-```
-
-```text
-$ue-project-inspector 识别当前 UE 项目的精确引擎版本并给出证据文件。
-```
-
-```text
-$ue-project-inspector 读取当前 .uproject 的紧凑声明，列出 Plugin 的简单启用、简单禁用和扩展声明。
-```
-
-```text
-$ue-project-inspector 检查项目 Module 结构，不扫描插件。
-```
-
-```text
-$ue-project-inspector 依次检查当前项目的描述符、Engine、Module、Target、Plugin 和根目录，并汇总结果。
-```
-
-```text
-$ue-project-inspector 读取 LyraAbilitySet.cpp 及唯一配套头文件，只输出源码事实和直接 include 来源，不递归读取依赖源码。
-```
-
-Skill 默认选择能回答问题的最小工具。只有明确要求全部类别时，才依次运行相关聚焦工具；各工具保留独立 Schema、验证结果和解释边界。
-
-## 统一 CLI 输出契约
-
-十四个只读检查 CLI 的正常扫描结果使用同一顶层顺序：
-
-```json
-{
-  "schema_version": "ue-itps.<module>.vN",
-  "...模块确认事实...": "...",
-  "validation": {
-    "status": "ok | warning | error",
-    "problem_count": 0,
-    "problems": []
-  },
-  "limits": {
-    "responsibility": "该模块负责什么",
-    "boundaries": ["该模块不负责或不能证明什么"]
-  }
-}
-```
-
-每个工具维护独立 Schema；模块入口工具的 v12 是面向状态结论的破坏性契约，其余项目级 Schema 不受影响：
-
-| 工具 | Schema |
-|---|---|
-| `ue_find_projects.py` | `ue-itps.project-discovery.v1` |
-| `ue_read_project_descriptor.py` | `ue-itps.project-descriptor.v1` |
-| `ue_resolve_engine.py` | `ue-itps.engine-resolution.v1` |
-| `ue_inspect_modules.py` | `ue-itps.project-modules.v1` |
-| `ue_inspect_targets.py` | `ue-itps.project-targets.v1` |
-| `ue_resolve_plugins.py` | `ue-itps.project-plugin-references.v1` |
-| `ue_classify_project_paths.py` | `ue-itps.project-paths.v1` |
-| `ue_read_plugin_descriptor.py` | `ue-itps.plugin-descriptor.v2` |
-| `ue_inspect_module_rules.py` | `ue-itps.module-rule-relations.v1` |
-| `ue_inspect_target_rules.py` | `ue-itps.target-rule-relations.v1` |
-| `ue_inspect_module_entry.py` | `ue-itps.module-entry-state.v12` |
-| `ue_list_source_includes.py` | `ue-itps.source-includes.v1` |
-| `ue_list_source_types.py` | `ue-itps.source-types.v1` |
-| `ue_inspect_source_function.py` | `ue-itps.source-function.v1` |
-
-`validation` 只放该模块检测到的问题；已确认事实保留在中间的模块字段中。`limits` 固定为最后一个字段，供用户和大语言模型判断职责与解释边界。标准输出和标准错误固定使用 UTF-8。
-
-所有命令的 `--help` 都提供中英文双语说明，例如：
-
-```powershell
-python tools\ue_resolve_engine.py --help
-```
-
-## 直接运行 UE 项目检查工具
-
-以下命令从仓库根目录执行。项目路径示例：
-
-```powershell
-$Project = "E:\UE_ITPS\LyraStarterGame\LyraStarterGame.uproject"
-```
-
-### 1. 发现 `.uproject`
-
-```powershell
-python tools\ue_find_projects.py --search-root E:\UE_ITPS
-```
-
-只定位候选项目；存在多个项目时返回 `ambiguous`，不会自行选择。
-
-### 2. 读取 `.uproject` 显式声明
-
-```powershell
-python tools\ue_read_project_descriptor.py --project $Project
-```
-
-输出 `FileVersion`、`EngineAssociation`、Module 名称列表、Plugin 简单启用/禁用列表、扩展声明索引和 Additional 目录；不重复完整 `Modules`/`Plugins`，不计算描述符哈希，也不搜索 Engine、Module 文件或插件目录。
-
-### 3. 解析真实 Engine 身份
-
-```powershell
-python tools\ue_resolve_engine.py --project $Project
-```
-
-将 `EngineAssociation` 解析到 Engine 根目录，并读取 `Engine/Build/Build.version`。当前基线应解析为 UE 5.6.1。
-
-### 4. 检查项目 Module
-
-```powershell
-python tools\ue_inspect_modules.py --project $Project
-```
-
-对账 `.uproject` Module 与项目 `*.Build.cs`；`reconciled_module_count/items` 仅包含一一匹配成功的 Module，缺失、歧义、未声明或重复声明进入 `validation`，并记录 `IMPLEMENT_*_MODULE` 入口证据。
-
-### 5. 发现项目 Target
-
-```powershell
-python tools\ue_inspect_targets.py --project $Project
-```
-
-发现 `Source/**/*.Target.cs`，在每个结果上标记是否位于 `Source` 根目录，并据此给出原生项目证据分类。Target 不由 `.uproject` 声明。
-
-位置校验规则：`Source` 下没有 Target 为错误；Target 只位于子目录为警告；根目录与子目录同时存在 Target 为另一类警告；Target 只位于 `Source` 根目录为正常。
-
-### 6. 定位直接 Plugin 引用
-
-Plugin 工具会根据 `.uproject` 的 `EngineAssociation` 自动解析 Engine 根目录：
-
-```powershell
-python tools\ue_resolve_plugins.py `
-  --project $Project `
-  --operation scan `
-  --platform Win64 `
-  --target-type Editor
-```
-
-当自动解析存在歧义、注册表不可用或需要指定自定义 Engine 时，可额外传入 `--engine-root <path>` 覆盖自动结果。
-
-Plugin v1 输出在 `path_roots` 中只记录一次项目和 Engine 绝对根路径，逐项 `descriptor` 使用对应根的相对路径。正常项从 `item_defaults` 继承省略的默认状态；未定位、候选冲突或关联诊断的问题项保留全部建模字段。工具只定位 `.uplugin` 路径，不读取或计算 Plugin 描述符哈希。
-
-当前只解析 `.uproject` 的直接 Plugin 引用，不计算 `.uplugin` 传递依赖和默认启用插件闭包。
-
-### 7. 分类项目根目录
-
-```powershell
-python tools\ue_classify_project_paths.py --project $Project
-```
-
-只根据 `.uproject` 的位置和项目根文件系统状态输出目录事实：
-
-- `project_root`：由所选 `.uproject` 父目录唯一确定的绝对项目根，只记录一次。
-- `project_descriptor`：所选 `.uproject` 的项目相对路径与文件系统状态。
-- `project_directories`：`Source`、`Config`、`Content`、`Plugins`、`Build`、`Platforms` 的约定角色和实际类型；`actual_type: missing` 表示路径不存在。
-- `build_and_ide_paths`：`Binaries`、`Intermediate` 和 `.sln` 的约定位置；该分组不判断来源、必要性、删除安全性或可重建性。
-- `cache_and_local_state_paths`：`DerivedDataCache`、`Saved`、`.vs` 和 `.idea`。
-- `unclassified_root_directories`：不能安全判断为可删除、必须人工复核的其他项目根目录。
-
-除顶层 `project_root` 外，路径项和诊断只保存 `project_relative_path`，不重复绝对路径。工具读取 `.uproject` 的显式顶层声明，但不读取目录内容、Module/Plugin 文件或资产。当 `Modules` 非空、没有声明 `AdditionalRootDirectories` 且 `Source` 缺失时，`validation` 报告阻断错误；路径项不增加额外的必要性字段。没有 Module 声明不能反向证明 `Source` 不需要。工具也不判断源码权威、自包含、删除安全性或可重建性。
-
-## 逐层读取插件与源码事实
-
-源码工具不会自动附加到 `.uproject` 结果。调用方先用项目级工具定位对象，再显式选择一个文件继续深入。例如检查 `CommonLoadingScreen`：
-
-```powershell
-$Plugin = "E:\UE_ITPS\LyraStarterGame\Plugins\CommonLoadingScreen\CommonLoadingScreen.uplugin"
-
-python tools\ue_read_plugin_descriptor.py --plugin $Plugin
-```
-
-该命令读取 `.uplugin` 的字段、Module 声明和直接 Plugin 依赖，按 UE 5.6.1 枚举与字段类型进行校验，并在插件 `Source`、`Platforms` 下递归对账 Module 对应的 Build.cs。Build.cs 通过文件名匹配，`Source/<Name>/<Name>.Build.cs` 只标记为传统位置，不是硬性要求；工具不遍历依赖插件。
-
-选择一个 Build.cs 后，分别读取规则和模块入口：
-
-```powershell
-$Rules = "E:\UE_ITPS\LyraStarterGame\Plugins\CommonLoadingScreen\Source\CommonLoadingScreen\CommonLoadingScreen.Build.cs"
-
-python tools\ue_inspect_module_rules.py --rules $Rules
-python tools\ue_inspect_module_entry.py --rules $Rules
-```
-
-Build.cs 工具以构造函数和可达的同文件辅助方法为内部扫描边界，只公开已声明的 ModuleRules 设置变更、引用对象、生效方式和源码行。明确的字符串或符号进入 `declared_mutations`，未知设置进入 `unclassified_mutations`，无法确认效果的外部或继承方法进入 `unresolved_effect_calls`；空集合操作被忽略，复杂表达式保留原文而不展开为 AST。`operation` 使用 `set/add/remove/increment/decrement` 等语义操作，不暴露 `Add` 与 `AddRange` 的 API 差异。`applicability.kind` 区分 `direct` 与 `conditional`；条件对象内部将 `#if/for/foreach/while/if/switch/catch` 等外层结构按顺序压平为 `control_path`，相关符号进入 `related_symbols`，不区分输入与常量，也不返回或求值完整条件表达式。控制表达式内部的显式赋值、`++/--` 和调用也会被扫描；`if/while/switch` 的条件求值不继承其自身分支，短路或三元分支、`for` 迭代器和 `catch when` 仍按条件执行处理。
-
-模块入口 v12 以 Build.cs 父目录作为单模块边界，从 `StartupModule`、`ShutdownModule` 和实际绑定的同模块函数回调建立受限函数图。`registration.module_class` 始终保留注册宏显式声明的类，包括不需要本地状态分析的 `FDefaultModuleImpl`；`module.class` 仍表示可在所选模块源码内继续分析的本地类。`callback_bindings` 以绑定语句为单位报告委托源、`function | lambda | ufunction` 回调目标、绑定/解绑 API、所在函数、条件和源码行；Lambda 与 UFunction 函数体不跟踪。条件会沿本模块调用链传播，并覆盖 `if/else`、预处理、`for/foreach/while`、`switch/case/default`、`&&/||/??` 和三元表达式；`do-while` 循环体首次必定执行，因此尾部条件不进入循环体的 `when`，`switch` 不推断 case 穿透。无法与任何绑定配对的可达清理语句单独进入顶层 `unmatched_cleanups`。位于非 virtual 辅助函数中的绑定和解绑额外使用 `virtual_targets`，列出普通同模块调用链最终到达的 virtual 函数，以及该 virtual 函数内部发起调用链的源码行；重复路径不去重，无法到达时为空数组，语句直接位于 virtual 函数时省略该字段。非回调变化进入精简的 `state_models`：公共源码文件提升为模型级 `path`，转换只保留 `state`、`on`、始终存在的 `when` 和紧凑行号；`via` 仅在经过额外辅助函数时出现，`certainty` 仅在不是 `confirmed` 时出现。`closure` 只保留状态和原因。可观察覆盖和不透明外部效果分别进入 `conditional_overrides` 与 `unresolved_effects`。源码中不配对、意外或类型不匹配的 `()[]{}` 会产生 error 级 validation problem；词法器保留 `TEXT` 宏的真实括号，因此兼容宏参数字符串化与相邻字符串拼接。工具仍保留可恢复的部分事实，但命令行返回 1。结果是静态源码证据，不代表运行时行为证明。
-
-`unresolved_effects` 对没有可靠状态模型的调用只做保守报告。除通用的明确状态动词模式外，当前显式白名单包含 `UGameplayTagsManager::Get().AddTagIniSearchPath`、`PreLoadingScreen->Init` 和 `PreLoadingScreen.Reset`；白名单命中只表示源码中发生了可能改变状态的外部调用，不推断其具体结果。相同方法名出现在其他接收者上不会因此命中。
-
-### 按类别读取显式源码单元
-
-```powershell
-python tools\ue_list_source_includes.py `
-  --source E:\UE_ITPS\LyraStarterGame\Source\LyraGame\AbilitySystem\LyraAbilitySet.cpp
-
-python tools\ue_list_source_types.py `
-  --source E:\UE_ITPS\LyraStarterGame\Source\LyraGame\AbilitySystem\LyraAbilitySet.cpp
-
-python tools\ue_inspect_source_function.py `
-  --source E:\UE_ITPS\LyraStarterGame\Source\LyraGame\AbilitySystem\LyraAbilitySet.cpp `
-  --function GiveToAbilitySystem
-```
-
-`--source` 必须是用户或大模型显式选择的 `.cpp/.cc`。三个工具都从源码所在目录逐级向上查找最近且唯一的 `.uproject`，不要求调用方重复提供项目；找不到或最近一层存在多个候选时直接报错。工具不接受手动头文件参数，而是从 `.cpp` 自动推导配套 `.h/.hpp`：检查同目录同名头文件，以及模块 `Private` 到 `Public`、`Classes` 的相对路径映射。唯一结果直接写入 `source_unit.header`，没有候选时为 `null`，多个候选时为 `null` 并将候选位置写入 `validation`。
-
-include 和类型命令是互不嵌套的事实索引。include 结果排除 `.cpp` 对配套头文件本身的引用，并用 `evidence.unit: cpp | header` 与 `line` 标识其所在源码单元；公开结果不重复输出 include 语法。唯一解析的 include 省略 `resolution.status`，其 `owner` 只保留物理来源 `kind`；`generated_header`、`generated_source` 和 `system_or_sdk_unresolved` 仍保留在 `includes` 并携带分类状态，`ambiguous`、`not_found` 和 `macro_unresolved` 则连同原 include 事实移入 `validation`。类型结果将成员放入 `member_details.variables` 和 `member_details.functions`，类型与成员证据使用 `unit: cpp | header` 和行号；`UCLASS`、`USTRUCT`、`GENERATED_BODY`、`UPROPERTY`、`UFUNCTION` 等宏以源码表达式字符串归属到对应类型或成员。参数中的前置 `class/struct` 不作为类型定义，模板特化名称不使用模板实参；无法可靠分类的文件或成员声明进入 `unresolved_declarations` 并触发 warning。`ue_inspect_source_function.py --function` 只按函数名选择，在 `.cpp` 与自动关联头文件中返回所有同名定义；所属类型、参数和 `function_id` 仅作为结果事实，不参与筛选。
-
-同名函数结果按 `matches` 分组，每个匹配项分别返回 `external_types` 和 `external_methods`。外部类型是从当前函数可见声明中提取的规范化类型表达式字符串；成员字段类型只有在当前函数体实际引用该成员名且未被参数或局部声明遮蔽时才会进入结果。模板包装及其参数保持整体，仅移除顶层 cv、指针和引用修饰。外部方法是成员调用字符串，能确定接收者声明类型时用完整类型表达式替换变量名，例如 `Ability->GetDefaultObject<UGameplayAbility>()` 输出为 `TSubclassOf<UGameplayAbility>->GetDefaultObject<UGameplayAbility>()`；无法确定时保留原表达式。工具不读取 include 内容、展开调用或推断继承与重载。
-
-Target.cs 同样要求显式选择单个文件：
-
-```powershell
-python tools\ue_inspect_target_rules.py `
-  --target E:\UE_ITPS\LyraStarterGame\Source\LyraGame.Target.cs
-```
-
-TargetRules 和 ModuleRules 复用底层词法、位置、控制结构和表达式模型，但使用不同的公开 Schema。两者都从构造函数出发，只投影可达同文件辅助方法中的 `declared_mutations`、`unclassified_mutations` 和 `unresolved_effect_calls`；TargetRules 通过外层到内层的 `applicability.controls` 统一保留 `if`、预处理、循环、`switch/case`、`catch when` 和表达式级控制，各项按适用情况携带源码表达式和分支，不再公开 `conditions`、`control_path` 或重复的 `related_symbols`。每项 Target 结果通过 `source.method` 和 `source.line` 定位方法与行。跨文件派生包装 Target 不会展开基类；文件名与 `TargetInfo` 构造函数共同命中的类仍保留本文件 mutation，并以 `inheritance.kind: unresolved` 和 validation warning 明示其继承关系未在本文件得到证明。已声明的局部变量、类字段及其集合变更不作为 Target 设置；调用点条件不会传播到被调辅助方法。所有结果均是静态声明证据，工具不会执行构造函数、求值 Target Profile 或生成实际 UBT 构建结果。
-
-## Lyra 研究证据工具
-
-### 生成基线文件指纹
-
-```powershell
-& .\tools\new_lyra_baseline_fingerprint.ps1
-```
-
-默认扫描 `LyraStarterGame/`，排除可再生目录，并写入：
-
-- `.planning/evidence/lyra-5.6.1/authoritative-files.sha256`
-- `.planning/evidence/lyra-5.6.1/baseline-fingerprint.json`
-
-### 归档一次 UE 运行日志
-
-关闭对应 UE 进程后执行：
-
-```powershell
-& .\tools\archive_lyra_run.ps1 `
-  -SourceLog E:\UE_ITPS\LyraStarterGame\Saved\Logs\LyraStarterGame.log `
-  -RunId l0-editor-pie-001 `
-  -Level L0 `
-  -RunMode PIE
-```
-
-工具验证复制前后哈希，并创建不可覆盖的 Run 目录。捕获状态固定为 `captured_unassessed`，不会自动晋升为已验证证据。
-
-### 查询 Lyra Asset Registry
-
-`tools/query_lyra_asset_registry.py` 依赖 `unreal` Python 模块，必须在 Unreal Editor/Commandlet 的 Python 环境中运行，不能用普通系统 Python 执行。默认输出：
-
-```text
-.planning/evidence/lyra-5.6.1/asset-registry-slice.json
-```
-
-## 输出与安全边界
-
-- 十四个聚焦检查 CLI 默认只读，并将 JSON 写到标准输出。
-- 十四个检查 CLI 不计算或输出文件内容哈希；基线指纹工具保持独立职责。
-- `--help`、参数说明、输出契约和退出码采用中英文双语；纯命令行语法错误仍由 argparse 写入标准错误。三个源码 CLI 的文件、项目发现和读取失败返回对应 Schema 的 JSON 与退出码 2；找不到同名函数定义时返回 `validation: error` 与退出码 1。
-- 基线指纹、运行日志归档和 Asset Registry 查询属于证据生成工具，会写入 `.planning/evidence/`。
-- 项目检查结果只证明静态声明和文件定位，不证明项目已经编译、启动、联网或通过测试。
-- 当前工具固定以 UE 5.6.1 Lyra 为首个回归基准，但长期数据模型不应绑定 Lyra 架构。
-
-## 开发验证
-
-从仓库根目录运行全部契约测试：
-
-```powershell
+```bash
 python -m unittest discover -s tests -v
 ```
 
-单元测试覆盖统一结果信封、双语 CLI、严格 JSON、描述符压缩、Module 对账、Target 分类、Plugin 定位、路径分类、ModuleRules/TargetRules 相关性投影、模块入口状态模型，以及三个源码工具的头文件选择、非递归边界、来源归属、成员投影、声明—定义关系和同名函数外部引用。静态检查通过不等于 UE 项目已经构建或运行；Lyra 构建与运行证据仍按 `.planning/evidence/` 中的独立流程管理。
+当前套件已从实时 `tests/` 目录验证为 **34 项测试**，覆盖：
 
-## 当前回归基线
+| 测试模块 | 关注点 |
+|---|---|
+| `test_cli_contracts.py` | 双语帮助、公共 JSON 外层、严格 JSON 读取、退出码与输入失败 |
+| `test_navigation_flow.py` | 14 个 CLI 形成一条可执行的显式导航链 |
+| `test_project_scanners.py` | 项目发现、描述符、Engine、Module、Target、Plugin 与目录分类 |
+| `test_plugin_descriptor.py` | `.uplugin` 对账、重复字段和缺失 `Build.cs` |
+| `test_rule_scanners.py` | ModuleRules/TargetRules 变更、同文件 helper 与条件控制 |
+| `test_module_entry.py` | Module 注册、回调绑定/清理、默认模块和损坏分隔符 |
+| `test_source_context.py` | 三个源码工具共享上下文、自动头文件和项目歧义 |
+| `test_source_includes.py` | 直接 include 来源、生成头、缺失引用与预处理条件 |
+| `test_source_types.py` | 类型、继承、成员和 UE 反射宏 |
+| `test_source_functions.py` | 声明匹配、外部引用、重载稳定性和缺失函数 |
 
-```text
-Engine: 5.6.1
-Project Modules: 2
-Target classification: native-project
-Direct Plugin References: 81
-Declared Enabled / Disabled: 69 / 12
-Simple Enabled / Disabled / Extended: 63 / 11 / 7
-Resolved Plugin Descriptors: 69
-Project / Engine Plugin Descriptors: 15 / 54
-Applicable Enabled Resolved: 66 / 68
-Validation: warning, warnings: 2
+测试使用临时目录构造最小 Unreal 项目、Engine、Plugin、规则文件和 C++ 源码，不依赖本机安装的 Unreal Engine，也不修改真实项目。
+
+## Lyra 5.6.1 烟雾基线
+
+仓库支持把本地 `LyraStarterGame/` 作为大型只读参考项目。当前基线目标为：
+
+- 项目：`LyraStarterGame/LyraStarterGame.uproject`
+- Engine：UE `5.6.1`
+- Plugin Profile：`scan / Win64 / Editor`
+- 基线内容身份：排除 UE/IDE 生成目录后，对参考项目文件生成 SHA-256 清单
+
+最小烟雾检查：
+
+```bash
+python tools/ue_find_projects.py --search-root LyraStarterGame
+python tools/ue_read_project_descriptor.py --project LyraStarterGame/LyraStarterGame.uproject
+python tools/ue_resolve_engine.py --project LyraStarterGame/LyraStarterGame.uproject
+python tools/ue_inspect_modules.py --project LyraStarterGame/LyraStarterGame.uproject
+python tools/ue_inspect_targets.py --project LyraStarterGame/LyraStarterGame.uproject
+python tools/ue_resolve_plugins.py --project LyraStarterGame/LyraStarterGame.uproject --operation scan --platform Win64 --target-type Editor
+python tools/ue_classify_project_paths.py --project LyraStarterGame/LyraStarterGame.uproject
 ```
 
-两条警告来自当前环境未定位的 Optional 插件 `D3DExternalGPUStatistics` 和 `EOSReservedHooks`。
+本地基线复核中，上述 7 个项目级扫描均完成并退出 `0`：发现、描述符、Engine、Module、Target 为 `ok`；Plugin 定位与根目录分类为非阻断 `warning`。烟雾结果用于验证大型真实目录上的静态导航，不替代 34 项自动化测试，也不证明 Lyra 可以编译或运行。
+
+当前 warning 基线分别是：Win64/Editor Profile 下 `D3DExternalGPUStatistics` 与 `EOSReservedHooks` 两个直接 Plugin 引用未定位；项目根目录中的 `.claude` 与 `.codex` 未被目录分类器建模。它们是需要保留的扫描事实，不应在调用侧静默改写为 `ok`。
+
+## 只读边界
+
+14 个核心 CLI 只读取并分析现有文件。它们不会：
+
+- 修改 `.uproject`、`.uplugin`、C++、Build.cs、Target.cs、Config、资产或 Engine 文件
+- 启动 Unreal Editor、编译项目、Cook、Package 或运行游戏
+- 写注册表、安装 Engine、启用 Plugin 或生成项目文件
+- 递归跟踪依赖源码、构建完整调用图或推导运行时状态
+
+`--operation` 只是 Plugin 适用性判断的静态上下文，不会执行相应操作。
+
+## 已知限制
+
+- 所有结论都是静态源码或描述符证据，不是编译、UHT、UnrealBuildTool、Editor 或运行时证明。
+- Plugin 项目扫描只解析 `.uproject` 的直接引用，不计算完整 Plugin 依赖闭包；单 Plugin 工具也只报告其直接依赖声明。
+- ModuleRules 和 TargetRules 工具是相关性投影，不是 C# AST 或最终有效 UBT 结果；外部/继承调用的副作用不会被猜测。
+- Module 入口工具只报告支持的注册、回调和状态模式；无法看到的外部调用保留为未解析影响。
+- 源码工具只读取所选 `.cpp/.cc` 及自动确定的唯一同名头文件，不递归读取 include、基类或被调用函数实现。
+- include 的文件系统唯一来源不等于有效编译 include 路径，也不能证明 `Build.cs` 依赖声明正确。
+- 目录分类只报告角色与当前文件系统状态，不能用于判断删除安全性、自包含性或可重建性。
