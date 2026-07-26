@@ -348,11 +348,66 @@ def _declaration_name(
     return candidate.value
 
 
-def _class_field_names(
+_FIELD_MODIFIERS = {
+    "const",
+    "event",
+    "extern",
+    "internal",
+    "new",
+    "private",
+    "protected",
+    "public",
+    "readonly",
+    "required",
+    "static",
+    "unsafe",
+    "volatile",
+}
+
+
+def _field_type_start(
+    tokens: list[Token],
+    forward: dict[int, int],
+    start: int,
+    end: int,
+) -> int:
+    cursor = start
+    while cursor < end:
+        if (
+            cursor + 1 < end
+            and tokens[cursor].value in {"public", "protected", "private"}
+            and tokens[cursor + 1].value == ":"
+        ):
+            cursor += 2
+            continue
+        if tokens[cursor].value in _FIELD_MODIFIERS:
+            cursor += 1
+            continue
+        if (
+            tokens[cursor].value == "["
+            and cursor in forward
+            and forward[cursor] < end
+        ):
+            cursor = forward[cursor] + 1
+            continue
+        if (
+            cursor + 1 < end
+            and tokens[cursor].value in _MEMBER_ANNOTATION_MACROS
+            and tokens[cursor + 1].value == "("
+            and cursor + 1 in forward
+            and forward[cursor + 1] < end
+        ):
+            cursor = forward[cursor + 1] + 1
+            continue
+        break
+    return cursor
+
+
+def _class_field_details(
     text: str, tokens: list[Token], start: int, end: int
-) -> list[str]:
+) -> list[dict[str, Any]]:
     forward, _ = token_pairs(tokens)
-    names: list[str] = []
+    fields: list[dict[str, Any]] = []
     statement_start = start
     brace_depth = 0
     paren_depth = 0
@@ -383,15 +438,57 @@ def _class_field_names(
                 tokens, forward, statement_start, cursor
             )
             if classification["kind"] == "variable":
-                names.append(classification["name"])
+                name_index = int(classification["name_index"])
+                type_start = _field_type_start(
+                    tokens,
+                    forward,
+                    statement_start,
+                    name_index,
+                )
+                fields.append(
+                    {
+                        "name": classification["name"],
+                        "type_expression": " ".join(
+                            _raw(
+                                text,
+                                tokens,
+                                type_start,
+                                name_index,
+                            ).split()
+                        ),
+                        "location": _location(
+                            tokens[type_start],
+                            tokens[cursor],
+                        ),
+                    }
+                )
             statement_start = cursor + 1
-    return _ordered_union(names)
+    return fields
 
 
-def _local_declaration_names(
+def _class_field_names(
     text: str, tokens: list[Token], start: int, end: int
 ) -> list[str]:
-    names: list[str] = []
+    return _ordered_union(
+        item["name"]
+        for item in _class_field_details(text, tokens, start, end)
+    )
+
+
+_LOCAL_DECLARATION_MODIFIERS = {
+    "await",
+    "const",
+    "ref",
+    "scoped",
+    "using",
+}
+
+
+def _local_declaration_details(
+    text: str, tokens: list[Token], start: int, end: int
+) -> list[dict[str, Any]]:
+    variables: list[dict[str, Any]] = []
+    forward, _ = token_pairs(tokens)
     statement_start = start
     paren_depth = 0
     bracket_depth = 0
@@ -416,11 +513,56 @@ def _local_declaration_names(
                 ),
                 cursor,
             )
-            name = _declaration_name(text, tokens, statement_start, assignment)
-            if name:
-                names.append(name)
+            classification = _classify_declaration(
+                tokens,
+                forward,
+                statement_start,
+                assignment,
+            )
+            if classification["kind"] == "variable":
+                name_index = int(classification["name_index"])
+                if (
+                    name_index > statement_start
+                    and tokens[name_index - 1].value in {".", "->", "::"}
+                ):
+                    statement_start = cursor + 1
+                    continue
+                type_start = statement_start
+                while (
+                    type_start < name_index
+                    and tokens[type_start].value
+                    in _LOCAL_DECLARATION_MODIFIERS
+                ):
+                    type_start += 1
+                if type_start < name_index:
+                    variables.append(
+                        {
+                            "name": str(classification["name"]),
+                            "type_expression": " ".join(
+                                _raw(
+                                    text,
+                                    tokens,
+                                    type_start,
+                                    name_index,
+                                ).split()
+                            ),
+                            "location": _location(
+                                tokens[type_start],
+                                tokens[cursor],
+                            ),
+                        }
+                    )
             statement_start = cursor + 1
-    return _ordered_union(names)
+    return variables
+
+
+def _local_declaration_names(
+    text: str, tokens: list[Token], start: int, end: int
+) -> list[str]:
+    return _ordered_union(
+        item["name"]
+        for item in _local_declaration_details(text, tokens, start, end)
+    )
 
 
 def _class_definition_brace(

@@ -1,7 +1,7 @@
 <!-- generated-by: gsd-doc-writer -->
 # UE-ITPS 扫描器核心程序设计
 
-本文面向维护 `tools/ue_project_tools/` 与 14 个公开扫描 CLI 的开发者。内容以当前实现和 `tests/` 中的自包含夹具为准，描述静态证据扫描器的职责、契约、边界与扩展方式。
+本文面向维护 `tools/ue_project_tools/` 与 15 个公开扫描 CLI 的开发者。内容以当前实现和 `tests/` 中的自包含夹具为准，描述静态证据扫描器的职责、契约、边界与扩展方式。
 
 ## 1. 设计目标与非目标
 
@@ -12,7 +12,7 @@
 - 将事实、扫描诊断和解释边界分开：模块事实位于结果主体，问题位于 `validation`，能力边界位于 `limits`。
 - 支持从项目入口逐层导航到 Plugin、Module、Target、源码单元和指定函数，同时要求调用方显式选择每一次深入对象。
 - 在解析能力之外保守失败：保留原表达式、输出 `unclassified`、`unresolved` 或诊断，不执行源码，也不猜测有效构建或运行结果。
-- 让 14 个入口共享 CLI 帮助、UTF-8 输出、结果信封和退出码语义，同时保持各自独立、可版本化的 Schema。
+- 让 15 个入口共享 CLI 帮助、UTF-8 输出、结果信封和退出码语义，同时保持各自独立、可版本化的 Schema。
 
 ### 1.2 非目标
 
@@ -30,7 +30,7 @@
 用户 / 自动化调用方
         |
         v
-14 个 tools/ue_*.py CLI
+15 个 tools/ue_*.py CLI
   参数解析、UTF-8、服务调用、JSON、退出码
         |
         v
@@ -40,9 +40,9 @@ tools/ue_project_tools/ 领域服务
         +--------------------------+
         |                          |
         v                          v
-规则与模块入口投影             显式源码单元投影
-Build.cs / Target.cs          .cpp + 唯一自动配套头文件
-模块内 C++ 生命周期           include / type / function
+规则、C# 与模块入口投影        显式 C++ 源码单元投影
+Build.cs / Target.cs / .cs    .cpp + 唯一自动配套头文件
+规则 / C# function / 生命周期 include / type / function
         |                          |
         +------------+-------------+
                      v
@@ -73,7 +73,8 @@ Build.cs / Target.cs          .cpp + 唯一自动配套头文件
 
 | 文件 | 职责 |
 |---|---|
-| `rule_source.py` | 将通用解析事实投影为 ModuleRules 或 TargetRules 的 mutation、operand、applicability、未分类操作和未解析效果。 |
+| `rule_source.py` | 将通用解析事实投影为 ModuleRules mutation 关系，或 TargetRules 类、成员变量和函数索引。 |
+| `cs_source.py` | 按名称选择任意 `.cs` 中的全部类成员函数，并投影签名、外部类型和方法引用。 |
 | `module_entry.py` | 以所选 Build.cs 的父目录为模块边界，编排源码加载、注册类选择、回调与状态投影，输出 module-entry v12。 |
 | `module_entry_common.py` | 委托 API 目录、回调/清理身份、条件合并、源码位置和每个 callable 最多 32 个上下文的共享规则。 |
 | `module_entry_callables.py` | 建立模块内受限 callable 索引和可达上下文，解析普通同模块调用与受支持回调目标。 |
@@ -90,13 +91,13 @@ Build.cs / Target.cs          .cpp + 唯一自动配套头文件
 | `source_preprocessor.py` | 跟踪 `#if/#ifdef/#ifndef/#elif/#else/#endif` 分支及可静态判断的活动状态。 |
 | `source_controls.py` | 将语句级、表达式级和预处理控制元数据合并到操作上。 |
 | `source_operations.py` | 从 Token 和控制范围中提取赋值、集合变更、调用、短路/三元门控等操作。 |
-| `source_parser.py` | 保留稳定解析入口，组装规则文件或 C++ 文件的类、函数、操作、注册宏和分隔符问题。 |
+| `source_parser.py` | 保留稳定解析入口，组装任意 C# 文件、规则文件或 C++ 文件的类、函数、操作、注册宏和分隔符问题。 |
 | `source_includes.py` | 提取直接 include，建立 Project/Engine Module 物理边界索引并定位唯一文件来源。 |
-| `source_unit.py` | 发现源码所属项目和 Engine，自动选择配套头文件，统一三个源码 CLI 的上下文，并分别投影 include、type 和指定函数事实。 |
+| `source_unit.py` | 发现源码所属项目和 Engine，自动选择配套头文件，统一三个 C++ 源码 CLI 的上下文，并分别投影 include、type 和指定函数事实。 |
 
-## 4. 14 个公开 CLI 与 Schema 目录
+## 4. 15 个公开 CLI 与 Schema 目录
 
-以下 14 个 `tools/ue_*.py` 是扫描器核心的公开命令行入口：
+以下 15 个 `tools/ue_*.py` 是扫描器核心的公开命令行入口：
 
 | CLI | 主要输入 | 单一职责 | Schema |
 |---|---|---|---|
@@ -109,13 +110,14 @@ Build.cs / Target.cs          .cpp + 唯一自动配套头文件
 | `ue_classify_project_paths.py` | `--project` | 分类项目根路径名称、位置和文件系统状态。 | `ue-itps.project-paths.v1` |
 | `ue_read_plugin_descriptor.py` | `--plugin` | 读取一个 `.uplugin`，校验字段并对账其 Module Build.cs。 | `ue-itps.plugin-descriptor.v2` |
 | `ue_inspect_module_rules.py` | `--rules` | 投影一个 Build.cs 的 ModuleRules mutation 与引用。 | `ue-itps.module-rule-relations.v1` |
-| `ue_inspect_target_rules.py` | `--target` | 投影一个 Target.cs 的 TargetRules mutation 与引用。 | `ue-itps.target-rule-relations.v1` |
+| `ue_inspect_target_rules.py` | `--target` | 索引一个 Target.cs 的 TargetRules 类、继承、成员变量和函数。 | `ue-itps.target-rule-relations.v1` |
 | `ue_inspect_module_entry.py` | `--rules` | 提取一个模块的注册、回调绑定/清理和非回调生命周期状态。 | `ue-itps.module-entry-state.v12` |
+| `ue_inspect_cs_function.py` | `--source`、`--function` | 返回任意 `.cs` 中指定名称的全部类成员函数及外部类型与方法引用。 | `ue-itps.cs-function.v1` |
 | `ue_list_source_includes.py` | `--source`，可选 `--engine-root` | 列出显式源码单元的非配套头文件直接 include 与物理来源。 | `ue-itps.source-includes.v1` |
 | `ue_list_source_types.py` | `--source`，可选 `--engine-root` | 索引类型、继承、成员名称和 UE 宏的词法事实。 | `ue-itps.source-types.v1` |
 | `ue_inspect_source_function.py` | `--source`、`--function`，可选 Engine | 返回指定名称的全部定义及各自的外部类型与成员调用。 | `ue-itps.source-function.v1` |
 
-`ue_resolve_plugins.py` 的默认 Profile 是 `operation=scan`、`platform=Win64`、`target_type=Editor`。三个源码 CLI 不接受手动头文件参数；配套 `.h/.hpp` 必须由同目录同名或 Module `Private` 到 `Public`/`Classes` 的唯一映射自动确定。
+`ue_resolve_plugins.py` 的默认 Profile 是 `operation=scan`、`platform=Win64`、`target_type=Editor`。三个 C++ 源码 CLI 不接受手动头文件参数；配套 `.h/.hpp` 必须由同目录同名或 Module `Private` 到 `Public`/`Classes` 的唯一映射自动确定。通用 C# 函数 CLI 只读取显式选择的一个 `.cs`。
 
 ## 5. 共享结果契约
 
@@ -170,6 +172,8 @@ Build.cs / Target.cs          .cpp + 唯一自动配套头文件
               |
               +-> 显式选择一个 Target.cs
               |     -> ue_inspect_target_rules
+              |     -> 从成员索引显式选择函数名
+              |     -> ue_inspect_cs_function
               |
               +-> 显式选择一个 .cpp/.cc
                     -> 最近唯一祖先 .uproject
@@ -179,11 +183,15 @@ Build.cs / Target.cs          .cpp + 唯一自动配套头文件
                     -> ue_list_source_types
                     -> 从类型成员名显式选择函数名
                     -> ue_inspect_source_function
+
+显式选择一个 .cs
+  -> 显式选择函数名
+  -> ue_inspect_cs_function
 ```
 
 导航证据只帮助调用方选择下一层输入。例如项目 Module 结果可定位 Build.cs，Plugin 描述符结果可定位 Plugin Module 的 Build.cs，类型结果可列出成员函数名。任何一层都不会自动调用下一层，也不会递归读取已定位的依赖源码。
 
-三个源码工具共享相同的加载逻辑，但每次调用都会独立重建上下文。它们：
+三个 C++ 源码工具共享相同的加载逻辑，但每次调用都会独立重建上下文。它们：
 
 1. 校验显式 `.cpp/.cc`。
 2. 从源码目录向上查找最近且唯一的 `.uproject`。
@@ -201,17 +209,18 @@ Build.cs / Target.cs          .cpp + 唯一自动配套头文件
 - `.uplugin` 使用 `ue_json.read_ue_json()`：允许 UE 描述符中实际存在的行/块注释和尾逗号，拒绝非标准常量，并把重复字段作为可定位诊断；重复字段物化时保留最后一次出现的值。
 - 未建模字段被保留或列入清单，不因扫描器尚未认识而自动判定非法。
 
-### 7.2 Build.cs 与 Target.cs
+### 7.2 C#、Build.cs 与 Target.cs
 
-规则扫描器使用自有轻量词法层，不执行 C#。它从确认的 `ModuleRules`/`TargetRules` 类构造函数出发，只跟踪静态可达的同文件辅助方法：
+C# 扫描器使用自有轻量词法层，不执行 C#：
 
+- ModuleRules 从确认类的构造函数出发，只跟踪静态可达的同文件辅助方法。
 - mutation 归一化为 `set/add/remove/increment/decrement` 等语义操作。
 - operand 仅分类为 `literal`、`symbol` 或保留原文的 `expression`。
 - ModuleRules 用 `applicability.kind` 和压平的 `control_path` 表示直接/条件适用性。
-- TargetRules 保留 `applicability.controls` 中的控制类型、表达式和分支，并用 `source.method`/`source.line` 定位证据。
-- 调用点条件不会传播进被调用辅助方法。
-- 未确认的设置变更进入 `unclassified_mutations`；可能改变规则但无法解释的调用进入 `unresolved_effect_calls`。
-- 输出顺序是确定性的源码顺序，不代表 C# 运行顺序。
+- TargetRules 只索引已确认或文件名启发式识别的规则类、继承、成员变量和全部词法成员函数，不读取函数体语义。
+- 通用 C# 函数工具接受任意 `.cs` 和一个显式函数名，返回全部同名类成员；外部类型来自参数、局部变量、被引用成员字段，以及非调用成员访问中的未绑定类型限定符。
+- 方法引用保留同类调用并按首次出现顺序去重；已知类型的根接收者替换为类型表达式，其余成员链保持不变。工具不绑定重载，也不递归展开被调用函数。
+- 输出顺序是确定性的源码顺序，不代表 C# 运行顺序或最终有效 UBT 结果。
 
 ### 7.3 模块入口
 
@@ -243,7 +252,7 @@ Build.cs / Target.cs          .cpp + 唯一自动配套头文件
 | UPROPERTY/UFUNCTION 等宏 | 词法相邻关系与源码位置 | UHT 解析、生成代码与反射注册结果 |
 | include | 拼写、条件、唯一物理候选与 owner | 编译器 include 搜索、UBT include path 与实际编译 |
 | 模块生命周期 | 注册、受支持回调绑定/清理、保守状态投影 | Editor/程序实际加载顺序、线程、对象状态与运行日志 |
-| 资产与配置 | 当前 14 个 CLI 不解析资产图或合并后的配置 | Editor、Asset Registry、Config 合并、Cook/Package |
+| 资产与配置 | 当前 15 个 CLI 不解析资产图或合并后的配置 | Editor、Asset Registry、Config 合并、Cook/Package |
 | 行为正确性 | 局部静态结构和诊断 | 构建、自动化测试、PIE、独立进程、网络和目标平台运行 |
 
 维护者不得把右列权威反向伪装成当前静态 Schema 的字段。未来若接入 UBT/UHT/Editor/运行时证据，应使用独立 Schema，携带采集上下文和证据来源，再由上层显式关联。
@@ -260,11 +269,11 @@ Build.cs / Target.cs          .cpp + 唯一自动配套头文件
 
 退出码 2 的当前行为必须精确区分：
 
-- `ue_list_source_includes.py`、`ue_list_source_types.py`、`ue_inspect_source_function.py` 捕获输入/读取异常，在 stdout 返回各自 Schema 的结构化错误 JSON：`request.status=failed`、`validation.status=error`，stderr 为空。
+- `ue_list_source_includes.py`、`ue_list_source_types.py`、`ue_inspect_source_function.py`、`ue_inspect_cs_function.py` 捕获输入/读取异常，在 stdout 返回各自 Schema 的结构化错误 JSON：`request.status=failed`、`validation.status=error`，stderr 为空。
 - 其余 11 个 CLI 的输入/读取异常调用 `argparse.ArgumentParser.error()`，在 stderr 输出用法和文本错误，不输出正常扫描 JSON。
-- 所有 14 个 CLI 的命令行语法错误都由 argparse 处理，使用 stderr 文本并退出 2。
+- 所有 15 个 CLI 的命令行语法错误都由 argparse 处理，使用 stderr 文本并退出 2。
 
-因此，当前实现只保证三个源码 CLI 的输入/读取失败是结构化结果；不能声称 14 个入口对此完全一致。
+因此，当前实现只保证三个 C++ 源码 CLI 和通用 C# 函数 CLI 的输入/读取失败是结构化结果；不能声称 15 个入口对此完全一致。
 
 ## 10. 测试架构与覆盖矩阵
 
@@ -280,17 +289,18 @@ Build.cs / Target.cs          .cpp + 唯一自动配套头文件
 
 | 测试文件 | 数量 | 当前覆盖 |
 |---|---:|---|
-| `test_cli_contracts.py` | 5 | 14 CLI 双语帮助、统一信封、严格 JSON、Target 输入失败、3 个源码 CLI 的结构化输入失败。 |
-| `test_navigation_flow.py` | 1 | 14 个 CLI 组成同一个显式项目到源码导航链，并核对每层路径衔接。 |
+| `test_cli_contracts.py` | 5 | 15 CLI 双语帮助、统一信封、严格 JSON、Target 输入失败、4 个源码查询 CLI 的结构化输入失败。 |
+| `test_navigation_flow.py` | 1 | 15 个 CLI 组成同一个显式项目到源码导航链，并核对每层路径衔接。 |
 | `test_project_scanners.py` | 8 | 项目发现歧义、描述符压缩、Engine/Module/Target 对账、Plugin 名称筛选与显式来源、路径职责边界。 |
 | `test_plugin_descriptor.py` | 3 | Plugin Module/依赖、重复字段与缺失 Build.cs、错误后缀。 |
-| `test_rule_scanners.py` | 3 | 同文件 helper、条件与 source method、错误基类时保守失败。 |
+| `test_rule_scanners.py` | 3 | ModuleRules helper/条件、TargetRules 类/变量/函数索引、错误基类时保守失败。 |
+| `test_cs_functions.py` | 4 | 普通/Rules C# 函数、外部类型与方法引用、重载和缺失函数。 |
 | `test_module_entry.py` | 3 | 注册/绑定/清理、默认模块不虚构状态、分隔符错误保留局部事实。 |
-| `test_source_context.py` | 4 | 三个源码工具共享上下文、自动头文件、头文件歧义、最近项目歧义。 |
+| `test_source_context.py` | 4 | 三个 C++ 源码工具共享上下文、自动头文件、头文件歧义、最近项目歧义。 |
 | `test_source_includes.py` | 4 | unit 证据、配套头文件去重、非递归读取、预处理条件。 |
 | `test_source_types.py` | 3 | 类型/成员/反射宏、enum/interface 宏归属、参数前置声明排除。 |
 | `test_source_functions.py` | 3 | 声明定义关系、外部引用、同名重载稳定 ID、函数不存在的结构化扫描错误。 |
-| **合计** | **34** | 当前重建套件全部通过。 |
+| **合计** | **41** | 当前重建套件全部通过。 |
 
 运行方式：
 
@@ -298,7 +308,7 @@ Build.cs / Target.cs          .cpp + 唯一自动配套头文件
 python -m unittest discover -s tests -v
 ```
 
-仓库当前没有覆盖率工具、覆盖率阈值或 CI 工作流；34 项通过证明已编码断言成立，不等于完整语法、平台或 Unreal 集成覆盖。
+仓库当前没有覆盖率工具、覆盖率阈值或 CI 工作流；41 项通过证明已编码断言成立，不等于完整语法、平台或 Unreal 集成覆盖。
 
 ## 11. 性能特征
 
@@ -310,7 +320,7 @@ python -m unittest discover -s tests -v
 - 模块入口工具会读取并分词所选模块边界中的全部 `.h/.hpp/.cpp/.cc`，成本随模块源码总量增长。
 - 词法解析器为每个读取文件建立完整 Token 列表，内存使用与文本和 Token 数量近似线性相关。
 - 每个 callable 最多保留 32 个上下文，用显式上限约束分支传播的组合增长。
-- 14 个独立 CLI 进程之间无法共享 Engine 解析、描述符、Build.cs 索引或 Token。当前也没有基准测试来定义可接受的项目规模和延迟预算。
+- 15 个独立 CLI 进程之间无法共享 Engine 解析、描述符、Build.cs 索引或 Token。当前也没有基准测试来定义可接受的项目规模和延迟预算。
 
 ## 12. 已知边界
 
@@ -332,15 +342,15 @@ python -m unittest discover -s tests -v
 ### 12.2 契约边界
 
 1. 公开 Schema 只有版本字符串和运行时 `dict`，没有独立 JSON Schema 或静态类型定义。
-2. 11 个非源码 CLI 与 3 个源码 CLI 的输入/读取失败输出不同；调用方必须同时处理 stderr 文本和结构化 JSON。
+2. 11 个传统 CLI 与 4 个源码查询 CLI 的输入/读取失败输出不同；调用方必须同时处理 stderr 文本和结构化 JSON。
 3. Schema 保证字段语义与顺序，但绝对 `path_roots`、注册表候选和文件系统状态依赖机器环境，不能假设跨机器字节完全相同。
-4. 测试对关键字段做行为断言，但没有为 14 个 Schema 保存完整、路径归一化后的 golden 输出。
-5. 内部存在非公开的辅助投影，例如 `source-functions.v1`；只有本文件目录中列出的 14 个 CLI Schema 属于公开命令行契约。
+4. 测试对关键字段做行为断言，但没有为 15 个 Schema 保存完整、路径归一化后的 golden 输出。
+5. 内部存在非公开的辅助投影，例如 `source-functions.v1`；只有本文件目录中列出的 15 个 CLI Schema 属于公开命令行契约。
 
 ### 12.3 性能边界
 
 1. Engine/Project Plugin 树、Build.cs 树和模块源码会在相关调用中重复遍历。
-2. 三个源码查询会重复建立相同上下文和 Token，连续查询没有进程内复用。
+2. 三个 C++ 源码查询会重复建立相同上下文和 Token，连续查询没有进程内复用。
 3. 超大 Engine、Plugin 树或单模块可能带来显著 I/O、内存和启动延迟；当前没有规模基准或回归阈值。
 4. 现有 CLI 是短生命周期进程，尚无只读常驻索引、缓存失效键或并发访问模型。
 
@@ -354,21 +364,21 @@ python -m unittest discover -s tests -v
 6. 解析器遇到未知语法或不透明效果时输出诊断、`unclassified` 或 `unresolved`，不得执行源码或猜测有效值。
 7. 静态事实必须带来源路径、行号或描述符指针；不能定位证据的结论不得升级为已确认事实。
 8. UBT/UHT/Editor/运行时接入必须使用独立 Schema 和来源上下文，不得覆写静态扫描结果。
-9. 新功能至少扩展自包含夹具、直接服务测试和 CLI 契约测试；若改变导航入口，还要更新 14 CLI 流程测试及本目录。
-10. 扫描器核心保持只读。任何生成、修改或归档能力必须与 14 个扫描 CLI 分离。
+9. 新功能至少扩展自包含夹具、直接服务测试和 CLI 契约测试；若改变导航入口，还要更新 15 CLI 流程测试及本目录。
+10. 扫描器核心保持只读。任何生成、修改或归档能力必须与 15 个扫描 CLI 分离。
 
 ## 14. 优先后续工作
 
 ### P0：冻结并统一公共契约
 
-1. 为 14 个公开 Schema 增加版本化 JSON Schema 或等价静态模型，并验证保留字段、必需字段、枚举和向后兼容性。
+1. 为 15 个公开 Schema 增加版本化 JSON Schema 或等价静态模型，并验证保留字段、必需字段、枚举和向后兼容性。
 2. 明确统一输入/读取失败契约：优先让全部 CLI 使用结构化错误 JSON，同时保留 argparse 对纯语法错误的退出码 2 行为。
 3. 为自包含夹具增加路径归一化后的完整 golden 输出，防止字段删除、重命名和顺序漂移只靠局部断言漏检。
 4. 补齐注册表歧义、junction/symlink、权限失败、Plugin Profile 组合、复杂 C#/C++ 声明和预处理分支测试。
 
 ### P1：建立可量化的性能与复用边界
 
-1. 增加小/中/大项目基准，分别记录 Plugin 索引、Build.cs 索引、模块入口和三个源码查询的时间与峰值内存。
+1. 增加小/中/大项目基准，分别记录 Plugin 索引、Build.cs 索引、模块入口和三个 C++ 源码查询的时间与峰值内存。
 2. 将 Engine、描述符、Build.cs owner 索引和 Token 缓存抽象为只读会话对象，并以根路径、文件元数据和 Engine 身份定义明确失效键。
 3. 让同一进程中的 include/type/function 查询复用同一个源码上下文，同时保持三个公开 Schema 独立。
 4. 在性能优化后验证排序、诊断和证据边界不因缓存或并发发生变化。

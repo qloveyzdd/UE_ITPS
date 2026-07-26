@@ -71,7 +71,6 @@ def applicable(plugin: dict[str, Any], platform: str, target: str) -> bool:
 
 
 def resolve_project_plugins(
-    project_file: Path,
     project_root: Path,
     engine_root: Path | None,
     declarations: Any,
@@ -239,21 +238,12 @@ def resolve_project_plugins(
             )
         )
 
-    try:
-        project_descriptor_path = (
-            project_file.resolve().relative_to(project_root.resolve()).as_posix()
-        )
-    except ValueError:
-        project_descriptor_path = normalized(project_file)
     return result_document(
         "ue-itps.project-plugin-references.v1",
         {
             "path_roots": {
                 "project": normalized(project_root),
                 "engine": normalized(engine_root) if engine_root else None,
-            },
-            "project_descriptor": {
-                "path": project_descriptor_path,
             },
             "additional_plugin_directories": additional_plugin_findings or [],
             "profile": {

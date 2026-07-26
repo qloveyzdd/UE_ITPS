@@ -8,8 +8,8 @@ from .common import iter_files, normalized
 from .source_controls import _registration_preprocessor_contexts
 from .source_controls import control_expression_ranges
 from .source_declarations import (
-    _class_field_names,
-    _local_declaration_names,
+    _class_field_details,
+    _local_declaration_details,
     parse_classes,
     parse_external_definitions,
     parse_free_functions,
@@ -74,11 +74,116 @@ def _rule_annotation(operation: dict[str, Any]) -> dict[str, str] | None:
     return None
 
 
-def parse_rule_file(path: Path, required_base_type: str) -> dict[str, Any]:
+def parse_csharp_file(
+    path: Path,
+    *,
+    include_operations: bool = True,
+) -> dict[str, Any]:
     resolved = path.resolve()
+    if resolved.suffix.casefold() != ".cs":
+        raise ValueError(f"Expected a .cs file: {resolved}")
     text = resolved.read_text(encoding="utf-8-sig", errors="replace")
     tokens = lex_source(text)
     classes, forward, reverse = parse_classes(text, tokens)
+
+    parsed_classes: list[dict[str, Any]] = []
+    for item in classes:
+        methods: list[dict[str, Any]] = []
+        for member in item["members"]:
+            operation_items: list[dict[str, Any]] = []
+            declared_names: list[str] = []
+            local_variables: list[dict[str, Any]] = []
+            referenced_names: list[str] = []
+            qualified_references: list[str] = []
+            if member["body_range"] and include_operations:
+                body_start, body_end = member["body_range"]
+                referenced_names = list(
+                    dict.fromkeys(
+                        token.value
+                        for token in tokens[body_start:body_end]
+                        if token.kind == "identifier"
+                    )
+                )
+                qualified_references = list(
+                    dict.fromkeys(
+                        tokens[index].value
+                        for index in range(body_start, body_end - 2)
+                        if (
+                            tokens[index].kind == "identifier"
+                            and tokens[index + 1].value == "."
+                            and tokens[index + 2].kind == "identifier"
+                            and (
+                                index == body_start
+                                or tokens[index - 1].value not in {".", "::"}
+                            )
+                        )
+                    )
+                )
+                local_variables = _local_declaration_details(
+                    text,
+                    tokens,
+                    body_start,
+                    body_end,
+                )
+                declared_names = list(
+                    dict.fromkeys(
+                        str(item["name"])
+                        for item in local_variables
+                    )
+                )
+                operation_items = parse_operations(
+                    text,
+                    tokens,
+                    forward,
+                    reverse,
+                    member["body_range"][0],
+                    member["body_range"][1],
+                    include_control_metadata=True,
+                )
+            methods.append(
+                {
+                    "name": member["name"],
+                    "parameters": member["parameters"],
+                    "signature": member["signature"],
+                    "has_body": member["has_body"],
+                    "is_constructor": member["is_constructor"],
+                    "location": member["location"],
+                    "declared_names": declared_names,
+                    "local_variables": local_variables,
+                    "referenced_names": referenced_names,
+                    "qualified_references": qualified_references,
+                    "operations": operation_items,
+                }
+            )
+        parsed_classes.append(
+            {
+                "kind": item["kind"],
+                "name": item["name"],
+                "base_types": item["base_types"],
+                "location": item["location"],
+                "fields": _class_field_details(
+                    text,
+                    tokens,
+                    item["body_range"][0],
+                    item["body_range"][1],
+                ),
+                "methods": methods,
+            }
+        )
+    return {
+        "path": normalized(resolved),
+        "classes": parsed_classes,
+        "problems": delimiter_problems(tokens),
+    }
+
+
+def parse_rule_file(path: Path, required_base_type: str) -> dict[str, Any]:
+    parsed = parse_csharp_file(
+        path,
+        include_operations=required_base_type == "ModuleRules",
+    )
+    resolved = Path(parsed["path"])
+    classes = parsed["classes"]
     known_bases = {required_base_type}
     selected: list[dict[str, Any]] = []
     base_resolution: dict[str, str] = {}
@@ -101,9 +206,9 @@ def parse_rule_file(path: Path, required_base_type: str) -> dict[str, Any]:
         expected_name = resolved.name[: -len(".Target.cs")] + "Target"
         for item in list(pending):
             has_target_constructor = any(
-                member["is_constructor"]
-                and re.search(r"\bTargetInfo\b", str(member["parameters"]))
-                for member in item["members"]
+                method["is_constructor"]
+                and re.search(r"\bTargetInfo\b", str(method["parameters"]))
+                for method in item["methods"]
             )
             if item["name"].casefold() == expected_name.casefold() and has_target_constructor:
                 selected.append(item)
@@ -114,43 +219,13 @@ def parse_rule_file(path: Path, required_base_type: str) -> dict[str, Any]:
 
     rules_classes: list[dict[str, Any]] = []
     for item in selected:
-        methods: list[dict[str, Any]] = []
-        for member in item["members"]:
-            operation_items: list[dict[str, Any]] = []
-            declared_names: list[str] = []
-            if member["body_range"]:
-                declared_names = _local_declaration_names(
-                    text,
-                    tokens,
-                    member["body_range"][0],
-                    member["body_range"][1],
-                )
-                operation_items = parse_operations(
-                    text,
-                    tokens,
-                    forward,
-                    reverse,
-                    member["body_range"][0],
-                    member["body_range"][1],
-                    include_control_metadata=required_base_type
-                    in {"ModuleRules", "TargetRules"},
-                )
-                if required_base_type == "ModuleRules":
-                    for operation in operation_items:
-                        annotation = _rule_annotation(operation)
-                        if annotation:
-                            operation["rule"] = annotation
-            methods.append(
-                {
-                    "name": member["name"],
-                    "parameters": member["parameters"],
-                    "signature": member["signature"],
-                    "is_constructor": member["is_constructor"],
-                    "location": member["location"],
-                    "declared_names": declared_names,
-                    "operations": operation_items,
-                }
-            )
+        methods = item["methods"]
+        if required_base_type == "ModuleRules":
+            for method in methods:
+                for operation in method["operations"]:
+                    annotation = _rule_annotation(operation)
+                    if annotation:
+                        operation["rule"] = annotation
         method_names = {method["name"] for method in methods}
         calls: list[dict[str, Any]] = []
         for method in methods:
@@ -172,16 +247,12 @@ def parse_rule_file(path: Path, required_base_type: str) -> dict[str, Any]:
         }
         rules_classes.append(
             {
+                "kind": item["kind"],
                 "name": item["name"],
                 "base_types": item["base_types"],
                 "base_resolution": base_resolution[item["name"]],
                 "location": item["location"],
-                "declared_fields": _class_field_names(
-                    text,
-                    tokens,
-                    item["body_range"][0],
-                    item["body_range"][1],
-                ),
+                "fields": item["fields"],
                 "methods": methods,
                 "same_file_calls": sorted(
                     unique_calls.values(),

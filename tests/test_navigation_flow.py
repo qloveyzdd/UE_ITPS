@@ -13,7 +13,7 @@ from tests.support import (
 
 
 class NavigationFlowTests(EnvelopeAssertions):
-    def test_all_fourteen_clis_form_one_explicit_navigation_flow(self) -> None:
+    def test_all_fifteen_clis_form_one_explicit_navigation_flow(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             fixture = create_fixture(Path(temporary_directory))
             project = str(fixture.project_file)
@@ -54,6 +54,12 @@ class NavigationFlowTests(EnvelopeAssertions):
                 "ue_inspect_target_rules.py": [
                     "--target",
                     str(fixture.target_file),
+                ],
+                "ue_inspect_cs_function.py": [
+                    "--source",
+                    str(fixture.target_file),
+                    "--function",
+                    "FixtureGameTarget",
                 ],
                 "ue_inspect_module_entry.py": [
                     "--rules",
@@ -145,5 +151,13 @@ class NavigationFlowTests(EnvelopeAssertions):
         )
         self.assertEqual(
             results["ue_inspect_source_function.py"]["match_count"],
+            1,
+        )
+        self.assertEqual(
+            results["ue_inspect_cs_function.py"]["selection"]["name"],
+            "FixtureGameTarget",
+        )
+        self.assertEqual(
+            results["ue_inspect_cs_function.py"]["match_count"],
             1,
         )

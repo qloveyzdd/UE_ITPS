@@ -1,6 +1,6 @@
 ---
 name: ue-project-inspector
-description: Inspect Unreal Engine projects and explicitly selected source entry files through the repository's deterministic, read-only tools. Use when Codex needs to find or read .uproject files; resolve Engine identity; locate direct Plugin references; inspect one .uplugin; navigate one plugin's declared modules; read one Build.cs or Target.cs; inspect one module's lifecycle entry source; list includes or types from one selected .cpp; inspect all function definitions matching one selected name; classify project directories; or summarize focused results. Do not use for runtime behavior, asset reachability, general class/call graphs, code generation, builds, tests, or project modification.
+description: Inspect Unreal Engine projects and explicitly selected source entry files through the repository's deterministic, read-only tools. Use when Codex needs to find or read .uproject files; resolve Engine identity; locate direct Plugin references; inspect one .uplugin; navigate one plugin's declared modules; read one Build.cs or Target.cs; inspect one selected C# or C++ function name; inspect one module's lifecycle entry source; list includes or types from one selected .cpp; classify project directories; or summarize focused results. Do not use for runtime behavior, asset reachability, general class/call graphs, code generation, builds, tests, or project modification.
 ---
 
 # UE Project Inspector
@@ -26,7 +26,8 @@ If the scripts are missing, report that this repository does not contain the exp
 | Classify project-root paths with explicit descriptor evidence | `ue_classify_project_paths.py` |
 | Read one explicitly selected `.uplugin` | `ue_read_plugin_descriptor.py` |
 | Read declared setting mutations and references from one Build.cs | `ue_inspect_module_rules.py` |
-| Read static rules from one Target.cs | `ue_inspect_target_rules.py` |
+| Index TargetRules classes, member variables, and functions from one Target.cs | `ue_inspect_target_rules.py` |
+| Inspect all class members matching one function name in one `.cs` | `ue_inspect_cs_function.py` |
 | Inspect one module's registration and lifecycle state transitions | `ue_inspect_module_entry.py` |
 | List direct include provenance from one selected `.cpp` | `ue_list_source_includes.py` |
 | List type and member-name facts from one selected `.cpp` | `ue_list_source_types.py` |
@@ -58,6 +59,8 @@ When the user or model explicitly selects one `.cpp`, run only the smallest sour
 
 Use `ue_list_source_types.py` to discover member-function names when type context is needed. The model must explicitly choose one function name, then call `ue_inspect_source_function.py` with that name. The function tool returns every same-name definition found in the selected `.cpp` and its automatically derived companion header; owner, parameters, qualifiers, and `function_id` are output facts and never selectors. Each match reports external type expressions and member calls using only local declaration syntax. Wrapped template types remain one expression, and member-call receivers are replaced with their locally declared type expression when available. Do not inspect other function names or dependency source.
 
+Use `ue_inspect_target_rules.py` to discover member-function names in one selected `Target.cs`. The model must explicitly choose one function name, then call `ue_inspect_cs_function.py` with the same file and selected name. The C# function tool can also inspect an explicitly selected ordinary `.cs` or `Build.cs` directly. It returns every same-name class or struct member in that file and never follows called functions.
+
 Do not embed or reinterpret later source-tool results as fields of the earlier `.uproject` result. Each tool keeps its own schema, validation, and limits.
 
 All normal scan results follow this top-level order: `schema_version`, module facts, `validation`, then `limits`. Treat `validation: warning` as a completed scan with non-blocking problems, not as `ok` and not as a process failure.
@@ -80,6 +83,7 @@ Replace `<plugin>`, `<rules>`, and `<target>` with one explicit file selected fr
 python tools/ue_read_plugin_descriptor.py --plugin <plugin>
 python tools/ue_inspect_module_rules.py --rules <rules>
 python tools/ue_inspect_target_rules.py --target <target>
+python tools/ue_inspect_cs_function.py --source <cs-source> --function <name>
 python tools/ue_inspect_module_entry.py --rules <rules>
 python tools/ue_list_source_includes.py --source <source>
 python tools/ue_list_source_types.py --source <source>
@@ -99,7 +103,6 @@ Use `Win64 / Editor` only as the default focused Plugin profile. If the user pro
 Treat `ue-itps.project-plugin-references.v1` items as explicit records:
 
 - `path_roots.project` and `.engine` are absolute roots recorded once. Plugin `descriptor` paths are relative to the project root for `project*` and `additional-project-*` origins, or to the Engine root for `engine*` origins.
-- `project_descriptor.path` is relative to `path_roots.project`.
 - Every Plugin item retains all modeled fields, including false, empty, and null values.
 - Plugin descriptor contents and hashes are not read.
 
@@ -134,18 +137,27 @@ Treat `ue-itps.module-rule-relations.v1` as a relevance projection, not a C# syn
 
 ## Interpret Target rule relations v1
 
-Treat `ue-itps.target-rule-relations.v1` as a TargetRules relevance projection, not a C# syntax tree or effective UBT result:
+Treat `ue-itps.target-rule-relations.v1` as a TargetRules navigation index, not a C# syntax tree or effective UBT result:
 
-- `declared_mutations` contains local Target setting assignments and collection changes from constructors and statically reachable same-file helpers.
-- `inheritance.kind` is `confirmed` when the selected file proves the TargetRules chain. A filename-matching class with a `TargetInfo` constructor may be reported as `unresolved` with a validation warning when its base is defined elsewhere; its local mutations remain evidence, but its inheritance and base effects are not inferred.
-- `operand.kind` is `literal`, `symbol`, or `expression`; module, plugin, and definition references are labeled when statically recognized.
-- `unclassified_mutations` retains mutation-shaped candidates that cannot be confirmed as TargetRules settings.
-- `unresolved_effect_calls` records external or inherited calls that may change rules without inferring their effects.
-- `applicability.controls` preserves recognized source controls in outer-to-inner order; each item carries `kind` and, when available, its source `expression` and `branch`. Target results do not expose parallel `conditions` or `control_path` arrays.
-- Target results omit flattened `related_symbols` because full local control expressions are already preserved.
-- `source.method` and `source.line` identify the containing same-file method and source evidence for each mutation or unresolved effect call.
-- Declared local variables, class fields, and mutations rooted at them are excluded from Target setting mutations.
-- Caller conditions are not propagated into mutations inside reachable helpers.
+- Each `rules_classes[]` item is a lexical type index with `kind`, `name`, `base_types`, `inheritance`, `member_details`, and `evidence`.
+- `member_details.variables` lists lexical class fields in deterministic source order. Each item retains name, type expression, and evidence; function locals and C# properties are not included.
+- `member_details.functions` lists every lexical member function in deterministic source order. Each item retains name, compact signature, constructor/body flags, and evidence.
+- Function bodies, mutations, calls, conditions, operands, and referenced values are not included. Select one function name and use `ue_inspect_cs_function.py` for body facts.
+- `inheritance.kind` is `confirmed` when the selected file proves the TargetRules chain. A filename-matching class with a `TargetInfo` constructor may be reported as `unresolved` with a validation warning when its base is defined elsewhere; its local class and member declarations remain evidence, but inheritance and base effects are not inferred.
+- The result is a TargetRules navigation index, not a complete C# type system or effective UBT result.
+
+## Interpret C# function v1
+
+Treat `ue-itps.cs-function.v1` as a lexical projection of one explicitly selected `.cs`, including ordinary C#, `Build.cs`, and `Target.cs`:
+
+- `selection.name` is the only function selector. `matches` returns every same-name class or struct member in the file.
+- Each match owns a compact `function_id`, a `function` identity, `external_types`, and source-ordered `external_methods`.
+- `function` retains constructor/method kind, owner, name, compact signature and parameters, body presence, and evidence.
+- External types are normalized type expressions derived from parameters, local variables, referenced member fields, and unbound type-like qualifiers used in non-call member access. Types declared in the selected file and built-in C# types are omitted.
+- External methods retain first-seen method-call expressions, including same-class calls. A locally typed root receiver is replaced with its type expression while the remaining member chain is preserved; unresolved receivers retain their source spelling.
+- Bare calls are retained when the selected class declares that method name. Constructor-shaped bare invocations remain outside `external_methods`.
+- A missing function returns `validation: error` with `function-not-found` and CLI exit 1. Input/read failure returns schema-shaped JSON and exit 2.
+- Called functions, inherited members, other files, runtime effects, and compiler semantics are not followed or inferred.
 
 ## Interpret module entry state v12
 
@@ -186,7 +198,7 @@ Treat `ue-itps.target-rule-relations.v1` as a TargetRules relevance projection, 
 - `.uproject` declares Modules and direct Plugin references, but descriptor v1 intentionally does not repeat their full arrays. It does not declare `Target.cs` or a complete dependency graph.
 - Direct Plugin resolution is not the effective `.uplugin` dependency closure.
 - The single-plugin descriptor tool reports direct Plugin dependency declarations without locating or traversing their descriptors; it recursively reconciles declared Modules with Build.cs files under the selected plugin's Source and Platforms directories.
-- Build.cs setting mutations use flattened applicability facts, while Target.cs operations preserve source conditions; neither is an effective UBT result.
+- Build.cs setting mutations use flattened applicability facts. The generic C# function tool reports lexical external references, while the TargetRules index omits function bodies; none is an effective UBT result.
 - Module entry v12 reports flat callback binding facts, unmatched cleanup evidence, compact non-callback state models, conditional default overrides, and unresolved stateful calls. Changed values, RHS expressions, full methods, and general call graphs are intentionally omitted.
 - Module entry conditions are propagated through reachable local helpers and actually bound same-module member callbacks. Virtual targets follow only ordinary same-module calls; callback registration is not reinterpreted as a synchronous caller. Bound top-level `static` callbacks report declarations without body traversal. A conditional override's `default` means the value before the selected module's first observed override, not a proven UE constructor value.
 - Unbalanced, unexpected, or mismatched `()[]{}` in module source is an error-level validation problem. Partial facts may still be returned for recovery, and the module-entry CLI exits with status 1.

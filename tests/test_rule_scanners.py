@@ -32,7 +32,7 @@ class RuleScannerTests(EnvelopeAssertions):
         self.assertEqual(private["applicability"]["kind"], "conditional")
         self.assertEqual(private["applicability"]["control_path"], ["if"])
 
-    def test_target_rules_project_reachable_mutations_and_source_methods(
+    def test_target_rules_index_classes_and_member_functions(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -40,22 +40,31 @@ class RuleScannerTests(EnvelopeAssertions):
             result = inspect_target_rules(fixture.target_file)
 
         self.assert_envelope(result)
+        self.assertEqual(
+            result["schema_version"],
+            "ue-itps.target-rule-relations.v1",
+        )
         rules = result["rules_classes"][0]
+        self.assertEqual(rules["kind"], "class")
+        self.assertEqual(rules["name"], "FixtureGameTarget")
+        self.assertEqual(rules["base_types"], ["TargetRules"])
         self.assertEqual(rules["inheritance"]["kind"], "confirmed")
-        by_setting = {
-            item["setting"]: item for item in rules["declared_mutations"]
+        variables = rules["member_details"]["variables"]
+        self.assertEqual(variables[0]["name"], "SharedDefinition")
+        self.assertEqual(variables[0]["type_expression"], "string")
+        self.assertIn("evidence", variables[0])
+        functions = {
+            item["name"]: item
+            for item in rules["member_details"]["functions"]
         }
-        self.assertEqual(by_setting["Type"]["operand"]["references"], ["TargetType.Game"])
-        self.assertEqual(
-            by_setting["bUseLoggingInShipping"]["source"]["method"],
-            "ApplySharedSettings",
-        )
-        self.assertEqual(
-            by_setting["bUseLoggingInShipping"]["applicability"]["controls"][0][
-                "kind"
-            ],
-            "if",
-        )
+        constructor = functions["FixtureGameTarget"]
+        helper = functions["ApplySharedSettings"]
+        self.assertTrue(constructor["is_constructor"])
+        self.assertFalse(helper["is_constructor"])
+        self.assertIn("signature", constructor)
+        self.assertIn("evidence", constructor)
+        self.assertIn("evidence", rules)
+        self.assertNotIn("declared_mutations", rules)
 
     def test_rule_scanners_fail_closed_for_wrong_base_type(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

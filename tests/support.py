@@ -27,6 +27,7 @@ CLI_SCRIPTS = (
     "ue_read_plugin_descriptor.py",
     "ue_inspect_module_rules.py",
     "ue_inspect_target_rules.py",
+    "ue_inspect_cs_function.py",
     "ue_inspect_module_entry.py",
     "ue_list_source_includes.py",
     "ue_list_source_types.py",
@@ -199,6 +200,8 @@ def create_fixture(workspace: Path) -> SimpleNamespace:
         """
         public class FixtureGameTarget : TargetRules
         {
+            private static readonly string SharedDefinition = "FIXTURE";
+
             public FixtureGameTarget(TargetInfo Target) : base(Target)
             {
                 Type = TargetType.Game;

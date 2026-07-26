@@ -80,12 +80,17 @@ class CliContractTests(EnvelopeAssertions):
             "ue_list_source_includes.py": "ue-itps.source-includes.v1",
             "ue_list_source_types.py": "ue-itps.source-types.v1",
             "ue_inspect_source_function.py": "ue-itps.source-function.v1",
+            "ue_inspect_cs_function.py": "ue-itps.cs-function.v1",
         }
         with tempfile.TemporaryDirectory() as temporary_directory:
-            missing = Path(temporary_directory) / "Missing.cpp"
             for script, schema in cases.items():
+                suffix = ".cs" if script == "ue_inspect_cs_function.py" else ".cpp"
+                missing = Path(temporary_directory) / f"Missing{suffix}"
                 arguments = ["--source", str(missing)]
-                if script == "ue_inspect_source_function.py":
+                if script in {
+                    "ue_inspect_source_function.py",
+                    "ue_inspect_cs_function.py",
+                }:
                     arguments.extend(["--function", "Missing"])
                 with self.subTest(script=script):
                     completed = run_cli(script, *arguments)

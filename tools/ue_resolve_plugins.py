@@ -81,7 +81,6 @@ def main() -> int:
             ),
         ]
         result = resolve_project_plugins(
-            project,
             project.parent,
             engine_root,
             descriptor.get("Plugins", []),

@@ -112,7 +112,6 @@ class ProjectScannerTests(EnvelopeAssertions):
             fixture = create_fixture(Path(temporary_directory))
             descriptor, _ = descriptor_result(fixture.project_file)
             result = resolve_project_plugins(
-                fixture.project_file,
                 fixture.project_root,
                 fixture.engine_root,
                 descriptor["Plugins"],
@@ -127,6 +126,7 @@ class ProjectScannerTests(EnvelopeAssertions):
         self.assertEqual(result["declared_enabled_count"], 1)
         self.assertEqual(result["declared_disabled_count"], 1)
         self.assertNotIn("item_defaults", result)
+        self.assertNotIn("project_descriptor", result)
         enabled = next(item for item in result["items"] if item["name"] == "FixturePlugin")
         self.assertEqual(
             set(enabled),
@@ -164,7 +164,6 @@ class ProjectScannerTests(EnvelopeAssertions):
             )
             descriptor, _ = descriptor_result(fixture.project_file)
             result = resolve_project_plugins(
-                fixture.project_file,
                 fixture.project_root,
                 fixture.engine_root,
                 descriptor["Plugins"],
@@ -196,7 +195,6 @@ class ProjectScannerTests(EnvelopeAssertions):
             fixture = create_fixture(Path(temporary_directory))
             descriptor, _ = descriptor_result(fixture.project_file)
             result = resolve_project_plugins(
-                fixture.project_file,
                 fixture.project_root,
                 fixture.engine_root,
                 descriptor["Plugins"],
