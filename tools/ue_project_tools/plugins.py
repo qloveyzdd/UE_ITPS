@@ -12,18 +12,6 @@ from .common import (
 from .descriptor import classify_plugin_declarations
 
 
-def plugin_item_defaults() -> dict[str, Any]:
-    return {
-        "declared_enabled": True,
-        "optional": False,
-        "applicable_for_context": True,
-        "status": "resolved",
-        "additional_fields": [],
-        "alternate_descriptors": [],
-        "filters": {},
-    }
-
-
 def descriptor_index(
     roots: list[tuple[str, Path]],
     declared_names: set[str],
@@ -32,10 +20,8 @@ def descriptor_index(
         return {}
     index: dict[str, list[dict[str, str]]] = {}
     for origin, root in roots:
-        for path in iter_files(root, ".uplugin"):
+        for path in iter_files(root, ".uplugin", declared_names):
             folded_name = path.stem.casefold()
-            if folded_name not in declared_names:
-                continue
             index.setdefault(folded_name, []).append(
                 {
                     "origin": origin,
@@ -64,29 +50,6 @@ def relative_descriptor_path(
         return Path(path).resolve().relative_to(root.resolve()).as_posix()
     except ValueError:
         return path
-
-
-def sparse_plugin_item(
-    item: dict[str, Any],
-    defaults: dict[str, Any],
-    problem_pointers: set[str],
-) -> dict[str, Any]:
-    problematic = (
-        item["status"] != "resolved"
-        or bool(item["alternate_descriptors"])
-        or item["descriptor_pointer"] in problem_pointers
-    )
-    if problematic:
-        return item
-
-    sparse = {
-        key: item[key]
-        for key in ("name", "origin", "descriptor")
-    }
-    for key, default in defaults.items():
-        if item[key] != default:
-            sparse[key] = item[key]
-    return sparse
 
 
 def applicable(plugin: dict[str, Any], platform: str, target: str) -> bool:
@@ -118,14 +81,29 @@ def resolve_project_plugins(
     target: str,
     additional_plugin_findings: list[dict[str, Any]] | None = None,
     initial_problems: list[dict[str, Any]] | None = None,
+    plugin_names: set[str] | None = None,
 ) -> dict[str, Any]:
-    defaults = plugin_item_defaults()
     _, declaration_problems = classify_plugin_declarations(declarations)
     problems = [*(initial_problems or []), *declaration_problems]
     valid_declarations = declarations if isinstance(declarations, list) else []
+    requested_names = (
+        {name.casefold() for name in plugin_names}
+        if plugin_names is not None
+        else None
+    )
+    selected_declarations = [
+        (declaration_index, raw)
+        for declaration_index, raw in enumerate(valid_declarations)
+        if requested_names is None
+        or (
+            isinstance(raw, dict)
+            and isinstance(raw.get("Name"), str)
+            and raw["Name"].casefold() in requested_names
+        )
+    ]
     declared_names = {
         raw["Name"].casefold()
-        for raw in valid_declarations
+        for _, raw in selected_declarations
         if isinstance(raw, dict)
         and isinstance(raw.get("Name"), str)
         and raw["Name"]
@@ -170,7 +148,7 @@ def resolve_project_plugins(
             return 3
         return origin_rank.get(origin, 99)
 
-    for declaration_index, raw in enumerate(valid_declarations):
+    for declaration_index, raw in selected_declarations:
         if (
             not isinstance(raw, dict)
             or not isinstance(raw.get("Name"), str)
@@ -267,16 +245,6 @@ def resolve_project_plugins(
         )
     except ValueError:
         project_descriptor_path = normalized(project_file)
-    problem_pointers = {
-        str(problem["descriptor_pointer"])
-        for problem in problems
-        if problem.get("descriptor_pointer")
-    }
-    for problem in problems:
-        problem_pointers.update(
-            str(pointer) for pointer in problem.get("descriptor_pointers", [])
-        )
-
     return result_document(
         "ue-itps.project-plugin-references.v1",
         {
@@ -288,7 +256,6 @@ def resolve_project_plugins(
                 "path": project_descriptor_path,
             },
             "additional_plugin_directories": additional_plugin_findings or [],
-            "item_defaults": defaults,
             "profile": {
                 "operation": operation,
                 "platform": platform,
@@ -322,10 +289,7 @@ def resolve_project_plugins(
             "engine_descriptor_count": sum(
                 1 for item in results if item["origin"] in {"engine", "engine-platform"}
             ),
-            "items": [
-                sparse_plugin_item(item, defaults, problem_pointers)
-                for item in results
-            ],
+            "items": results,
         },
         problems,
         responsibility=(
@@ -336,7 +300,7 @@ def resolve_project_plugins(
             "Effective defaults and transitive .uplugin dependency closure are not computed.",
             "Applicability evaluates platform and target filters; configuration and deeper UBT policy remain out of scope.",
             "Plugin descriptor contents and hashes are not read.",
-            "Sparse items inherit omitted fields from item_defaults; problem items retain all modeled fields.",
+            "Every Plugin item retains all modeled fields.",
             "Descriptor paths are relative to path_roots according to origin.",
         ],
     )

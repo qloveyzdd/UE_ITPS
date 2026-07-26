@@ -78,6 +78,7 @@ python tools/ue_inspect_module_entry.py --help
 - `--operation`：`scan`、`open_editor`、`build_editor`、`run_game` 或 `cook_package`，默认 `scan`
 - `--platform`：默认 `Win64`
 - `--target-type`：默认 `Editor`
+- `--plugin-name`：按 Plugin Name 筛选，可重复指定；省略时解析全部直接引用
 
 ## 显式导航工作流
 

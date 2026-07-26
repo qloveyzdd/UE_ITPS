@@ -46,6 +46,15 @@ def main() -> int:
         metavar="NAME",
         help="Target 类型，默认 Editor / Target type; default: Editor",
     )
+    parser.add_argument(
+        "--plugin-name",
+        action="append",
+        metavar="NAME",
+        help=(
+            "按 Name 筛选 Plugin，可重复指定 / "
+            "Filter Plugins by Name; may be repeated"
+        ),
+    )
     args = parser.parse_args()
     project = Path(args.project).resolve()
     try:
@@ -82,6 +91,7 @@ def main() -> int:
             args.target_type,
             directory_findings,
             initial_problems,
+            set(args.plugin_name) if args.plugin_name else None,
         )
     except (OSError, ValueError) as exc:
         parser.error(str(exc))

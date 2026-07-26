@@ -4,6 +4,7 @@ from pathlib import Path
 import tempfile
 
 from tools.ue_project_tools.code_inventory import inspect_modules, inspect_targets
+from tools.ue_project_tools.common import iter_files
 from tools.ue_project_tools.descriptor import (
     descriptor_result,
     resolve_internal_directories,
@@ -17,6 +18,20 @@ from tests.support import EnvelopeAssertions, create_fixture, write_json
 
 
 class ProjectScannerTests(EnvelopeAssertions):
+    def test_file_iteration_can_filter_exact_names(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            write_json(root / "Wanted" / "Wanted.uplugin", {})
+            write_json(root / "Other" / "Other.uplugin", {})
+            write_json(root / "Wanted" / "Wanted.uplugin.backup", {})
+
+            matches = iter_files(root, ".uplugin", {"wanted"})
+
+        self.assertEqual(
+            [path.name for path in matches],
+            ["Wanted.uplugin"],
+        )
+
     def test_project_discovery_selects_one_and_refuses_ambiguity(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -92,7 +107,7 @@ class ProjectScannerTests(EnvelopeAssertions):
         self.assertEqual(targets["classification"], "native-project")
         self.assertEqual([item["name"] for item in targets["items"]], ["FixtureGame"])
 
-    def test_plugin_resolution_preserves_profile_and_sparse_origins(self) -> None:
+    def test_plugin_resolution_preserves_profile_and_explicit_items(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             fixture = create_fixture(Path(temporary_directory))
             descriptor, _ = descriptor_result(fixture.project_file)
@@ -111,12 +126,90 @@ class ProjectScannerTests(EnvelopeAssertions):
         self.assertEqual(result["count"], 2)
         self.assertEqual(result["declared_enabled_count"], 1)
         self.assertEqual(result["declared_disabled_count"], 1)
+        self.assertNotIn("item_defaults", result)
         enabled = next(item for item in result["items"] if item["name"] == "FixturePlugin")
+        self.assertEqual(
+            set(enabled),
+            {
+                "name",
+                "descriptor_pointer",
+                "declared_enabled",
+                "optional",
+                "additional_fields",
+                "applicable_for_context",
+                "status",
+                "origin",
+                "descriptor",
+                "alternate_descriptors",
+                "filters",
+            },
+        )
         self.assertEqual(enabled["origin"], "project")
         self.assertEqual(
             enabled["descriptor"],
             "Plugins/FixturePlugin/FixturePlugin.uplugin",
         )
+
+    def test_plugin_resolution_preserves_all_matches_for_one_name(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            fixture = create_fixture(Path(temporary_directory))
+            write_json(
+                fixture.engine_root
+                / "Engine"
+                / "Plugins"
+                / "Runtime"
+                / "FixturePlugin"
+                / "FixturePlugin.uplugin",
+                {},
+            )
+            descriptor, _ = descriptor_result(fixture.project_file)
+            result = resolve_project_plugins(
+                fixture.project_file,
+                fixture.project_root,
+                fixture.engine_root,
+                descriptor["Plugins"],
+                [],
+                "scan",
+                "Win64",
+                "Editor",
+            )
+
+        plugin = next(
+            item for item in result["items"] if item["name"] == "FixturePlugin"
+        )
+        self.assertEqual(plugin["origin"], "project")
+        self.assertEqual(
+            plugin["alternate_descriptors"],
+            [
+                {
+                    "origin": "engine",
+                    "path": (
+                        "Engine/Plugins/Runtime/FixturePlugin/"
+                        "FixturePlugin.uplugin"
+                    ),
+                }
+            ],
+        )
+
+    def test_plugin_resolution_can_filter_project_declarations_by_name(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            fixture = create_fixture(Path(temporary_directory))
+            descriptor, _ = descriptor_result(fixture.project_file)
+            result = resolve_project_plugins(
+                fixture.project_file,
+                fixture.project_root,
+                fixture.engine_root,
+                descriptor["Plugins"],
+                [],
+                "scan",
+                "Win64",
+                "Editor",
+                plugin_names={"disabledplugin"},
+            )
+
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(result["items"][0]["name"], "DisabledPlugin")
+        self.assertEqual(result["items"][0]["descriptor_pointer"], "/Plugins/1")
 
     def test_path_classifier_reports_facts_without_claiming_deletion_safety(
         self,

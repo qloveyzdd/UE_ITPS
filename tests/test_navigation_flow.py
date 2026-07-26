@@ -39,6 +39,8 @@ class NavigationFlowTests(EnvelopeAssertions):
                     "Win64",
                     "--target-type",
                     "Editor",
+                    "--plugin-name",
+                    "FixturePlugin",
                 ],
                 "ue_classify_project_paths.py": ["--project", project],
                 "ue_read_plugin_descriptor.py": [
@@ -106,6 +108,7 @@ class NavigationFlowTests(EnvelopeAssertions):
         self.assertEqual(target_path, fixture.target_file.resolve())
 
         plugin_result = results["ue_resolve_plugins.py"]
+        self.assertEqual(plugin_result["count"], 1)
         plugin_item = next(
             item
             for item in plugin_result["items"]

@@ -64,7 +64,7 @@ Build.cs / Target.cs          .cpp + 唯一自动配套头文件
 | `descriptor.py` | 投影 `.uproject` 显式字段，分类 Module/Plugin 声明，解析 Additional 目录并保留未建模字段。 |
 | `engine.py` | 按显式覆盖、关联路径、Windows 注册表、版本匹配和祖先路径解析 Engine，并读取 `Build.version`。 |
 | `code_inventory.py` | 按 basename 发现 Build.cs、对账项目 Module、提取 `IMPLEMENT_*_MODULE` 入口证据、发现 Target.cs。 |
-| `plugins.py` | 为 `.uproject` 的直接 Plugin 引用建立描述符索引，计算有限 Profile 适用性并输出稀疏记录。 |
+| `plugins.py` | 为 `.uproject` 的直接 Plugin 引用建立描述符索引，计算有限 Profile 适用性并输出完整记录。 |
 | `structure.py` | 依据 `.uproject.parent` 和根目录文件系统状态分类项目、构建、IDE、缓存与本地状态路径。 |
 | `ue_json.py` | 读取允许注释和尾逗号的 UE 描述符 JSON，记录重复字段；不接受 `NaN` 等非标准常量。 |
 | `plugin_descriptor.py` | 校验一个显式 `.uplugin` 的字段、枚举、Module 和直接 Plugin 依赖，并在该 Plugin 的 `Source`/`Platforms` 下对账 Build.cs。 |
@@ -282,7 +282,7 @@ Build.cs / Target.cs          .cpp + 唯一自动配套头文件
 |---|---:|---|
 | `test_cli_contracts.py` | 5 | 14 CLI 双语帮助、统一信封、严格 JSON、Target 输入失败、3 个源码 CLI 的结构化输入失败。 |
 | `test_navigation_flow.py` | 1 | 14 个 CLI 组成同一个显式项目到源码导航链，并核对每层路径衔接。 |
-| `test_project_scanners.py` | 5 | 项目发现歧义、描述符压缩、Engine/Module/Target 对账、Plugin 稀疏来源、路径职责边界。 |
+| `test_project_scanners.py` | 8 | 项目发现歧义、描述符压缩、Engine/Module/Target 对账、Plugin 名称筛选与显式来源、路径职责边界。 |
 | `test_plugin_descriptor.py` | 3 | Plugin Module/依赖、重复字段与缺失 Build.cs、错误后缀。 |
 | `test_rule_scanners.py` | 3 | 同文件 helper、条件与 source method、错误基类时保守失败。 |
 | `test_module_entry.py` | 3 | 注册/绑定/清理、默认模块不虚构状态、分隔符错误保留局部事实。 |

@@ -169,15 +169,29 @@ def read_json(path: Path) -> dict[str, Any]:
     return value
 
 
-def iter_files(root: Path, suffix: str) -> Iterable[Path]:
+def iter_files(
+    root: Path,
+    suffix: str,
+    exact_names: set[str] | None = None,
+) -> Iterable[Path]:
     if not root.is_dir():
         return []
+    expected_filenames = (
+        {f"{name}{suffix}".casefold() for name in exact_names}
+        if exact_names is not None
+        else None
+    )
     matches: list[Path] = []
     for current, dirs, files in os.walk(root):
         dirs[:] = [name for name in dirs if name not in SKIP_DIRS]
         for name in files:
-            if name.casefold().endswith(suffix.casefold()):
-                matches.append((Path(current) / name).resolve())
+            folded_name = name.casefold()
+            if expected_filenames is not None:
+                if folded_name not in expected_filenames:
+                    continue
+            elif not folded_name.endswith(suffix.casefold()):
+                continue
+            matches.append((Path(current) / name).resolve())
     return matches
 
 

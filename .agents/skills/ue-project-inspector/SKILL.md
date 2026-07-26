@@ -96,13 +96,12 @@ Use `Win64 / Editor` only as the default focused Plugin profile. If the user pro
 
 ## Interpret Plugin v1
 
-Treat `ue-itps.project-plugin-references.v1` items as sparse records:
+Treat `ue-itps.project-plugin-references.v1` items as explicit records:
 
 - `path_roots.project` and `.engine` are absolute roots recorded once. Plugin `descriptor` paths are relative to the project root for `project*` and `additional-project-*` origins, or to the Engine root for `engine*` origins.
 - `project_descriptor.path` is relative to `path_roots.project`.
-- A missing state field inherits its value from `item_defaults`; absence is not an unknown value.
-- Normal resolved items keep only name, origin, relative descriptor path, and state fields that differ from defaults. Plugin descriptor contents and hashes are not read.
-- Not-found items, alternate descriptor conflicts, and items associated with validation problems retain every modeled field, including empty values.
+- Every Plugin item retains all modeled fields, including false, empty, and null values.
+- Plugin descriptor contents and hashes are not read.
 
 ## Interpret descriptor v1
 
