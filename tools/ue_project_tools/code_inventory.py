@@ -12,11 +12,11 @@ def discover_module_build_rules(
 ) -> tuple[dict[str, list[Path]], dict[str, str]]:
     all_rules = sorted(
         {
-            path.resolve()
+            path
             for search_root in search_roots
             for path in iter_files(search_root, ".Build.cs")
         },
-        key=lambda path: normalized(path).casefold(),
+        key=lambda path: path.as_posix().casefold(),
     )
     rules_by_module: dict[str, list[Path]] = {}
     discovered_module_names: dict[str, str] = {}

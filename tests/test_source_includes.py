@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 import tempfile
+from unittest.mock import patch
 
+from tools.ue_project_tools.source_includes import module_records, resolve_include
 from tools.ue_project_tools.source_unit import list_source_includes
 
 from tests.support import EnvelopeAssertions, create_fixture, write_text
@@ -127,3 +129,40 @@ class SourceIncludeTests(EnvelopeAssertions):
                 }
             ],
         )
+
+    def test_resolved_module_candidate_reuses_its_known_owner(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            fixture = create_fixture(Path(temporary_directory))
+            records = module_records(
+                fixture.project_root,
+                fixture.engine_root,
+            )
+            include = {
+                "spelling": "CoreMinimal.h",
+                "syntax": "quote",
+            }
+            with patch(
+                "tools.ue_project_tools.source_includes.owner_for_path",
+                side_effect=AssertionError("known module owner was rescanned"),
+            ):
+                resolution = resolve_include(
+                    include,
+                    fixture.source_file,
+                    records,
+                    fixture.project_root,
+                    fixture.engine_root,
+                )
+
+        self.assertEqual(resolution["status"], "resolved")
+        self.assertEqual(resolution["owner"], {"kind": "engine_module"})
+
+    def test_include_scan_skips_declaration_only_analysis(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            fixture = create_fixture(Path(temporary_directory))
+            with patch(
+                "tools.ue_project_tools.source_unit._callable_parts",
+                side_effect=AssertionError("include scan loaded callable analysis"),
+            ):
+                result = list_source_includes(fixture.source_file)
+
+        self.assertEqual(result["schema_version"], "ue-itps.source-includes.v1")

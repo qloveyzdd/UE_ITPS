@@ -864,6 +864,8 @@ def _types(
 def _load_source_unit(
     source_file: Path,
     engine_override: Path | None = None,
+    *,
+    load_declaration_analysis: bool = True,
 ) -> dict[str, Any]:
     source = _validated_file(source_file, _SOURCE_SUFFIXES, "Source file")
     project = find_nearest_uproject(source)
@@ -1026,7 +1028,6 @@ def _load_source_unit(
                 }
             )
 
-    parts = _callable_parts(parsed_files, project_root, engine_root)
     parsed_by_path = {path: parsed for path, parsed in parsed_files}
     header_fact = (
         rooted_path(selected_header, project_root, engine_root)
@@ -1034,20 +1035,27 @@ def _load_source_unit(
         else None
     )
 
-    macros = [
-        macro
-        for path, parsed in parsed_files
-        for macro in _source_macros(
-            parsed, path, project_root, engine_root
-        )
-    ]
-    macros.sort(
-        key=lambda item: (
-            item["evidence"]["root"],
-            item["evidence"]["path"].casefold(),
-            item["evidence"]["line"],
-        )
+    parts = (
+        _callable_parts(parsed_files, project_root, engine_root)
+        if load_declaration_analysis
+        else []
     )
+    macros: list[dict[str, Any]] = []
+    if load_declaration_analysis:
+        macros = [
+            macro
+            for path, parsed in parsed_files
+            for macro in _source_macros(
+                parsed, path, project_root, engine_root
+            )
+        ]
+        macros.sort(
+            key=lambda item: (
+                item["evidence"]["root"],
+                item["evidence"]["path"].casefold(),
+                item["evidence"]["line"],
+            )
+        )
 
     return {
         "path_roots": {
@@ -1114,7 +1122,11 @@ def list_source_includes(
     source_file: Path,
     engine_override: Path | None = None,
 ) -> dict[str, Any]:
-    loaded = _load_source_unit(source_file, engine_override)
+    loaded = _load_source_unit(
+        source_file,
+        engine_override,
+        load_declaration_analysis=False,
+    )
     return _source_result(
         "ue-itps.source-includes.v1",
         loaded,
