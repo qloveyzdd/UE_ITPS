@@ -1,6 +1,7 @@
 # External local reference project. The reproducible identity and derived
 # evidence are kept in .planning/evidence instead of committing Epic content.
 /LyraStarterGame/
+/ExternalProjects/
 
 # Unreal Engine generated directories
 Binaries/

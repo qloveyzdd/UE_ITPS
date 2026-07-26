@@ -229,6 +229,24 @@ python tools/ue_classify_project_paths.py --project LyraStarterGame/LyraStarterG
 
 当前 warning 基线分别是：Win64/Editor Profile 下 `D3DExternalGPUStatistics` 与 `EOSReservedHooks` 两个直接 Plugin 引用未定位；项目根目录中的 `.claude` 与 `.codex` 未被目录分类器建模。它们是需要保留的扫描事实，不应在调用侧静默改写为 `ok`。
 
+## 真实项目测试矩阵
+
+除 Lyra 外，后续可靠性与通用性验证使用以下公开 UE C++ 项目。它们是外部测试输入，不属于仓库分发内容；表中的版本来自项目当前默认分支或指定开发分支，正式纳入基线时必须固定提交，并记录内容指纹。
+
+本地检出统一放在 `ExternalProjects/<项目目录>/`，整个 `ExternalProjects/` 由仓库根 `.gitignore` 排除，不进入当前工程提交。
+
+| # | 项目 | 目标版本/分支 | 主要测试角色 | 获取与许可注意事项 |
+|---:|---|---|---|---|
+| 1 | [JanSeliv/Bomber](https://github.com/JanSeliv/Bomber) | UE 5.7 / `master` | 现代模块化主案例：GAS、Game Feature、Iris、Mover、MVVM、StateTree、Steam 联机 | 使用递归子模块；仓库含精简地图，完整美术内容另见 Releases；MIT |
+| 2 | [tomlooman/ActionRoguelike](https://github.com/tomlooman/ActionRoguelike) | UE 5.6 / `master` | 常规完整游戏主案例：C++/Blueprint、AI、EQS、联机、存档、异步资源加载 | 主分支含实验性功能；仓库未声明独立许可证 |
+| 3 | [intrxx/Multiplayer-Shooter](https://github.com/intrxx/Multiplayer-Shooter) | UE 5.2 / `main` | 中型多人射击回归案例：RPC、服务器回溯、客户端预测、会话、HUD/UI | 部分功能仍为 WIP；仓库未声明独立许可证 |
+| 4 | [tomlooman/EpicSurvivalGame](https://github.com/tomlooman/EpicSurvivalGame) | UE 5.2 / `master` | 旧代码风格兼容案例：多人、生存玩法、AI、UMG、存档 | 作者明确标记为较旧的编码标准与约定；MIT |
+| 5 | [intrxx/Obsidian](https://github.com/intrxx/Obsidian) | UE 5.7 / `main` | 大型 GAS/ARPG 案例：Game Feature、CommonUI、复制背包、装备、程序化物品、存档 | 使用递归子模块；项目仍在持续开发；GPL-3.0 |
+| 6 | [vahabahmadvand/ActionRPG_UE5](https://github.com/vahabahmadvand/ActionRPG_UE5) | UE 5.7 / `main` | 资源与 Blueprint 占比较高的混合案例：GAS、Enhanced Input、LoadingScreen 模块 | 官方 ActionRPG 样例的社区升级仓库；未声明独立许可证 |
+| 7 | [carla-simulator/carla](https://github.com/carla-simulator/carla) | UE 5.5 / `ue5-dev` | 极端规模与非标准结构压力案例：嵌套 `.uproject`、CMake、Python API、ROS2、第三方库、自定义插件 | 需要额外资产和复杂构建环境；不进入快速回归集；MIT |
+
+建议执行分层为：1–4 组成常规回归集，5–6 组成复杂 Gameplay/资源关系集，7 只用于大型仓库压力测试。仓库链接和版本声明只是候选身份，不能替代本地提交哈希、子模块提交和 SHA-256 基线。
+
 ## 只读边界
 
 14 个核心 CLI 只读取并分析现有文件。它们不会：
