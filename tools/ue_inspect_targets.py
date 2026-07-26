@@ -20,6 +20,8 @@ def main() -> int:
     )
     args = parser.parse_args()
     project = Path(args.project).resolve()
+    if not project.is_file():
+        parser.error(f"Expected an existing .uproject file: {project}")
     result = inspect_targets(project.parent)
     print(json_text(result), end="")
     return 1 if result["validation"]["status"] == "error" else 0

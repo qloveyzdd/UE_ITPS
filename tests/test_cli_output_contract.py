@@ -305,6 +305,32 @@ class CliOutputContractTests(unittest.TestCase):
         self.assertEqual(result["validation"]["status"], "ok")
         self.assertTrue(all(item["is_root_target"] for item in result["items"]))
 
+    def test_target_cli_rejects_a_missing_project_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            source_root = root / "Source"
+            source_root.mkdir()
+            (source_root / "Game.Target.cs").write_text("", encoding="utf-8")
+            missing_project = root / "Missing.uproject"
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(TOOLS_ROOT / "ue_inspect_targets.py"),
+                    "--project",
+                    str(missing_project),
+                ],
+                cwd=REPOSITORY_ROOT,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=False,
+            )
+
+        self.assertEqual(completed.returncode, 2)
+        self.assertEqual(completed.stdout, "")
+        self.assertIn("Missing.uproject", completed.stderr)
+
     def test_discovery_failure_is_json_and_returns_one(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             completed = subprocess.run(
