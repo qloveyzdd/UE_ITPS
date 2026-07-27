@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:schema:project-plugin-references:v1",
+  "title": "ue_resolve_plugins.py result",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/success"
+    },
+    {
+      "allOf": [
+        {
+          "$ref": "urn:ue-itps:schema:common:v1#/$defs/errorDocument"
+        },
+        {
+          "properties": {
+            "schema_version": {
+              "const": "ue-itps.project-plugin-references.v1"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "success": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "path_roots",
+        "additional_plugin_directories",
+        "profile",
+        "count",
+        "declared_enabled_count",
+        "declared_disabled_count",
+        "resolved_count",
+        "declared_enabled_applicable_count",
+        "declared_enabled_applicable_resolved_count",
+        "project_descriptor_count",
+        "engine_descriptor_count",
+        "items",
+        "validation",
+        "limits"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "ue-itps.project-plugin-references.v1"
+        },
+        "path_roots": {
+          "type": "object"
+        },
+        "additional_plugin_directories": {
+          "type": "array"
+        },
+        "profile": {
+          "type": "object"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "declared_enabled_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "declared_disabled_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "resolved_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "declared_enabled_applicable_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "declared_enabled_applicable_resolved_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "project_descriptor_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "engine_descriptor_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "items": {
+          "type": "array"
+        },
+        "validation": {
+          "$ref": "urn:ue-itps:schema:common:v1#/$defs/validation"
+        },
+        "limits": {
+          "$ref": "urn:ue-itps:schema:common:v1#/$defs/limits"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

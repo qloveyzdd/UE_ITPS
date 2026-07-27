@@ -7,10 +7,18 @@ from ue_project_tools.common import cli_parser, json_text, read_json
 from ue_project_tools.structure import classify_project_paths
 
 
+SCHEMA_VERSION = "ue-itps.project-paths.v1"
+RESPONSIBILITY = (
+    "Classify project-root path names, locations, and filesystem states."
+)
+
+
 def main() -> int:
     parser = cli_parser(
         "读取 .uproject 的显式目录证据，并分类项目根路径状态。",
         "Read explicit .uproject directory evidence and classify project-root paths.",
+        schema_version=SCHEMA_VERSION,
+        responsibility=RESPONSIBILITY,
     )
     parser.add_argument(
         "--project",

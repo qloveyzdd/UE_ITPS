@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:schema:engine-resolution:v1",
+  "title": "ue_resolve_engine.py result",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/success"
+    },
+    {
+      "allOf": [
+        {
+          "$ref": "urn:ue-itps:schema:common:v1#/$defs/errorDocument"
+        },
+        {
+          "properties": {
+            "schema_version": {
+              "const": "ue-itps.engine-resolution.v1"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "success": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "association_raw",
+        "status",
+        "resolution_method",
+        "resolution_candidates",
+        "engine_root",
+        "build_version_file",
+        "version",
+        "build",
+        "validation",
+        "limits"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "ue-itps.engine-resolution.v1"
+        },
+        "association_raw": {
+          "type": ["string", "null"]
+        },
+        "status": {
+          "enum": ["resolved", "ambiguous", "unresolved"]
+        },
+        "resolution_method": {
+          "type": ["string", "null"]
+        },
+        "resolution_candidates": {
+          "type": "array"
+        },
+        "engine_root": {
+          "type": ["string", "null"]
+        },
+        "build_version_file": {
+          "type": ["string", "null"]
+        },
+        "version": {
+          "type": ["string", "null"]
+        },
+        "build": {
+          "type": ["object", "null"]
+        },
+        "validation": {
+          "$ref": "urn:ue-itps:schema:common:v1#/$defs/validation"
+        },
+        "limits": {
+          "$ref": "urn:ue-itps:schema:common:v1#/$defs/limits"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -7,10 +7,19 @@ from ue_project_tools.common import cli_parser, json_text
 from ue_project_tools.rule_source import inspect_module_rules
 
 
+SCHEMA_VERSION = "ue-itps.module-rule-relations.v1"
+RESPONSIBILITY = (
+    "Report declared ModuleRules mutations and referenced values from one Build.cs "
+    "file."
+)
+
+
 def main() -> int:
     parser = cli_parser(
         "提取单个 Build.cs 声明的设置变更和引用关系。",
         "Extract declared setting mutations and references from one Build.cs file.",
+        schema_version=SCHEMA_VERSION,
+        responsibility=RESPONSIBILITY,
     )
     parser.add_argument(
         "--rules",

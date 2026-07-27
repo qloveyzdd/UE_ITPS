@@ -7,10 +7,19 @@ from ue_project_tools.code_inventory import inspect_targets
 from ue_project_tools.common import cli_parser, json_text
 
 
+SCHEMA_VERSION = "ue-itps.project-targets.v1"
+RESPONSIBILITY = (
+    "Discover project Target.cs files, validate their placement, and classify native "
+    "Target evidence."
+)
+
+
 def main() -> int:
     parser = cli_parser(
         "发现项目 Target.cs 文件和原生 Target 证据。",
         "Discover project Target.cs files and native Target evidence.",
+        schema_version=SCHEMA_VERSION,
+        responsibility=RESPONSIBILITY,
     )
     parser.add_argument(
         "--project",

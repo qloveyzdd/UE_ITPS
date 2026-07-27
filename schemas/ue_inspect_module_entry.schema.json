@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:schema:module-entry-state:v12",
+  "title": "ue_inspect_module_entry.py result",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/success"
+    },
+    {
+      "allOf": [
+        {
+          "$ref": "urn:ue-itps:schema:common:v1#/$defs/errorDocument"
+        },
+        {
+          "properties": {
+            "schema_version": {
+              "const": "ue-itps.module-entry-state.v12"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "success": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "module",
+        "registration",
+        "callback_bindings",
+        "unmatched_cleanups",
+        "state_models",
+        "conditional_overrides",
+        "unresolved_effects",
+        "validation",
+        "limits"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "ue-itps.module-entry-state.v12"
+        },
+        "module": {
+          "type": "object"
+        },
+        "registration": {
+          "type": ["object", "null"]
+        },
+        "callback_bindings": {
+          "type": "array"
+        },
+        "unmatched_cleanups": {
+          "type": "array"
+        },
+        "state_models": {
+          "type": "array"
+        },
+        "conditional_overrides": {
+          "type": "array"
+        },
+        "unresolved_effects": {
+          "type": "array"
+        },
+        "validation": {
+          "$ref": "urn:ue-itps:schema:common:v1#/$defs/validation"
+        },
+        "limits": {
+          "$ref": "urn:ue-itps:schema:common:v1#/$defs/limits"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

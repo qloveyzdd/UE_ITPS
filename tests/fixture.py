@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from functools import lru_cache
 from pathlib import Path
 import subprocess
 import sys
@@ -9,9 +10,13 @@ from types import SimpleNamespace
 from typing import Any
 import unittest
 
+from jsonschema import Draft202012Validator
+from referencing import Registry, Resource
+
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 TOOLS_ROOT = REPOSITORY_ROOT / "tools"
+SCHEMAS_ROOT = REPOSITORY_ROOT / "schemas"
 
 if str(TOOLS_ROOT) not in sys.path:
     sys.path.insert(0, str(TOOLS_ROOT))
@@ -35,12 +40,39 @@ CLI_SCHEMAS = {
     "ue_inspect_cxx_function.py": "ue-itps.cxx-function.v1",
 }
 
-SOURCE_CLIS = (
-    "ue_inspect_cs_function.py",
-    "ue_list_cxx_includes.py",
-    "ue_list_cxx_types.py",
-    "ue_inspect_cxx_function.py",
-)
+@lru_cache(maxsize=1)
+def schema_registry() -> Registry:
+    registry = Registry()
+    for path in sorted(SCHEMAS_ROOT.glob("*.schema.json")):
+        schema = json.loads(path.read_text(encoding="utf-8"))
+        registry = registry.with_resource(
+            schema["$id"],
+            Resource.from_contents(schema),
+        )
+    return registry
+
+
+@lru_cache(maxsize=None)
+def result_validator(script: str) -> Draft202012Validator:
+    schema_path = SCHEMAS_ROOT / f"{Path(script).stem}.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    return Draft202012Validator(schema, registry=schema_registry())
+
+
+def assert_schema_valid(
+    test_case: unittest.TestCase,
+    script: str,
+    result: dict[str, Any],
+) -> None:
+    errors = sorted(
+        result_validator(script).iter_errors(result),
+        key=lambda item: list(item.absolute_path),
+    )
+    test_case.assertEqual(
+        errors,
+        [],
+        msg="\n".join(error.message for error in errors),
+    )
 
 
 def write_json(path: Path, value: Any) -> None:
@@ -82,6 +114,7 @@ def parse_cli(
     test_case.assertEqual(completed.stderr, "")
     result = json.loads(completed.stdout)
     test_case.assertEqual(result["schema_version"], CLI_SCHEMAS[script])
+    assert_schema_valid(test_case, script, result)
     return result
 
 

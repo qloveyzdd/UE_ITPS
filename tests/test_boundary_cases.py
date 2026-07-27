@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from tests.fixture import FixtureTestCase, run_cli, write_json, write_text
 
 
@@ -44,10 +46,15 @@ class BoundaryCaseTests(FixtureTestCase):
             str(self.fixture.project_file),
         )
         self.assertEqual(completed.returncode, 2)
-        self.assertEqual(completed.stdout, "")
+        self.assertEqual(completed.stderr, "")
+        result = json.loads(completed.stdout)
+        self.assertEqual(
+            result["request"],
+            {"status": "failed", "kind": "input"},
+        )
         self.assertIn(
             "Expecting property name enclosed in double quotes",
-            completed.stderr,
+            result["validation"]["problems"][0]["message"],
         )
 
     def test_plugin_resolution_keeps_alternate_descriptors(self) -> None:
@@ -121,7 +128,10 @@ class BoundaryCaseTests(FixtureTestCase):
             str(source),
             expected_code=2,
         )
-        self.assertEqual(result["request"], {"status": "failed"})
+        self.assertEqual(
+            result["request"],
+            {"status": "failed", "kind": "input"},
+        )
         self.assertEqual(result["validation"]["status"], "error")
         self.assertIn(
             "Multiple .uproject",

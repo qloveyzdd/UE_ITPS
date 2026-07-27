@@ -7,10 +7,16 @@ from ue_project_tools.common import cli_parser, json_text, read_json
 from ue_project_tools.engine import resolve_engine
 
 
+SCHEMA_VERSION = "ue-itps.engine-resolution.v1"
+RESPONSIBILITY = "Resolve EngineAssociation to one Engine root and read Build.version."
+
+
 def main() -> int:
     parser = cli_parser(
         "将 EngineAssociation 解析到唯一 Engine，并读取 Build.version。",
         "Resolve EngineAssociation to one Engine and read Build.version.",
+        schema_version=SCHEMA_VERSION,
+        responsibility=RESPONSIBILITY,
     )
     parser.add_argument(
         "--project",

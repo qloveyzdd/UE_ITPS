@@ -7,10 +7,19 @@ from ue_project_tools.common import cli_parser, json_text
 from ue_project_tools.module_entry import inspect_module_entry
 
 
+SCHEMA_VERSION = "ue-itps.module-entry-state.v12"
+RESPONSIBILITY = (
+    "Report callback binding facts and non-callback state transitions caused by one "
+    "module's lifecycle."
+)
+
+
 def main() -> int:
     parser = cli_parser(
         "读取单个模块入口的回调绑定和生命周期状态变化。",
         "Read callback bindings and lifecycle state transitions for one module entry.",
+        schema_version=SCHEMA_VERSION,
+        responsibility=RESPONSIBILITY,
     )
     parser.add_argument(
         "--rules",

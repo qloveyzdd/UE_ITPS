@@ -229,12 +229,27 @@ limits
 | `1` | 扫描完成，Validation 为 `error` |
 | `2` | 参数、输入或读取失败 |
 
-当前错误通道分为两类：
+所有 CLI 的参数语法、输入与读取失败统一在 stdout 返回 JSON，stderr 保持为空。公共信封顺序为：
 
-- `ue_inspect_cs_function.py` 和三个 C++ 源码 CLI：输入或读取失败时在 stdout 返回 Schema 错误 JSON。
-- 其余 CLI：输入或读取失败通过 `argparse` 在 stderr 输出错误。
+```text
+schema_version
+request
+validation
+limits
+```
 
-所有 CLI 的纯参数语法错误都由 `argparse` 处理。
+`request.status` 固定为 `failed`；`request.kind` 区分 `argument` 与 `input`。公共参数解析器负责把缺少参数、未知参数和非法枚举转换为 `argument-error`；CLI 在完成参数解析后报告的路径、格式或读取问题转换为 `input-error`。聚焦源码 CLI 可以保留更具体的问题码，但必须使用相同信封。
+
+### 6.4 正式 JSON Schema
+
+`schemas/` 使用 JSON Schema Draft 2020-12：
+
+- `common.schema.json` 定义共享 `validation`、`limits`、`request` 和失败文档。
+- 每个公开 CLI 拥有一个同名 `.schema.json`，通过 `oneOf` 分别约束领域结果与请求失败结果。
+- JSON Schema 的 `$id` 与文件名用于引用和验证，不替代 CLI 输出中的 `schema_version`。
+- 核心 CLI 不依赖 Schema 校验库；测试通过 `requirements-dev.txt` 中的 `jsonschema` 验证所有结果。
+
+正式 Schema 当前严格锁定顶层字段、公共信封、主要标量类型和结果类别；复杂领域对象的内部事实仍由版本化实现、针对性断言和后续约束共同维护。
 
 ## 7. 路径、证据与确定性
 
@@ -259,11 +274,11 @@ limits
 
 测试不读取 Lyra，不依赖已安装 Unreal Engine，不调用 UBT/UHT/Editor，也不修改真实项目。
 
-当前 43 项测试分布：
+当前 44 项测试分布：
 
 | 模块 | 数量 | 目标 |
 |---|---:|---|
-| `test_contract_surface.py` | 7 | CLI 清单、Schema、帮助、退出码和 JSON 公共契约 |
+| `test_contract_surface.py` | 8 | CLI 清单、正式 Schema、帮助、退出码和统一 JSON 错误信封 |
 | `test_project_layer.py` | 9 | 项目级发现和导航事实 |
 | `test_build_layer.py` | 9 | Plugin、规则、C# 和模块入口 |
 | `test_source_layer.py` | 10 | C++ 上下文、include、类型和函数 |
@@ -295,9 +310,8 @@ python -m unittest discover -s tests -v
 
 ## 10. 已知限制
 
-- 无独立 JSON Schema 文件或静态类型包，公共契约由版本字段、实现和测试共同约束。
-- 两类输入错误通道尚未统一，调用方必须同时处理 stderr 和结构化错误 JSON。
-- 未生成 15 个 Schema 的完整 golden 文件，当前测试以关键字段和行为断言为主。
+- 正式 JSON Schema 已覆盖公共信封和稳定领域字段，但复杂嵌套事实尚未全部收紧为封闭类型。
+- 未生成 15 个 Schema 的完整 golden 文件，当前测试以 Schema 校验、关键字段和行为断言为主。
 - Engine、Plugin 和 Build.cs 树在不同 CLI 进程间会重复扫描。
 - 三个 C++ 工具不会跨进程复用上下文或 Token。
 - 大型 Engine、Plugin 树或 Module 可能产生明显 I/O 和内存开销。

@@ -12,10 +12,18 @@ from ue_project_tools.engine import resolve_engine
 from ue_project_tools.plugins import resolve_project_plugins
 
 
+SCHEMA_VERSION = "ue-itps.project-plugin-references.v1"
+RESPONSIBILITY = (
+    "Resolve direct .uproject Plugin references for one explicit profile."
+)
+
+
 def main() -> int:
     parser = cli_parser(
         "在一个显式 Profile 下定位 .uproject 的直接 Plugin 引用。",
         "Resolve direct .uproject Plugin references for one explicit profile.",
+        schema_version=SCHEMA_VERSION,
+        responsibility=RESPONSIBILITY,
     )
     parser.add_argument(
         "--project",

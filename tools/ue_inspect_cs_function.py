@@ -15,6 +15,8 @@ def main() -> int:
     parser = cli_parser(
         "读取一个 C# 文件中指定名称的全部类成员函数及其外部类型和方法引用。",
         "Read external type and method references from all matching methods in one C# file.",
+        schema_version=SCHEMA_VERSION,
+        responsibility=RESPONSIBILITY,
     )
     parser.add_argument(
         "--source",

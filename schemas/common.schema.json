@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:schema:common:v1",
+  "title": "UE ITPS shared result definitions",
+  "$defs": {
+    "problem": {
+      "type": "object",
+      "required": ["severity", "code", "message"],
+      "properties": {
+        "severity": {
+          "enum": ["warning", "error"]
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "validation": {
+      "type": "object",
+      "required": ["status", "problem_count", "problems"],
+      "properties": {
+        "status": {
+          "enum": ["ok", "warning", "error"]
+        },
+        "problem_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "problems": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/problem"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "limits": {
+      "type": "object",
+      "required": ["responsibility", "boundaries"],
+      "properties": {
+        "responsibility": {
+          "type": "string",
+          "minLength": 1
+        },
+        "boundaries": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "requestFailure": {
+      "type": "object",
+      "required": ["status", "kind"],
+      "properties": {
+        "status": {
+          "const": "failed"
+        },
+        "kind": {
+          "enum": ["argument", "input"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "errorValidation": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/validation"
+        },
+        {
+          "properties": {
+            "status": {
+              "const": "error"
+            },
+            "problem_count": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "problems": {
+              "type": "array",
+              "minItems": 1
+            }
+          }
+        }
+      ]
+    },
+    "errorDocument": {
+      "type": "object",
+      "required": ["schema_version", "request", "validation", "limits"],
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "request": {
+          "$ref": "#/$defs/requestFailure"
+        },
+        "validation": {
+          "$ref": "#/$defs/errorValidation"
+        },
+        "limits": {
+          "$ref": "#/$defs/limits"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

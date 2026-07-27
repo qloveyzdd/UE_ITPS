@@ -7,10 +7,19 @@ from ue_project_tools.common import cli_parser, json_text
 from ue_project_tools.plugin_descriptor import read_plugin_descriptor
 
 
+SCHEMA_VERSION = "ue-itps.plugin-descriptor.v2"
+RESPONSIBILITY = (
+    "Read and validate modeled facts from one explicitly selected .uplugin "
+    "descriptor, including recursive Build.cs reconciliation."
+)
+
+
 def main() -> int:
     parser = cli_parser(
         "读取单个 .uplugin 描述符。",
         "Read one explicit .uplugin descriptor.",
+        schema_version=SCHEMA_VERSION,
+        responsibility=RESPONSIBILITY,
     )
     parser.add_argument(
         "--plugin",

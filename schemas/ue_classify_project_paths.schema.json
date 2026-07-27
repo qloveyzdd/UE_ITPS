@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:schema:project-paths:v1",
+  "title": "ue_classify_project_paths.py result",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/success"
+    },
+    {
+      "allOf": [
+        {
+          "$ref": "urn:ue-itps:schema:common:v1#/$defs/errorDocument"
+        },
+        {
+          "properties": {
+            "schema_version": {
+              "const": "ue-itps.project-paths.v1"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "success": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "project_root",
+        "project_descriptor",
+        "project_directories",
+        "build_and_ide_paths",
+        "cache_and_local_state_paths",
+        "unclassified_root_directories",
+        "validation",
+        "limits"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "ue-itps.project-paths.v1"
+        },
+        "project_root": {
+          "type": "string"
+        },
+        "project_descriptor": {
+          "type": "object"
+        },
+        "project_directories": {
+          "type": "array"
+        },
+        "build_and_ide_paths": {
+          "type": "array"
+        },
+        "cache_and_local_state_paths": {
+          "type": "array"
+        },
+        "unclassified_root_directories": {
+          "type": "array"
+        },
+        "validation": {
+          "$ref": "urn:ue-itps:schema:common:v1#/$defs/validation"
+        },
+        "limits": {
+          "$ref": "urn:ue-itps:schema:common:v1#/$defs/limits"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

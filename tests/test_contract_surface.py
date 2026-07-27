@@ -4,11 +4,14 @@ import json
 from pathlib import Path
 import tempfile
 
+from jsonschema import Draft202012Validator
+
 from tests.fixture import (
     CLI_SCHEMAS,
     EnvelopeAssertions,
-    SOURCE_CLIS,
+    SCHEMAS_ROOT,
     TOOLS_ROOT,
+    assert_schema_valid,
     run_cli,
     write_text,
 )
@@ -23,6 +26,29 @@ class ContractSurfaceTests(EnvelopeAssertions):
         self.assertEqual(len(declared), 15)
         self.assertEqual(len(set(CLI_SCHEMAS.values())), 15)
 
+    def test_formal_schema_inventory_is_complete_and_valid(self) -> None:
+        expected = {
+            "common.schema.json",
+            *{
+                f"{Path(script).stem}.schema.json"
+                for script in CLI_SCHEMAS
+            },
+        }
+        present = {
+            path.name
+            for path in SCHEMAS_ROOT.glob("*.schema.json")
+            if path.is_file()
+        }
+        self.assertEqual(present, expected)
+        for path in sorted(SCHEMAS_ROOT.glob("*.schema.json")):
+            with self.subTest(schema=path.name):
+                schema = json.loads(path.read_text(encoding="utf-8"))
+                self.assertEqual(
+                    schema["$schema"],
+                    "https://json-schema.org/draft/2020-12/schema",
+                )
+                Draft202012Validator.check_schema(schema)
+
     def test_every_cli_help_is_bilingual_and_declares_exit_codes(self) -> None:
         for script in CLI_SCHEMAS:
             with self.subTest(script=script):
@@ -33,14 +59,24 @@ class ContractSurfaceTests(EnvelopeAssertions):
                 self.assertIn("输出契约 / Output contract:", completed.stdout)
                 self.assertIn("退出码 / Exit codes:", completed.stdout)
 
-    def test_missing_required_arguments_use_argparse_exit_two(self) -> None:
+    def test_missing_required_arguments_use_json_exit_two(self) -> None:
         scripts_with_required_arguments = set(CLI_SCHEMAS) - {"ue_find_projects.py"}
         for script in scripts_with_required_arguments:
             with self.subTest(script=script):
                 completed = run_cli(script)
                 self.assertEqual(completed.returncode, 2)
-                self.assertEqual(completed.stdout, "")
-                self.assertIn("用法 / usage:", completed.stderr)
+                self.assertEqual(completed.stderr, "")
+                result = json.loads(completed.stdout)
+                self.assertEqual(result["schema_version"], CLI_SCHEMAS[script])
+                self.assertEqual(
+                    result["request"],
+                    {"status": "failed", "kind": "argument"},
+                )
+                self.assertEqual(
+                    result["validation"]["problems"][0]["code"],
+                    "argument-error",
+                )
+                assert_schema_valid(self, script, result)
 
     def test_result_document_keeps_order_and_rejects_reserved_content(self) -> None:
         result = result_document(
@@ -87,31 +123,54 @@ class ContractSurfaceTests(EnvelopeAssertions):
             with self.assertRaisesRegex(ValueError, "Non-standard JSON constant"):
                 read_json(constant)
 
-    def test_source_clis_report_missing_files_as_schema_json(self) -> None:
-        missing = str(TOOLS_ROOT / "does-not-exist.cpp")
+    def test_all_path_clis_report_missing_inputs_as_schema_json(self) -> None:
+        missing_project = str(TOOLS_ROOT / "does-not-exist.uproject")
+        missing_plugin = str(TOOLS_ROOT / "does-not-exist.uplugin")
+        missing_rules = str(TOOLS_ROOT / "does-not-exist.Build.cs")
+        missing_target = str(TOOLS_ROOT / "does-not-exist.Target.cs")
+        missing_source = str(TOOLS_ROOT / "does-not-exist.cpp")
+        missing_cs_source = str(TOOLS_ROOT / "does-not-exist.cs")
         arguments = {
+            "ue_read_project_descriptor.py": ["--project", missing_project],
+            "ue_resolve_engine.py": ["--project", missing_project],
+            "ue_inspect_modules.py": ["--project", missing_project],
+            "ue_inspect_targets.py": ["--project", missing_project],
+            "ue_resolve_plugins.py": ["--project", missing_project],
+            "ue_classify_project_paths.py": ["--project", missing_project],
+            "ue_read_plugin_descriptor.py": ["--plugin", missing_plugin],
+            "ue_inspect_module_rules.py": ["--rules", missing_rules],
+            "ue_inspect_target_rules.py": ["--target", missing_target],
             "ue_inspect_cs_function.py": [
                 "--source",
-                missing,
+                missing_cs_source,
                 "--function",
                 "Missing",
             ],
-            "ue_list_cxx_includes.py": ["--source", missing],
-            "ue_list_cxx_types.py": ["--source", missing],
+            "ue_inspect_module_entry.py": ["--rules", missing_rules],
+            "ue_list_cxx_includes.py": ["--source", missing_source],
+            "ue_list_cxx_types.py": ["--source", missing_source],
             "ue_inspect_cxx_function.py": [
                 "--source",
-                missing,
+                missing_source,
                 "--function",
                 "Missing",
             ],
         }
-        for script in SOURCE_CLIS:
+        self.assertEqual(
+            set(arguments),
+            set(CLI_SCHEMAS) - {"ue_find_projects.py"},
+        )
+        for script, cli_arguments in arguments.items():
             with self.subTest(script=script):
-                completed = run_cli(script, *arguments[script])
+                completed = run_cli(script, *cli_arguments)
                 self.assertEqual(completed.returncode, 2)
                 self.assertEqual(completed.stderr, "")
                 result = json.loads(completed.stdout)
                 self.assertEqual(result["schema_version"], CLI_SCHEMAS[script])
-                self.assertEqual(result["request"], {"status": "failed"})
+                self.assertEqual(
+                    result["request"],
+                    {"status": "failed", "kind": "input"},
+                )
                 self.assertEqual(result["validation"]["status"], "error")
                 self.assert_envelope(result)
+                assert_schema_valid(self, script, result)

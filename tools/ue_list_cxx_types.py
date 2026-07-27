@@ -17,6 +17,8 @@ def main() -> int:
     parser = cli_parser(
         "列出一个显式选择的 C++ 源码单元中的类型事实。",
         "List type facts from one explicitly selected C++ source unit.",
+        schema_version=SCHEMA_VERSION,
+        responsibility=RESPONSIBILITY,
     )
     parser.add_argument("--source", required=True, metavar="FILE", help="显式选择的 .cpp/.cc 文件 / Explicitly selected .cpp/.cc file")
     parser.add_argument("--engine-root", metavar="PATH", help="显式 Engine 根目录覆盖 / Explicit Engine root override")

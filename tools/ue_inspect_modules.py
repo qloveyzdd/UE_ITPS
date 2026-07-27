@@ -8,10 +8,18 @@ from ue_project_tools.common import cli_parser, json_text, read_json
 from ue_project_tools.descriptor import resolve_internal_directories
 
 
+SCHEMA_VERSION = "ue-itps.project-modules.v1"
+RESPONSIBILITY = (
+    "Reconcile declared project Modules with Build.cs and entrypoint evidence."
+)
+
+
 def main() -> int:
     parser = cli_parser(
         "对账 .uproject Module 声明、Build.cs 和模块入口证据。",
         "Reconcile .uproject Modules with Build.cs and entrypoint evidence.",
+        schema_version=SCHEMA_VERSION,
+        responsibility=RESPONSIBILITY,
     )
     parser.add_argument(
         "--project",

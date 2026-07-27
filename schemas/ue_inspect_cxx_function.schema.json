@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:schema:cxx-function:v1",
+  "title": "ue_inspect_cxx_function.py result",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/success"
+    },
+    {
+      "allOf": [
+        {
+          "$ref": "urn:ue-itps:schema:common:v1#/$defs/errorDocument"
+        },
+        {
+          "properties": {
+            "schema_version": {
+              "const": "ue-itps.cxx-function.v1"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "success": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "path_roots",
+        "context",
+        "source_unit",
+        "selection",
+        "match_count",
+        "matches",
+        "validation",
+        "limits"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "ue-itps.cxx-function.v1"
+        },
+        "path_roots": {
+          "type": "object"
+        },
+        "context": {
+          "type": "object"
+        },
+        "source_unit": {
+          "type": "object"
+        },
+        "selection": {
+          "type": "object",
+          "required": ["name"]
+        },
+        "match_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "matches": {
+          "type": "array"
+        },
+        "validation": {
+          "$ref": "urn:ue-itps:schema:common:v1#/$defs/validation"
+        },
+        "limits": {
+          "$ref": "urn:ue-itps:schema:common:v1#/$defs/limits"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

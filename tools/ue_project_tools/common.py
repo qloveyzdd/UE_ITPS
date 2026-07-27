@@ -5,7 +5,7 @@ import json
 import os
 from pathlib import Path
 import sys
-from typing import Any, Iterable
+from typing import Any, Iterable, NoReturn
 
 
 SKIP_DIRS = {
@@ -29,7 +29,10 @@ OPERATION_CHOICES = (
 
 CLI_EPILOG = """\
 输出契约 / Output contract:
-  schema_version -> 模块事实 / module facts -> validation -> limits
+  成功 / success: schema_version -> 模块事实 / module facts -> validation -> limits
+  失败 / failure: schema_version -> request -> validation -> limits
+  所有 JSON 输出写入 stdout；stderr 保持为空。
+  All JSON output is written to stdout; stderr remains empty.
 
 退出码 / Exit codes:
   0  扫描完成且无阻断问题 / Scan completed without blocking problems
@@ -39,7 +42,16 @@ CLI_EPILOG = """\
 
 
 class BilingualArgumentParser(argparse.ArgumentParser):
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        *args: Any,
+        schema_version: str,
+        responsibility: str,
+        **kwargs: Any,
+    ) -> None:
+        self.schema_version = schema_version
+        self.responsibility = responsibility
+        self._parsing_arguments = False
         super().__init__(*args, **kwargs)
         self._positionals.title = "位置参数 / Positional arguments"
         self._optionals.title = "选项 / Options"
@@ -53,13 +65,38 @@ class BilingualArgumentParser(argparse.ArgumentParser):
     def format_usage(self) -> str:
         return super().format_usage().replace("usage:", "用法 / usage:", 1)
 
+    def parse_args(
+        self,
+        args: list[str] | None = None,
+        namespace: argparse.Namespace | None = None,
+    ) -> argparse.Namespace:
+        self._parsing_arguments = True
+        try:
+            return super().parse_args(args, namespace)
+        finally:
+            self._parsing_arguments = False
+
+    def error(self, message: str) -> NoReturn:
+        failure_kind = "argument" if self._parsing_arguments else "input"
+        result = cli_error_document(
+            self.schema_version,
+            kind=failure_kind,
+            code=f"{failure_kind}-error",
+            message=message,
+            responsibility=self.responsibility,
+        )
+        sys.stdout.write(json_text(result))
+        raise SystemExit(2)
+
 
 def cli_parser(
     description_zh: str,
     description_en: str,
     *,
+    schema_version: str,
+    responsibility: str,
     epilog: str | None = None,
-) -> argparse.ArgumentParser:
+) -> BilingualArgumentParser:
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
@@ -67,6 +104,8 @@ def cli_parser(
         description=f"{description_zh}\n{description_en}",
         epilog=epilog or CLI_EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        schema_version=schema_version,
+        responsibility=responsibility,
     )
 
 
@@ -112,14 +151,22 @@ def result_document(
 def cli_error_document(
     schema_version: str,
     *,
+    kind: str = "input",
     code: str,
     message: str,
     responsibility: str,
 ) -> dict[str, Any]:
-    """Return a machine-readable input/read failure for focused CLIs."""
+    """Return the shared machine-readable request-failure envelope."""
+    if kind not in {"argument", "input"}:
+        raise ValueError(f"Unsupported CLI failure kind: {kind}")
     return result_document(
         schema_version,
-        {"request": {"status": "failed"}},
+        {
+            "request": {
+                "status": "failed",
+                "kind": kind,
+            }
+        },
         [
             {
                 "severity": "error",
@@ -129,8 +176,8 @@ def cli_error_document(
         ],
         responsibility=responsibility,
         boundaries=[
-            "The requested scan did not start because its input or source context could not be read.",
-            "Command-line syntax errors still use argparse usage text and exit code 2.",
+            "The requested scan did not start, so no domain facts are present.",
+            "The failure is reported as JSON on stdout with exit code 2.",
         ],
     )
 

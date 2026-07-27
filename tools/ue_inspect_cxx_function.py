@@ -17,6 +17,8 @@ def main() -> int:
     parser = cli_parser(
         "读取指定名称的全部 C++ 函数定义及其外部类型和方法引用。",
         "Read external type and method references from all C++ function definitions matching one name.",
+        schema_version=SCHEMA_VERSION,
+        responsibility=RESPONSIBILITY,
     )
     parser.add_argument("--source", required=True, metavar="FILE", help="显式选择的 .cpp/.cc 文件 / Explicitly selected .cpp/.cc file")
     parser.add_argument(

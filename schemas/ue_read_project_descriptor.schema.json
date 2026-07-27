@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:schema:project-descriptor:v1",
+  "title": "ue_read_project_descriptor.py result",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/success"
+    },
+    {
+      "allOf": [
+        {
+          "$ref": "urn:ue-itps:schema:common:v1#/$defs/errorDocument"
+        },
+        {
+          "properties": {
+            "schema_version": {
+              "const": "ue-itps.project-descriptor.v1"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "success": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "project",
+        "declared_modules",
+        "plugin_declarations",
+        "additional_root_directories",
+        "additional_plugin_directories",
+        "descriptor_options",
+        "descriptor_top_level_fields",
+        "unmodeled_top_level_fields",
+        "validation",
+        "limits"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "ue-itps.project-descriptor.v1"
+        },
+        "project": {
+          "type": "object"
+        },
+        "declared_modules": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "plugin_declarations": {
+          "type": "object",
+          "required": ["enabled", "disabled", "extended"]
+        },
+        "additional_root_directories": {
+          "type": "array"
+        },
+        "additional_plugin_directories": {
+          "type": "array"
+        },
+        "descriptor_options": {
+          "type": "object"
+        },
+        "descriptor_top_level_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unmodeled_top_level_fields": {
+          "type": "object"
+        },
+        "validation": {
+          "$ref": "urn:ue-itps:schema:common:v1#/$defs/validation"
+        },
+        "limits": {
+          "$ref": "urn:ue-itps:schema:common:v1#/$defs/limits"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -7,11 +7,17 @@ from ue_project_tools.common import cli_parser, json_text
 from ue_project_tools.discovery import discovery_result
 
 
+SCHEMA_VERSION = "ue-itps.project-discovery.v1"
+RESPONSIBILITY = "Discover .uproject files under one search root."
+
+
 def main() -> int:
     """查找搜索根目录下的 Unreal 项目，并以 JSON 格式输出结果。"""
     parser = cli_parser(
         "查找搜索根目录下的 .uproject 候选文件，并如实报告歧义。",
         "Find .uproject candidates under a search root and report ambiguity.",
+        schema_version=SCHEMA_VERSION,
+        responsibility=RESPONSIBILITY,
     )
     # 默认使用调用者的当前目录，使工具可以从任意仓库根目录运行。
     parser.add_argument(

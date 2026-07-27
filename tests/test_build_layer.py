@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from tests.fixture import FixtureTestCase, run_cli, write_text
 
 
@@ -59,8 +61,16 @@ class BuildLayerTests(FixtureTestCase):
             str(wrong),
         )
         self.assertEqual(completed.returncode, 2)
-        self.assertEqual(completed.stdout, "")
-        self.assertIn("Expected a .uplugin file", completed.stderr)
+        self.assertEqual(completed.stderr, "")
+        result = json.loads(completed.stdout)
+        self.assertEqual(
+            result["request"],
+            {"status": "failed", "kind": "input"},
+        )
+        self.assertIn(
+            "Expected a .uplugin file",
+            result["validation"]["problems"][0]["message"],
+        )
 
     def test_module_rules_follow_local_helper_and_preserve_condition(self) -> None:
         result = self.cli(

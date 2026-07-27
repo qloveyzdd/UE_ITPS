@@ -107,6 +107,18 @@ validation
 limits
 ```
 
+请求在参数解析、输入校验或读取阶段失败时，统一返回：
+
+```text
+schema_version
+request
+validation
+limits
+```
+
+- `request.status` 固定为 `failed`
+- `request.kind` 为 `argument` 或 `input`
+- 所有 JSON 都写入 stdout；stderr 保持为空
 - `validation.status` 为 `ok`、`warning` 或 `error`
 - `validation.problems` 保存稳定问题码、严重级别和证据
 - `limits.responsibility` 说明该结果负责回答什么
@@ -118,9 +130,22 @@ limits
 | `1` | 扫描完成，但验证结果为 `error` |
 | `2` | 参数、输入或读取失败 |
 
-四个聚焦源码 CLI 在输入或读取失败时返回带 Schema 的错误 JSON；其他 CLI 的这类失败由 `argparse` 写入 stderr。所有 CLI 的命令行语法错误都使用退出码 `2`。
+15 个 CLI 的参数语法、输入和读取失败都使用统一 JSON 错误信封与退出码 `2`。扫描已经开始但发现阻断问题时，仍返回对应领域事实、`validation: error` 和退出码 `1`。
 
 `.uproject`、`Build.version` 等通用 JSON 输入使用严格 JSON；`.uplugin` 读取器单独支持 Unreal 描述符中常见的注释和尾随逗号，同时会把重复字段报告为验证问题。
+
+## JSON Schema
+
+`schemas/` 提供 Draft 2020-12 正式契约：
+
+- `common.schema.json`：共享 `validation`、`limits` 和错误信封定义
+- `ue_<name>.schema.json`：15 个 CLI 各自的成功结果与错误结果 Schema
+
+Schema 文件不改变 CLI 输出中的既有 `schema_version`。核心 CLI 仍只依赖 Python 标准库；运行 Schema 校验测试时安装开发依赖：
+
+```powershell
+python -m pip install -r requirements-dev.txt
+```
 
 ## 测试
 
@@ -130,17 +155,17 @@ limits
 python -m unittest discover -s tests -v
 ```
 
-当前共有 43 项测试，全部使用临时目录构造最小 Engine、项目、Plugin、规则文件和 C++ 源码，不依赖本机 Unreal Engine，也不会修改真实项目。
+当前共有 44 项测试，全部使用临时目录构造最小 Engine、项目、Plugin、规则文件和 C++ 源码，不依赖本机 Unreal Engine，也不会修改真实项目。
 
 | 测试模块 | 数量 | 关注点 |
 |---|---:|---|
-| `test_contract_surface.py` | 7 | 15 个 CLI、Schema、双语帮助、退出码、JSON 外层契约 |
+| `test_contract_surface.py` | 8 | 15 个 CLI、正式 Schema、双语帮助、统一错误信封和退出码 |
 | `test_project_layer.py` | 9 | 项目发现、描述符、Engine、Module、Target、Plugin、路径 |
 | `test_build_layer.py` | 9 | `.uplugin`、ModuleRules、TargetRules、C# 函数、模块入口 |
 | `test_source_layer.py` | 10 | C++ 上下文、include、类型、函数、头文件推导 |
 | `test_boundary_cases.py` | 7 | 歧义、非法输入、重复定位、损坏语法、保守失败 |
 | `test_navigation_workflow.py` | 1 | 15 个 CLI 的完整显式导航流程 |
-| **合计** | **43** | 当前公开行为与关键失败边界 |
+| **合计** | **44** | 当前公开行为与关键失败边界 |
 
 ## 仓库结构
 
@@ -151,7 +176,9 @@ python -m unittest discover -s tests -v
 │  └─ ue_project_tools/       # 发现、解析、验证与事实投影
 ├─ tests/
 │  ├─ fixture.py              # 共享最小 UE 夹具与 CLI 断言
-│  └─ test_*.py               # 43 项自动化测试
+│  └─ test_*.py               # 44 项自动化测试
+├─ schemas/                   # Draft 2020-12 公共结果契约
+├─ requirements-dev.txt       # Schema 测试依赖
 ├─ docs/PROGRAM-DESIGN.md     # 架构、契约和扩展规则
 ├─ LyraStarterGame/           # 可选本地只读参考项目，Git 忽略
 └─ ExternalProjects/          # 可选外部测试项目，Git 忽略

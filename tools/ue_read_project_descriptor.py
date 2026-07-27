@@ -7,10 +7,16 @@ from ue_project_tools.common import cli_parser, json_text
 from ue_project_tools.descriptor import descriptor_result
 
 
+SCHEMA_VERSION = "ue-itps.project-descriptor.v1"
+RESPONSIBILITY = "Read explicit facts declared by one .uproject file."
+
+
 def main() -> int:
     parser = cli_parser(
         "只读取一个 .uproject 文件明确声明的事实。",
         "Read only the explicit facts declared by one .uproject file.",
+        schema_version=SCHEMA_VERSION,
+        responsibility=RESPONSIBILITY,
     )
     parser.add_argument(
         "--project",
