@@ -93,7 +93,13 @@ Build.cs / Target.cs / .cs    .cpp + 唯一自动配套头文件
 | `source_operations.py` | 从 Token 和控制范围中提取赋值、集合变更、调用、短路/三元门控等操作。 |
 | `source_parser.py` | 保留稳定解析入口，组装任意 C# 文件、规则文件或 C++ 文件的类、函数、操作、注册宏和分隔符问题。 |
 | `source_includes.py` | 提取直接 include，建立 Project/Engine Module 物理边界索引并定位唯一文件来源。 |
-| `source_unit.py` | 发现源码所属项目和 Engine，自动选择配套头文件，统一三个 C++ 源码 CLI 的上下文，并分别投影 include、type 和指定函数事实。 |
+| `source_context.py` | 发现源码所属项目和 Engine、建立 Module owner 索引、选择配套头文件，并按查询需要加载轻量或完整源码上下文。 |
+| `source_signatures.py` | 归一化 C++ 参数签名，供源码函数投影和 Module Entry callable 对账共同使用。 |
+| `source_fact_common.py` | 提供类型与函数投影共用的源码位置、宏、声明和文本归一化事实。 |
+| `source_include_facts.py` | 将按需加载的直接 include 事实投影到公开 Schema。 |
+| `source_type_facts.py` | 投影类型、成员、枚举和 UE 宏事实。 |
+| `source_function_facts.py` | 投影 callable、声明定义关系和指定函数的外部引用。 |
+| `source_unit.py` | 保留三个 C++ 源码服务函数的兼容导入入口，不承载解析实现。 |
 
 ## 4. 15 个公开 CLI 与 Schema 目录
 
@@ -198,7 +204,7 @@ Build.cs / Target.cs / .cs    .cpp + 唯一自动配套头文件
 3. 读取项目描述符并解析 Engine。
 4. 建立 Project/Engine Module 物理边界记录。
 5. 确定源码 owner 和唯一自动配套头文件。
-6. 只把所选源码与唯一头文件作为 C++ 解析输入。
+6. include 查询只分词并提取直接 include；type/function 查询执行完整 C++ 词法结构解析，但不定位 include。
 7. 将 include、type 或指定函数分别投影到独立 Schema。
 
 ## 7. 确定性解析器与证据边界
@@ -296,11 +302,11 @@ C# 扫描器使用自有轻量词法层，不执行 C#：
 | `test_rule_scanners.py` | 3 | ModuleRules helper/条件、TargetRules 类/变量/函数索引、错误基类时保守失败。 |
 | `test_cs_functions.py` | 4 | 普通/Rules C# 函数、外部类型与方法引用、重载和缺失函数。 |
 | `test_module_entry.py` | 3 | 注册/绑定/清理、默认模块不虚构状态、分隔符错误保留局部事实。 |
-| `test_source_context.py` | 4 | 三个 C++ 源码工具共享上下文、自动头文件、头文件歧义、最近项目歧义。 |
-| `test_source_includes.py` | 4 | unit 证据、配套头文件去重、非递归读取、预处理条件。 |
+| `test_source_context.py` | 5 | 三个 C++ 源码工具共享上下文、自动头文件、项目歧义和按需解析边界。 |
+| `test_source_includes.py` | 6 | unit 证据、配套头文件去重、非递归读取、预处理条件、owner 复用和声明分析跳过。 |
 | `test_source_types.py` | 3 | 类型/成员/反射宏、enum/interface 宏归属、参数前置声明排除。 |
 | `test_source_functions.py` | 3 | 声明定义关系、外部引用、同名重载稳定 ID、函数不存在的结构化扫描错误。 |
-| **合计** | **41** | 当前重建套件全部通过。 |
+| **合计** | **44** | 当前重建套件全部通过。 |
 
 运行方式：
 
@@ -308,7 +314,7 @@ C# 扫描器使用自有轻量词法层，不执行 C#：
 python -m unittest discover -s tests -v
 ```
 
-仓库当前没有覆盖率工具、覆盖率阈值或 CI 工作流；41 项通过证明已编码断言成立，不等于完整语法、平台或 Unreal 集成覆盖。
+仓库当前没有覆盖率工具、覆盖率阈值或 CI 工作流；44 项通过证明已编码断言成立，不等于完整语法、平台或 Unreal 集成覆盖。
 
 ## 11. 性能特征
 
@@ -316,7 +322,7 @@ python -m unittest discover -s tests -v
 - `iter_files()` 使用 `os.walk`，跳过 `.git`、`.idea`、`.vs`、`Binaries`、`DerivedDataCache`、`Intermediate`、`Saved`，调用方随后进行确定性排序。
 - 项目发现、Build.cs 对账和 Plugin 描述符索引的主要成本与被遍历目录中的文件数量近似线性相关。
 - Plugin 定位会为每次调用重新遍历 Project/Engine Plugin 根；虽然只记录声明名称匹配项，仍需枚举目录树。
-- 每个源码 CLI 都会重新扫描 Project/Engine 的 Build.cs 来建立 owner 索引，再解析一个 `.cpp/.cc` 和至多一个配套头文件。连续运行 include/type/function 三个工具不会共享索引或 Token。
+- 每个源码 CLI 都会重新扫描 Project/Engine 的 Build.cs 来建立 owner 索引。include 查询只执行分词和 include 定位；type/function 查询解析一个 `.cpp/.cc` 和至多一个配套头文件，但不定位 include。连续运行三个工具仍不会跨进程共享索引或 Token。
 - 模块入口工具会读取并分词所选模块边界中的全部 `.h/.hpp/.cpp/.cc`，成本随模块源码总量增长。
 - 词法解析器为每个读取文件建立完整 Token 列表，内存使用与文本和 Token 数量近似线性相关。
 - 每个 callable 最多保留 32 个上下文，用显式上限约束分支传播的组合增长。

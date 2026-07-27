@@ -189,13 +189,16 @@ python tools/ue_inspect_cs_function.py --source D:/Projects/MyGame/Source/MyGame
 │  └─ *_lyra_*.ps1/.py         # Lyra 基线、运行证据和资产查询辅助工具
 ├─ tests/
 │  ├─ support.py               # 共享 CLI 清单、断言和临时 UE fixture
-│  └─ test_*.py                # 41 项单元与 CLI 导航测试
+│  └─ test_*.py                # 44 项单元与 CLI 导航测试
 ├─ docs/PROGRAM-DESIGN.md       # 扫描器架构、契约、测试与扩展规则
 ├─ .agents/skills/             # Agent 使用这些 CLI 时的仓库内操作约定
 └─ LyraStarterGame/            # 可选的本地外部烟雾测试项目；被 Git 忽略
 ```
 
 `LyraStarterGame/` 不是仓库分发内容。没有该目录时，15 个核心 CLI 和测试套件仍可使用。
+
+C++ 源码查询内部按上下文、include、类型、函数和共享事实投影拆分；
+`source_unit.py` 仅保留兼容导入入口。各 CLI 的公开 Schema 不受该内部结构影响。
 
 ## 测试
 
@@ -205,7 +208,7 @@ python tools/ue_inspect_cs_function.py --source D:/Projects/MyGame/Source/MyGame
 python -m unittest discover -s tests -v
 ```
 
-当前套件已从实时 `tests/` 目录验证为 **41 项测试**，覆盖：
+当前套件已从实时 `tests/` 目录验证为 **44 项测试**，覆盖：
 
 | 测试模块 | 关注点 |
 |---|---|
@@ -244,7 +247,7 @@ python tools/ue_resolve_plugins.py --project LyraStarterGame/LyraStarterGame.upr
 python tools/ue_classify_project_paths.py --project LyraStarterGame/LyraStarterGame.uproject
 ```
 
-本地基线复核中，上述 7 个项目级扫描均完成并退出 `0`：发现、描述符、Engine、Module、Target 为 `ok`；Plugin 定位与根目录分类为非阻断 `warning`。烟雾结果用于验证大型真实目录上的静态导航，不替代 41 项自动化测试，也不证明 Lyra 可以编译或运行。
+本地基线复核中，上述 7 个项目级扫描均完成并退出 `0`：发现、描述符、Engine、Module、Target 为 `ok`；Plugin 定位与根目录分类为非阻断 `warning`。烟雾结果用于验证大型真实目录上的静态导航，不替代 44 项自动化测试，也不证明 Lyra 可以编译或运行。
 
 当前 warning 基线分别是：Win64/Editor Profile 下 `D3DExternalGPUStatistics` 与 `EOSReservedHooks` 两个直接 Plugin 引用未定位；项目根目录中的 `.claude` 与 `.codex` 未被目录分类器建模。它们是需要保留的扫描事实，不应在调用侧静默改写为 `ok`。
 

@@ -160,7 +160,7 @@ class SourceIncludeTests(EnvelopeAssertions):
         with tempfile.TemporaryDirectory() as temporary_directory:
             fixture = create_fixture(Path(temporary_directory))
             with patch(
-                "tools.ue_project_tools.source_unit._callable_parts",
+                "tools.ue_project_tools.source_function_facts._callable_parts",
                 side_effect=AssertionError("include scan loaded callable analysis"),
             ):
                 result = list_source_includes(fixture.source_file)

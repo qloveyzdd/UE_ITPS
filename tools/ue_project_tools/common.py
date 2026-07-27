@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import datetime as dt
 import json
 import os
 from pathlib import Path
@@ -134,10 +133,6 @@ def cli_error_document(
             "Command-line syntax errors still use argparse usage text and exit code 2.",
         ],
     )
-
-
-def utc_now() -> str:
-    return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
 
 
 def normalized(path: Path) -> str:

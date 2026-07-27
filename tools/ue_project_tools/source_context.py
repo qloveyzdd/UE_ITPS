@@ -1,0 +1,320 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+from .common import normalized, read_json, result_document
+from .descriptor import resolve_internal_directories
+from .discovery import find_nearest_uproject
+from .engine import resolve_engine
+from .source_includes import (
+    extract_includes,
+    module_records,
+    owner_for_path,
+    public_owner,
+    resolve_include,
+    rooted_path,
+)
+from .source_parser import parse_cpp_file
+from .source_tokens import delimiter_problems, lex_source
+
+
+_SOURCE_SUFFIXES = {".cpp", ".cc"}
+
+
+def _is_relative_to(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _validated_file(path: Path, suffixes: set[str], label: str) -> Path:
+    resolved = path.resolve()
+    if resolved.suffix.casefold() not in suffixes:
+        expected = ", ".join(sorted(suffixes))
+        raise ValueError(f"Expected {label} with one of {expected}: {resolved}")
+    if not resolved.is_file():
+        raise ValueError(f"{label} is not a file: {resolved}")
+    return resolved
+
+
+def _automatic_headers(
+    source: Path,
+    source_owner: dict[str, Any] | None,
+) -> list[Path]:
+    candidate_bases = [source.parent / source.stem]
+    if source_owner is not None:
+        module_root = Path(source_owner["root"]).resolve()
+        try:
+            relative = source.relative_to(module_root)
+        except ValueError:
+            relative = None
+        if relative is not None and relative.parts:
+            first = relative.parts[0].casefold()
+            tail = relative.parts[1:]
+            if first == "private":
+                candidate_bases.extend(
+                    module_root / public_dir / Path(*tail).with_suffix("")
+                    for public_dir in ("Public", "Classes")
+                )
+            elif first in {"public", "classes"}:
+                candidate_bases.append(
+                    module_root / "Private" / Path(*tail).with_suffix("")
+                )
+    candidates = {
+        candidate.resolve()
+        for base in candidate_bases
+        for suffix in (".h", ".hpp")
+        if (candidate := base.with_suffix(suffix)).is_file()
+    }
+    return sorted(candidates, key=lambda path: normalized(path).casefold())
+
+
+def _lightweight_source(path: Path) -> dict[str, Any]:
+    text = path.read_text(encoding="utf-8-sig", errors="replace")
+    tokens = lex_source(text)
+    return {
+        "path": normalized(path),
+        "text": text,
+        "tokens": tokens,
+        "problems": delimiter_problems(tokens),
+    }
+
+
+def load_source_context(
+    source_file: Path,
+    engine_override: Path | None = None,
+    *,
+    load_includes: bool = False,
+    load_cpp_analysis: bool = True,
+) -> dict[str, Any]:
+    source = _validated_file(source_file, _SOURCE_SUFFIXES, "Source file")
+    project = find_nearest_uproject(source)
+    descriptor = read_json(project)
+    project_root = project.parent.resolve()
+
+    engine_result = resolve_engine(
+        project,
+        str(descriptor.get("EngineAssociation") or ""),
+        engine_override,
+    )
+    engine_root = (
+        Path(engine_result["engine_root"]).resolve()
+        if engine_result["status"] == "resolved"
+        else None
+    )
+    if not _is_relative_to(source, project_root) and (
+        engine_root is None or not _is_relative_to(source, engine_root)
+    ):
+        raise ValueError(
+            "Source file must be inside the selected project or resolved Engine: "
+            f"{source}"
+        )
+
+    additional_module_roots, _ = resolve_internal_directories(
+        project, descriptor, "AdditionalRootDirectories"
+    )
+    additional_plugin_roots, _ = resolve_internal_directories(
+        project, descriptor, "AdditionalPluginDirectories"
+    )
+    records = module_records(
+        project_root,
+        engine_root,
+        additional_module_roots,
+        additional_plugin_roots,
+    )
+    source_owner = owner_for_path(source, records)
+    header_candidates = _automatic_headers(source, source_owner)
+    selected_header = header_candidates[0] if len(header_candidates) == 1 else None
+    header_locations = [
+        rooted_path(candidate, project_root, engine_root)
+        for candidate in header_candidates
+    ]
+
+    parsed_source = (
+        parse_cpp_file(source)
+        if load_cpp_analysis
+        else _lightweight_source(source)
+    )
+    parsed_files: list[tuple[Path, dict[str, Any]]] = [(source, parsed_source)]
+    all_includes: list[dict[str, Any]] = []
+    include_problems: list[dict[str, Any]] = []
+
+    def collect_include(
+        include: dict[str, Any],
+        unit: str,
+        including_file: Path,
+    ) -> None:
+        resolution = resolve_include(
+            include,
+            including_file,
+            records,
+            project_root,
+            engine_root,
+        )
+        resolved_locations = [
+            *([resolution["location"]] if "location" in resolution else []),
+            *[
+                candidate["location"]
+                for candidate in resolution.get("candidates", [])
+            ],
+        ]
+        if any(location in header_locations for location in resolved_locations):
+            return
+
+        fact = {
+            "spelling": include["spelling"],
+            "conditions": include["conditions"],
+            "evidence": {
+                "unit": unit,
+                "line": int(include["line"]),
+            },
+            "resolution": resolution,
+        }
+        status = str(resolution["status"])
+        if status == "resolved":
+            fact["resolution"] = {
+                key: value
+                for key, value in resolution.items()
+                if key != "status"
+            }
+            all_includes.append(fact)
+            return
+        if status in {
+            "generated_header",
+            "generated_source",
+            "system_or_sdk_unresolved",
+        }:
+            all_includes.append(fact)
+            return
+
+        messages = {
+            "ambiguous": "Include resolved to multiple filesystem candidates",
+            "not_found": "Include could not be located in known source roots",
+            "macro_unresolved": "Include macro could not be resolved statically",
+        }
+        include_problems.append(
+            {
+                "severity": "warning",
+                "code": f"source-include-{status.replace('_', '-')}",
+                "include": fact,
+                "message": messages.get(
+                    status, "Include provenance could not be resolved"
+                ),
+            }
+        )
+
+    if load_includes:
+        for include in extract_includes(str(parsed_source["text"])):
+            collect_include(include, "cpp", source)
+    if selected_header is not None:
+        parsed_header = (
+            parse_cpp_file(selected_header)
+            if load_cpp_analysis
+            else _lightweight_source(selected_header)
+        )
+        parsed_files.append((selected_header, parsed_header))
+        if load_includes:
+            for include in extract_includes(str(parsed_header["text"])):
+                collect_include(include, "header", selected_header)
+
+    problems: list[dict[str, Any]] = []
+    if engine_result["status"] != "resolved":
+        problems.append(
+            {
+                "severity": "warning",
+                "code": "source-unit-engine-unresolved",
+                "message": (
+                    "Engine provenance could not be resolved; project source facts "
+                    "remain available but Engine ownership may be incomplete"
+                ),
+            }
+        )
+    if source_owner is None:
+        problems.append(
+            {
+                "severity": "warning",
+                "code": "source-unit-owner-unresolved",
+                "source": rooted_path(source, project_root, engine_root),
+                "message": "No enclosing Build.cs source boundary was found",
+            }
+        )
+    if len(header_candidates) > 1:
+        problems.append(
+            {
+                "severity": "warning",
+                "code": "source-unit-header-ambiguous",
+                "candidates": header_locations,
+                "message": "Multiple automatically derived companion headers were found",
+            }
+        )
+    for path, parsed in parsed_files:
+        for problem in parsed["problems"]:
+            problems.append(
+                {
+                    **problem,
+                    "source": rooted_path(path, project_root, engine_root),
+                }
+            )
+
+    header_fact = (
+        rooted_path(selected_header, project_root, engine_root)
+        if selected_header is not None
+        else None
+    )
+    return {
+        "path_roots": {
+            "project": normalized(project_root),
+            "engine": normalized(engine_root) if engine_root else None,
+        },
+        "context": {
+            "project_descriptor": project.name,
+            "project_discovery_method": "nearest-source-ancestor",
+            "engine": {
+                "status": engine_result["status"],
+                "version": engine_result.get("version"),
+            },
+            "source_owner": public_owner(source_owner),
+        },
+        "source_unit": {
+            "source": rooted_path(source, project_root, engine_root),
+            "header": header_fact,
+        },
+        "includes": all_includes,
+        "include_problems": include_problems,
+        "parsed_files": parsed_files,
+        "parsed_by_path": {path: parsed for path, parsed in parsed_files},
+        "project_root": project_root,
+        "engine_root": engine_root,
+        "problems": problems,
+    }
+
+
+def source_result(
+    schema_version: str,
+    loaded: dict[str, Any],
+    content: dict[str, Any],
+    *,
+    responsibility: str,
+    boundaries: list[str],
+    additional_problems: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    return result_document(
+        schema_version,
+        {
+            "path_roots": loaded["path_roots"],
+            "context": loaded["context"],
+            "source_unit": loaded["source_unit"],
+            **content,
+        },
+        [*loaded["problems"], *(additional_problems or [])],
+        responsibility=responsibility,
+        boundaries=[
+            "Only the selected .cpp and one unambiguous automatically derived companion header are read as C++ source.",
+            *boundaries,
+            "The result does not decide required dependencies, feature meaning, implementation correctness, or build-rule changes.",
+            "Validation reports input and locally observable structural problems; ok does not prove compilation or runtime behavior.",
+        ],
+    )

@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 import tempfile
+from unittest.mock import patch
 
+from tools.ue_project_tools import (
+    source_context,
+    source_function_facts,
+)
 from tools.ue_project_tools.discovery import find_nearest_uproject
 from tools.ue_project_tools.source_unit import (
     inspect_source_function,
@@ -70,3 +75,48 @@ class SourceContextTests(EnvelopeAssertions):
 
             with self.assertRaisesRegex(ValueError, "Multiple .uproject"):
                 find_nearest_uproject(source)
+
+    def test_source_queries_only_run_the_analysis_their_schema_consumes(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            fixture = create_fixture(Path(temporary_directory))
+
+            with (
+                patch.object(
+                    source_context,
+                    "parse_cpp_file",
+                    wraps=source_context.parse_cpp_file,
+                ) as parse_cpp,
+                patch.object(
+                    source_context,
+                    "resolve_include",
+                    wraps=source_context.resolve_include,
+                ) as resolve_include,
+                patch.object(
+                    source_function_facts,
+                    "_callable_parts",
+                    wraps=source_function_facts._callable_parts,
+                ) as callable_parts,
+            ):
+                list_source_includes(fixture.source_file)
+
+            self.assertEqual(parse_cpp.call_count, 0)
+            self.assertGreater(resolve_include.call_count, 0)
+            self.assertEqual(callable_parts.call_count, 0)
+
+            with patch.object(
+                source_context,
+                "resolve_include",
+                wraps=source_context.resolve_include,
+            ) as resolve_include:
+                list_source_types(fixture.source_file)
+            self.assertEqual(resolve_include.call_count, 0)
+
+            with patch.object(
+                source_context,
+                "resolve_include",
+                wraps=source_context.resolve_include,
+            ) as resolve_include:
+                inspect_source_function(fixture.source_file, "Execute")
+            self.assertEqual(resolve_include.call_count, 0)
