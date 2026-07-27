@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 from types import SimpleNamespace
 from typing import Any
 import unittest
@@ -16,19 +17,26 @@ if str(TOOLS_ROOT) not in sys.path:
     sys.path.insert(0, str(TOOLS_ROOT))
 
 
-CLI_SCRIPTS = (
-    "ue_find_projects.py",
-    "ue_read_project_descriptor.py",
-    "ue_resolve_engine.py",
-    "ue_inspect_modules.py",
-    "ue_inspect_targets.py",
-    "ue_resolve_plugins.py",
-    "ue_classify_project_paths.py",
-    "ue_read_plugin_descriptor.py",
-    "ue_inspect_module_rules.py",
-    "ue_inspect_target_rules.py",
+CLI_SCHEMAS = {
+    "ue_find_projects.py": "ue-itps.project-discovery.v1",
+    "ue_read_project_descriptor.py": "ue-itps.project-descriptor.v1",
+    "ue_resolve_engine.py": "ue-itps.engine-resolution.v1",
+    "ue_inspect_modules.py": "ue-itps.project-modules.v1",
+    "ue_inspect_targets.py": "ue-itps.project-targets.v1",
+    "ue_resolve_plugins.py": "ue-itps.project-plugin-references.v1",
+    "ue_classify_project_paths.py": "ue-itps.project-paths.v1",
+    "ue_read_plugin_descriptor.py": "ue-itps.plugin-descriptor.v2",
+    "ue_inspect_module_rules.py": "ue-itps.module-rule-relations.v1",
+    "ue_inspect_target_rules.py": "ue-itps.target-rule-relations.v1",
+    "ue_inspect_cs_function.py": "ue-itps.cs-function.v1",
+    "ue_inspect_module_entry.py": "ue-itps.module-entry-state.v12",
+    "ue_list_cxx_includes.py": "ue-itps.cxx-includes.v1",
+    "ue_list_cxx_types.py": "ue-itps.cxx-types.v1",
+    "ue_inspect_cxx_function.py": "ue-itps.cxx-function.v1",
+}
+
+SOURCE_CLIS = (
     "ue_inspect_cs_function.py",
-    "ue_inspect_module_entry.py",
     "ue_list_cxx_includes.py",
     "ue_list_cxx_types.py",
     "ue_inspect_cxx_function.py",
@@ -59,34 +67,83 @@ def run_cli(script: str, *arguments: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def parse_cli(
+    test_case: unittest.TestCase,
+    script: str,
+    *arguments: str,
+    expected_code: int = 0,
+) -> dict[str, Any]:
+    completed = run_cli(script, *arguments)
+    test_case.assertEqual(
+        completed.returncode,
+        expected_code,
+        msg=completed.stderr or completed.stdout,
+    )
+    test_case.assertEqual(completed.stderr, "")
+    result = json.loads(completed.stdout)
+    test_case.assertEqual(result["schema_version"], CLI_SCHEMAS[script])
+    return result
+
+
 class EnvelopeAssertions(unittest.TestCase):
     def assert_envelope(self, result: dict[str, Any]) -> None:
-        keys = list(result)
-        self.assertEqual(keys[0], "schema_version")
-        self.assertEqual(keys[-2:], ["validation", "limits"])
-        self.assertIn(result["validation"]["status"], {"ok", "warning", "error"})
+        self.assertGreaterEqual(len(result), 3)
+        self.assertEqual(next(iter(result)), "schema_version")
+        self.assertEqual(list(result)[-2:], ["validation", "limits"])
+        validation = result["validation"]
+        self.assertIn(validation["status"], {"ok", "warning", "error"})
         self.assertEqual(
-            result["validation"]["problem_count"],
-            len(result["validation"]["problems"]),
+            validation["problem_count"],
+            len(validation["problems"]),
         )
         self.assertIsInstance(result["limits"]["responsibility"], str)
         self.assertIsInstance(result["limits"]["boundaries"], list)
 
+    def assert_success_envelope(self, result: dict[str, Any]) -> None:
+        self.assert_envelope(result)
+        self.assertNotEqual(result["validation"]["status"], "error")
+
+
+class FixtureTestCase(EnvelopeAssertions):
+    fixture: SimpleNamespace
+    temporary_directory: tempfile.TemporaryDirectory[str]
+
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.fixture = create_fixture(Path(self.temporary_directory.name))
+
+    def tearDown(self) -> None:
+        self.temporary_directory.cleanup()
+
+    def cli(
+        self,
+        script: str,
+        *arguments: str,
+        expected_code: int = 0,
+    ) -> dict[str, Any]:
+        result = parse_cli(
+            self,
+            script,
+            *arguments,
+            expected_code=expected_code,
+        )
+        self.assert_envelope(result)
+        return result
+
 
 def create_fixture(workspace: Path) -> SimpleNamespace:
-    project_root = workspace / "FixtureProject"
-    project_file = project_root / "FixtureProject.uproject"
     engine_root = workspace
-    build_version = engine_root / "Engine" / "Build" / "Build.version"
+    project_root = workspace / "CurrentGame"
+    project_file = project_root / "CurrentGame.uproject"
 
     write_json(
-        build_version,
+        engine_root / "Engine" / "Build" / "Build.version",
         {
             "MajorVersion": 5,
             "MinorVersion": 6,
             "PatchVersion": 1,
-            "Changelist": 123,
-            "CompatibleChangelist": 123,
+            "Changelist": 101,
+            "CompatibleChangelist": 101,
             "IsLicenseeVersion": 0,
             "IsPromotedBuild": 0,
             "BranchName": "Fixture",
@@ -142,27 +199,29 @@ def create_fixture(workspace: Path) -> SimpleNamespace:
             "FileVersion": 3,
             "EngineAssociation": "",
             "Category": "Tests",
+            "Description": "Current implementation fixture",
             "Modules": [
                 {
-                    "Name": "FixtureGame",
+                    "Name": "CurrentGame",
                     "Type": "Runtime",
                     "LoadingPhase": "Default",
                 }
             ],
             "Plugins": [
-                {"Name": "FixturePlugin", "Enabled": True},
+                {"Name": "CurrentPlugin", "Enabled": True},
                 {"Name": "DisabledPlugin", "Enabled": False},
             ],
+            "CustomField": {"preserved": True},
         },
     )
 
-    game_rules = project_root / "Source" / "FixtureGame" / "FixtureGame.Build.cs"
+    game_rules = project_root / "Source" / "CurrentGame" / "CurrentGame.Build.cs"
     write_text(
         game_rules,
         """
-        public class FixtureGame : ModuleRules
+        public class CurrentGame : ModuleRules
         {
-            public FixtureGame(ReadOnlyTargetRules Target) : base(Target)
+            public CurrentGame(ReadOnlyTargetRules Target) : base(Target)
             {
                 PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
                 PublicDependencyModuleNames.AddRange(
@@ -171,41 +230,40 @@ def create_fixture(workspace: Path) -> SimpleNamespace:
                 {
                     PrivateDependencyModuleNames.Add("UnrealEd");
                 }
-                AddOptionalModules();
+                AddRuntimeModules();
             }
 
-            private void AddOptionalModules()
+            private void AddRuntimeModules()
             {
                 DynamicallyLoadedModuleNames.Add("Projects");
             }
         }
         """,
     )
+    game_entry = (
+        project_root / "Source" / "CurrentGame" / "Private" / "CurrentGameModule.cpp"
+    )
     write_text(
-        project_root
-        / "Source"
-        / "FixtureGame"
-        / "Private"
-        / "FixtureGameModule.cpp",
+        game_entry,
         """
         #include "Modules/ModuleManager.h"
         IMPLEMENT_PRIMARY_GAME_MODULE(
-            FDefaultGameModuleImpl, FixtureGame, "FixtureGame");
+            FDefaultGameModuleImpl, CurrentGame, "CurrentGame");
         """,
     )
 
-    target_file = project_root / "Source" / "FixtureGame.Target.cs"
+    target_file = project_root / "Source" / "CurrentGame.Target.cs"
     write_text(
         target_file,
         """
-        public class FixtureGameTarget : TargetRules
+        public class CurrentGameTarget : TargetRules
         {
-            private static readonly string SharedDefinition = "FIXTURE";
+            private static readonly string SharedDefinition = "CURRENT";
 
-            public FixtureGameTarget(TargetInfo Target) : base(Target)
+            public CurrentGameTarget(TargetInfo Target) : base(Target)
             {
                 Type = TargetType.Game;
-                ExtraModuleNames.Add("FixtureGame");
+                ExtraModuleNames.Add("CurrentGame");
                 ApplySharedSettings(Target);
             }
 
@@ -220,21 +278,21 @@ def create_fixture(workspace: Path) -> SimpleNamespace:
         """,
     )
 
-    plugin_root = project_root / "Plugins" / "FixturePlugin"
-    plugin_file = plugin_root / "FixturePlugin.uplugin"
+    plugin_root = project_root / "Plugins" / "CurrentPlugin"
+    plugin_file = plugin_root / "CurrentPlugin.uplugin"
     write_json(
         plugin_file,
         {
             "FileVersion": 3,
-            "Version": 1,
-            "VersionName": "1.0",
-            "FriendlyName": "Fixture Plugin",
-            "Description": "Self-contained scanner fixture",
+            "Version": 2,
+            "VersionName": "2.0",
+            "FriendlyName": "Current Plugin",
+            "Description": "Current implementation fixture plugin",
             "Category": "Tests",
             "CanContainContent": False,
             "Modules": [
                 {
-                    "Name": "FixturePlugin",
+                    "Name": "CurrentPlugin",
                     "Type": "Runtime",
                     "LoadingPhase": "Default",
                 }
@@ -242,15 +300,13 @@ def create_fixture(workspace: Path) -> SimpleNamespace:
             "Plugins": [{"Name": "GameplayTags", "Enabled": True}],
         },
     )
-    plugin_rules = (
-        plugin_root / "Source" / "FixturePlugin" / "FixturePlugin.Build.cs"
-    )
+    plugin_rules = plugin_root / "Source" / "CurrentPlugin" / "CurrentPlugin.Build.cs"
     write_text(
         plugin_rules,
         """
-        public class FixturePlugin : ModuleRules
+        public class CurrentPlugin : ModuleRules
         {
-            public FixturePlugin(ReadOnlyTargetRules Target) : base(Target)
+            public CurrentPlugin(ReadOnlyTargetRules Target) : base(Target)
             {
                 PublicDependencyModuleNames.Add("Core");
                 PrivateDependencyModuleNames.Add("GameplayTags");
@@ -259,24 +315,20 @@ def create_fixture(workspace: Path) -> SimpleNamespace:
         """,
     )
     plugin_entry = (
-        plugin_root
-        / "Source"
-        / "FixturePlugin"
-        / "Private"
-        / "FixturePluginModule.cpp"
+        plugin_root / "Source" / "CurrentPlugin" / "Private" / "CurrentPluginModule.cpp"
     )
     write_text(
         plugin_entry,
         """
         #include "Modules/ModuleManager.h"
 
-        class FFixturePluginModule : public IModuleInterface
+        class FCurrentPluginModule : public IModuleInterface
         {
         public:
             virtual void StartupModule() override
             {
                 ReadyHandle = FCoreDelegates::OnPostEngineInit.AddRaw(
-                    this, &FFixturePluginModule::HandleReady);
+                    this, &FCurrentPluginModule::HandleReady);
             }
 
             virtual void ShutdownModule() override
@@ -288,15 +340,15 @@ def create_fixture(workspace: Path) -> SimpleNamespace:
             FDelegateHandle ReadyHandle;
         };
 
-        IMPLEMENT_MODULE(FFixturePluginModule, FixturePlugin)
+        IMPLEMENT_MODULE(FCurrentPluginModule, CurrentPlugin)
         """,
     )
 
     source_file = (
-        project_root / "Source" / "FixtureGame" / "Private" / "Feature.cpp"
+        project_root / "Source" / "CurrentGame" / "Private" / "CurrentFeature.cpp"
     )
     header_file = (
-        project_root / "Source" / "FixtureGame" / "Public" / "Feature.h"
+        project_root / "Source" / "CurrentGame" / "Public" / "CurrentFeature.h"
     )
     write_text(
         header_file,
@@ -305,10 +357,17 @@ def create_fixture(workspace: Path) -> SimpleNamespace:
 
         #include "CoreMinimal.h"
         #include "GameplayTagContainer.h"
-        #include "Feature.generated.h"
+        #include "CurrentFeature.generated.h"
+
+        UENUM(BlueprintType)
+        enum class ECurrentMode : uint8
+        {
+            Default,
+            Active
+        };
 
         USTRUCT(BlueprintType)
-        struct FFixtureFeature
+        struct FCurrentFeature
         {
             GENERATED_BODY()
 
@@ -317,7 +376,7 @@ def create_fixture(workspace: Path) -> SimpleNamespace:
         };
 
         UCLASS()
-        class UFixtureObject : public UObject
+        class UCurrentObject : public UObject
         {
             GENERATED_BODY()
 
@@ -332,10 +391,10 @@ def create_fixture(workspace: Path) -> SimpleNamespace:
     write_text(
         source_file,
         """
-        #include "Feature.h"
+        #include "CurrentFeature.h"
         #include "CoreMinimal.h"
 
-        void UFixtureObject::Execute(UObject* Context) const
+        void UCurrentObject::Execute(UObject* Context) const
         {
             if (Context)
             {
@@ -348,11 +407,11 @@ def create_fixture(workspace: Path) -> SimpleNamespace:
 
     return SimpleNamespace(
         workspace=workspace,
+        engine_root=engine_root,
         project_root=project_root,
         project_file=project_file,
-        engine_root=engine_root,
-        build_version=build_version,
         game_rules=game_rules,
+        game_entry=game_entry,
         target_file=target_file,
         plugin_root=plugin_root,
         plugin_file=plugin_file,

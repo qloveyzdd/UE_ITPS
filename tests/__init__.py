@@ -1,1 +1,1 @@
-"""UE-ITPS test package."""
+"""UE ITPS automated tests."""
