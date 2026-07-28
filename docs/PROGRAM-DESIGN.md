@@ -35,7 +35,7 @@ UE ITPS 解决的是“如何从一个明确的 Unreal Engine 项目或源码入
 
 ## 3. 公开表面
 
-项目公开 15 个 CLI，分为四个范围：
+项目公开 16 个 CLI，分为四个范围：
 
 ### 3.1 项目导航
 
@@ -44,6 +44,7 @@ UE ITPS 解决的是“如何从一个明确的 Unreal Engine 项目或源码入
 - `ue_resolve_engine.py`
 - `ue_inspect_modules.py`
 - `ue_inspect_targets.py`
+- `ue_list_project_cxx_sources.py`
 - `ue_resolve_plugins.py`
 - `ue_classify_project_paths.py`
 
@@ -114,6 +115,7 @@ UE ITPS 解决的是“如何从一个明确的 Unreal Engine 项目或源码入
 - `descriptor.py`：项目描述符投影。
 - `engine.py`：Engine 根目录与版本解析。
 - `code_inventory.py`：Module 和 Target 文件对账。
+- `project_cxx_sources.py`：项目与项目 Plugin 的 C++ 文件分组和生成文件过滤。
 - `plugins.py`：直接 Plugin 声明定位。
 - `structure.py`：项目根路径分类。
 - `plugin_descriptor.py`：`.uplugin` 校验和 Module 对账。
@@ -274,16 +276,16 @@ limits
 
 测试不读取 Lyra，不依赖已安装 Unreal Engine，不调用 UBT/UHT/Editor，也不修改真实项目。
 
-当前 44 项测试分布：
+当前 45 项测试分布：
 
 | 模块 | 数量 | 目标 |
 |---|---:|---|
 | `test_contract_surface.py` | 8 | CLI 清单、正式 Schema、帮助、退出码和统一 JSON 错误信封 |
-| `test_project_layer.py` | 9 | 项目级发现和导航事实 |
+| `test_project_layer.py` | 10 | 项目级发现、导航事实和项目 C++ 源码清单 |
 | `test_build_layer.py` | 9 | Plugin、规则、C# 和模块入口 |
 | `test_source_layer.py` | 10 | C++ 上下文、include、类型和函数 |
 | `test_boundary_cases.py` | 7 | 歧义、损坏输入、保守失败与备用来源 |
-| `test_navigation_workflow.py` | 1 | 15 个 CLI 的端到端显式导航 |
+| `test_navigation_workflow.py` | 1 | 16 个 CLI 的端到端显式导航 |
 
 执行方式：
 
@@ -306,12 +308,12 @@ python -m unittest discover -s tests -v
 7. 新功能至少增加成功路径、失败路径和 CLI 契约测试。
 8. 改变导航入口时同步更新完整导航测试和两份文档。
 9. UBT、UHT、Editor、Asset Registry 或运行时证据必须使用独立 Schema 和采集上下文。
-10. 核心扫描器继续保持只读；生成、修改和归档能力必须与这 15 个 CLI 分离。
+10. 核心扫描器继续保持只读；生成、修改和归档能力必须与这 16 个 CLI 分离。
 
 ## 10. 已知限制
 
 - 正式 JSON Schema 已覆盖公共信封和稳定领域字段，但复杂嵌套事实尚未全部收紧为封闭类型。
-- 未生成 15 个 Schema 的完整 golden 文件，当前测试以 Schema 校验、关键字段和行为断言为主。
+- 未生成 16 个 Schema 的完整 golden 文件，当前测试以 Schema 校验、关键字段和行为断言为主。
 - Engine、Plugin 和 Build.cs 树在不同 CLI 进程间会重复扫描。
 - 三个 C++ 工具不会跨进程复用上下文或 Token。
 - 大型 Engine、Plugin 树或 Module 可能产生明显 I/O 和内存开销。

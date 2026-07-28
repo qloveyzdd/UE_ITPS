@@ -17,6 +17,7 @@ class NavigationWorkflowTests(FixtureTestCase):
             "ue_resolve_engine.py": ["--project", project],
             "ue_inspect_modules.py": ["--project", project],
             "ue_inspect_targets.py": ["--project", project],
+            "ue_list_project_cxx_sources.py": ["--project", project],
             "ue_resolve_plugins.py": [
                 "--project",
                 project,
@@ -86,6 +87,11 @@ class NavigationWorkflowTests(FixtureTestCase):
         self.assertEqual(module_rules, self.fixture.game_rules.resolve())
         target = Path(results["ue_inspect_targets.py"]["items"][0]["path"]).resolve()
         self.assertEqual(target, self.fixture.target_file.resolve())
+        source_modules = {
+            item["module"]
+            for item in results["ue_list_project_cxx_sources.py"]["modules"]
+        }
+        self.assertEqual(source_modules, {"CurrentGame", "CurrentPlugin"})
 
         plugin_result = results["ue_resolve_plugins.py"]
         plugin = plugin_result["items"][0]

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tests.fixture import FixtureTestCase, write_json
+from tests.fixture import FixtureTestCase, write_json, write_text
 
 
 class ProjectLayerTests(FixtureTestCase):
@@ -101,6 +101,88 @@ class ProjectLayerTests(FixtureTestCase):
             Path(result["items"][0]["path"]).resolve(),
             self.fixture.target_file.resolve(),
         )
+
+    def test_project_cxx_sources_groups_manual_files_and_excludes_generated_and_engine(
+        self,
+    ) -> None:
+        write_text(
+            self.fixture.project_root / "Source" / "CurrentGame" / "Loose.hpp",
+            "#pragma once",
+        )
+        write_text(
+            self.fixture.project_root
+            / "Source"
+            / "CurrentGame"
+            / "Private"
+            / "Transient.gen.cpp",
+            "void GeneratedByTool() {}",
+        )
+        write_text(
+            self.fixture.plugin_root
+            / "Source"
+            / "CurrentPlugin"
+            / "Public"
+            / "CurrentPluginApi.hpp",
+            "#pragma once",
+        )
+        write_text(
+            self.fixture.engine_root
+            / "Engine"
+            / "Source"
+            / "Runtime"
+            / "Core"
+            / "Private"
+            / "Core.cpp",
+            "void EngineSource() {}",
+        )
+
+        result = self.cli(
+            "ue_list_project_cxx_sources.py",
+            "--project",
+            str(self.fixture.project_file),
+        )
+
+        self.assertEqual(result["module_count"], 2)
+        self.assertEqual(result["file_count"], 6)
+        modules = {item["module"]: item for item in result["modules"]}
+        game = modules["CurrentGame"]
+        self.assertIsNone(game["plugin"])
+        self.assertIsNone(game["plugin_descriptor"])
+        self.assertEqual(
+            game["headers"]["public"],
+            ["Source/CurrentGame/Public/CurrentFeature.h"],
+        )
+        self.assertEqual(
+            game["headers"]["unclassified"],
+            ["Source/CurrentGame/Loose.hpp"],
+        )
+        self.assertEqual(
+            game["cpp"]["private"],
+            [
+                "Source/CurrentGame/Private/CurrentFeature.cpp",
+                "Source/CurrentGame/Private/CurrentGameModule.cpp",
+            ],
+        )
+
+        plugin = modules["CurrentPlugin"]
+        self.assertEqual(plugin["plugin"], "CurrentPlugin")
+        self.assertEqual(
+            plugin["plugin_descriptor"],
+            "Plugins/CurrentPlugin/CurrentPlugin.uplugin",
+        )
+        self.assertEqual(
+            plugin["headers"]["public"],
+            ["Plugins/CurrentPlugin/Source/CurrentPlugin/Public/CurrentPluginApi.hpp"],
+        )
+        all_paths = [
+            path
+            for item in result["modules"]
+            for kind in ("headers", "cpp")
+            for paths in item[kind].values()
+            for path in paths
+        ]
+        self.assertFalse(any(".gen." in path for path in all_paths))
+        self.assertFalse(any(path.startswith("Engine/") for path in all_paths))
 
     def test_plugin_resolution_preserves_profile_and_disabled_items(self) -> None:
         result = self.cli(

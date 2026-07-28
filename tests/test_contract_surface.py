@@ -23,21 +23,16 @@ class ContractSurfaceTests(EnvelopeAssertions):
         declared = set(CLI_SCHEMAS)
         present = {path.name for path in TOOLS_ROOT.glob("ue_*.py") if path.is_file()}
         self.assertEqual(present, declared)
-        self.assertEqual(len(declared), 15)
-        self.assertEqual(len(set(CLI_SCHEMAS.values())), 15)
+        self.assertEqual(len(declared), 16)
+        self.assertEqual(len(set(CLI_SCHEMAS.values())), 16)
 
     def test_formal_schema_inventory_is_complete_and_valid(self) -> None:
         expected = {
             "common.schema.json",
-            *{
-                f"{Path(script).stem}.schema.json"
-                for script in CLI_SCHEMAS
-            },
+            *{f"{Path(script).stem}.schema.json" for script in CLI_SCHEMAS},
         }
         present = {
-            path.name
-            for path in SCHEMAS_ROOT.glob("*.schema.json")
-            if path.is_file()
+            path.name for path in SCHEMAS_ROOT.glob("*.schema.json") if path.is_file()
         }
         self.assertEqual(present, expected)
         for path in sorted(SCHEMAS_ROOT.glob("*.schema.json")):
@@ -135,6 +130,7 @@ class ContractSurfaceTests(EnvelopeAssertions):
             "ue_resolve_engine.py": ["--project", missing_project],
             "ue_inspect_modules.py": ["--project", missing_project],
             "ue_inspect_targets.py": ["--project", missing_project],
+            "ue_list_project_cxx_sources.py": ["--project", missing_project],
             "ue_resolve_plugins.py": ["--project", missing_project],
             "ue_classify_project_paths.py": ["--project", missing_project],
             "ue_read_plugin_descriptor.py": ["--plugin", missing_plugin],

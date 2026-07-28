@@ -1,6 +1,6 @@
 ---
 name: ue-project-inspector
-description: Inspect Unreal Engine projects and explicitly selected source entry files through the repository's deterministic, read-only tools. Use when Codex needs to find or read .uproject files; resolve Engine identity; locate direct Plugin references; inspect one .uplugin; navigate one plugin's declared modules; read one Build.cs or Target.cs; inspect one selected C# or C++ function name; inspect one module's lifecycle entry source; list includes or types from one selected .cpp; classify project directories; or summarize focused results. Do not use for runtime behavior, asset reachability, general class/call graphs, code generation, builds, tests, or project modification.
+description: Inspect Unreal Engine projects and explicitly selected source entry files through the repository's deterministic, read-only tools. Use when Codex needs to find or read .uproject files; resolve Engine identity; list project-local C++ sources; locate direct Plugin references; inspect one .uplugin; navigate one plugin's declared modules; read one Build.cs or Target.cs; inspect one selected C# or C++ function name; inspect one module's lifecycle entry source; list includes or types from one selected .cpp; classify project directories; or summarize focused results. Do not use for runtime behavior, asset reachability, general class/call graphs, code generation, builds, tests, or project modification.
 ---
 
 # UE Project Inspector
@@ -22,6 +22,7 @@ If the scripts are missing, report that this repository does not contain the exp
 | Resolve actual Engine identity/version | `ue_resolve_engine.py` |
 | Check declared project Module structure | `ue_inspect_modules.py` |
 | Discover project Targets | `ue_inspect_targets.py` |
+| List project and project-Plugin C++ source files | `ue_list_project_cxx_sources.py` |
 | Locate direct `.uproject` Plugin references | `ue_resolve_plugins.py` |
 | Classify project-root paths with explicit descriptor evidence | `ue_classify_project_paths.py` |
 | Read one explicitly selected `.uplugin` | `ue_read_plugin_descriptor.py` |
@@ -74,6 +75,7 @@ python tools/ue_read_project_descriptor.py --project <project>
 python tools/ue_resolve_engine.py --project <project>
 python tools/ue_inspect_modules.py --project <project>
 python tools/ue_inspect_targets.py --project <project>
+python tools/ue_list_project_cxx_sources.py --project <project>
 python tools/ue_classify_project_paths.py --project <project>
 ```
 
@@ -97,6 +99,16 @@ python tools/ue_resolve_plugins.py --project <project> --operation scan --platfo
 ```
 
 Use `Win64 / Editor` only as the default focused Plugin profile. If the user provides another platform, target type, or operation, pass it through and state the active profile. Configuration is not accepted or evaluated by the focused Plugin tool.
+
+## Interpret project C++ sources v1
+
+Treat `ue-itps.project-cxx-sources.v1` as a physical project-local source inventory:
+
+- `modules` is grouped by physical `*.Build.cs` ancestry. Same-named Modules with different Build.cs files remain separate and produce a validation warning.
+- `plugin` and `plugin_descriptor` come from the nearest project-local `.uplugin` ancestor. They do not prove that the Plugin is declared, enabled, or selected by UBT.
+- `headers` and `cpp` independently contain `public`, `private`, and `unclassified` paths. `Classes` maps to `public`; classification is based on the first directory below the Module root.
+- All reported source paths and Build.cs or Plugin descriptor evidence are relative to `project.root`.
+- Engine directories, external additional directories, generated directories, and conventional generated filenames are excluded. This is a filesystem convention filter, not proof of human authorship.
 
 ## Interpret Plugin v1
 

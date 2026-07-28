@@ -28,6 +28,7 @@ CLI_SCHEMAS = {
     "ue_resolve_engine.py": "ue-itps.engine-resolution.v1",
     "ue_inspect_modules.py": "ue-itps.project-modules.v1",
     "ue_inspect_targets.py": "ue-itps.project-targets.v1",
+    "ue_list_project_cxx_sources.py": "ue-itps.project-cxx-sources.v1",
     "ue_resolve_plugins.py": "ue-itps.project-plugin-references.v1",
     "ue_classify_project_paths.py": "ue-itps.project-paths.v1",
     "ue_read_plugin_descriptor.py": "ue-itps.plugin-descriptor.v2",
@@ -39,6 +40,7 @@ CLI_SCHEMAS = {
     "ue_list_cxx_types.py": "ue-itps.cxx-types.v1",
     "ue_inspect_cxx_function.py": "ue-itps.cxx-function.v1",
 }
+
 
 @lru_cache(maxsize=1)
 def schema_registry() -> Registry:
