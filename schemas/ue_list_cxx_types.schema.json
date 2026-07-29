@@ -29,7 +29,12 @@
         "path_roots",
         "context",
         "source_unit",
-        "types",
+        "classes",
+        "structs",
+        "enums",
+        "interface_candidates",
+        "global_variables",
+        "free_functions",
         "unresolved_declarations",
         "validation",
         "limits"
@@ -47,8 +52,41 @@
         "source_unit": {
           "type": "object"
         },
-        "types": {
-          "type": "array"
+        "classes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/compoundTypeAnchor"
+          }
+        },
+        "structs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/compoundTypeAnchor"
+          }
+        },
+        "enums": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/enumAnchor"
+          }
+        },
+        "interface_candidates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/interfaceCandidate"
+          }
+        },
+        "global_variables": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/globalVariableAnchor"
+          }
+        },
+        "free_functions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/freeFunctionAnchor"
+          }
         },
         "unresolved_declarations": {
           "type": "array"
@@ -58,6 +96,237 @@
         },
         "limits": {
           "$ref": "urn:ue-itps:schema:common:v1#/$defs/limits"
+        }
+      },
+      "additionalProperties": false
+    },
+    "unitEvidence": {
+      "type": "object",
+      "required": ["unit", "line"],
+      "properties": {
+        "unit": {
+          "enum": ["cpp", "header"]
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "end_line": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "memberAnchor": {
+      "type": "object",
+      "required": ["kind", "name", "macros", "evidence"],
+      "properties": {
+        "kind": {
+          "enum": ["variable", "function"]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type_expression": {
+          "type": "string"
+        },
+        "signature": {
+          "type": "string"
+        },
+        "macros": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evidence": {
+          "$ref": "#/$defs/unitEvidence"
+        }
+      },
+      "additionalProperties": false
+    },
+    "compoundTypeAnchor": {
+      "type": "object",
+      "required": [
+        "name",
+        "qualified_name",
+        "owner",
+        "role",
+        "base_types",
+        "macros",
+        "member_anchors",
+        "evidence"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "qualified_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner": {
+          "type": ["string", "null"]
+        },
+        "role": {
+          "enum": ["declaration", "definition"]
+        },
+        "base_types": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "macros": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "member_anchors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/memberAnchor"
+          }
+        },
+        "evidence": {
+          "$ref": "#/$defs/unitEvidence"
+        }
+      },
+      "additionalProperties": false
+    },
+    "enumAnchor": {
+      "type": "object",
+      "required": [
+        "kind",
+        "name",
+        "qualified_name",
+        "owner",
+        "role",
+        "scoped",
+        "macros",
+        "evidence"
+      ],
+      "properties": {
+        "kind": {
+          "const": "enum"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "qualified_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner": {
+          "type": ["string", "null"]
+        },
+        "role": {
+          "enum": ["declaration", "definition"]
+        },
+        "scoped": {
+          "type": "boolean"
+        },
+        "macros": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evidence": {
+          "$ref": "#/$defs/unitEvidence"
+        }
+      },
+      "additionalProperties": false
+    },
+    "interfaceCandidate": {
+      "type": "object",
+      "required": [
+        "name",
+        "qualified_name",
+        "owner",
+        "declaration_kind",
+        "reasons",
+        "evidence"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "qualified_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner": {
+          "type": ["string", "null"]
+        },
+        "declaration_kind": {
+          "enum": ["class", "struct"]
+        },
+        "reasons": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "evidence": {
+          "$ref": "#/$defs/unitEvidence"
+        }
+      },
+      "additionalProperties": false
+    },
+    "globalVariableAnchor": {
+      "type": "object",
+      "required": [
+        "name",
+        "type_expression",
+        "macros",
+        "evidence"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type_expression": {
+          "type": "string",
+          "minLength": 1
+        },
+        "macros": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evidence": {
+          "$ref": "#/$defs/unitEvidence"
+        }
+      },
+      "additionalProperties": false
+    },
+    "freeFunctionAnchor": {
+      "type": "object",
+      "required": ["name", "signature", "role", "evidence"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "signature": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "enum": ["declaration", "definition"]
+        },
+        "evidence": {
+          "$ref": "#/$defs/unitEvidence"
         }
       },
       "additionalProperties": false

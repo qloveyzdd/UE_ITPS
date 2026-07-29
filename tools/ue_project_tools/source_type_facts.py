@@ -6,6 +6,8 @@ from typing import Any
 from .source_context import load_source_context, source_result
 from .source_declarations import (
     _class_field_names,
+    _type_owner_at,
+    parse_free_function_declarations,
 )
 from .source_tokens import (
     Token,
@@ -46,10 +48,19 @@ def _enums(parsed: dict[str, Any], path: Path, project_root: Path, engine_root: 
         if opening is None or tokens[opening].value != "{" or opening not in forward:
             continue
         close = forward[opening]
+        owner = _type_owner_at(parsed["classes"], index)
+        owner_name = owner["qualified_name"] if owner else None
         results.append(
             {
                 "kind": "enum",
                 "name": name,
+                "qualified_name": (
+                    f"{owner_name}::{name}"
+                    if owner_name
+                    else name
+                ),
+                "owner": owner_name,
+                "role": "definition",
                 "scoped": scoped,
                 "evidence": _file_evidence(
                     path,
@@ -136,7 +147,9 @@ def _type_macros(
             and macro["name"]
             in {
                 "GENERATED_BODY",
+                "GENERATED_IINTERFACE_BODY",
                 "GENERATED_UCLASS_BODY",
+                "GENERATED_UINTERFACE_BODY",
                 "GENERATED_USTRUCT_BODY",
             }
             and int(body_range[0]) <= macro_index < int(body_range[1])
@@ -163,13 +176,102 @@ def _type_evidence(
     return _type_unit_evidence(loaded, path, adjusted)
 
 
-def _type_facts(
+def _anchor_sort_key(item: dict[str, Any]) -> tuple[int, int, str]:
+    evidence = item["evidence"]
+    return (
+        0 if evidence["unit"] == "cpp" else 1,
+        int(evidence["line"]),
+        str(item["name"]).casefold(),
+    )
+
+
+def _member_anchors(
+    loaded: dict[str, Any],
+    path: Path,
+    parsed: dict[str, Any],
+    class_item: dict[str, Any],
+    variables: list[dict[str, Any]],
+    rooted_class_evidence: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[str], list[str]]:
+    variable_anchors = [
+        {
+            "kind": "variable",
+            "name": item["name"],
+            "type_expression": item["type_expression"],
+            "macros": list(item.get("_macros", [])),
+            "evidence": _type_unit_evidence(
+                loaded,
+                path,
+                item["evidence"],
+            ),
+        }
+        for item in variables
+        if item["scope"] == "member"
+        and item.get("owner") == class_item["name"]
+        and item["evidence"]["root"] == rooted_class_evidence["root"]
+        and item["evidence"]["path"] == rooted_class_evidence["path"]
+        and rooted_class_evidence["line"]
+        <= item["evidence"]["line"]
+        <= rooted_class_evidence.get(
+            "end_line",
+            rooted_class_evidence["line"],
+        )
+    ]
+    function_anchors = [
+        {
+            "kind": "function",
+            "name": _callable_name(
+                member["name"],
+                member["signature"],
+            ),
+            "signature": " ".join(member["signature"].split()),
+            "macros": list(member.get("_macros", [])),
+            "evidence": _type_unit_evidence(
+                loaded,
+                path,
+                member["location"],
+            ),
+        }
+        for member in class_item["members"]
+        if member["name"] not in _SOURCE_MACROS
+    ]
+    anchors = sorted(
+        [*variable_anchors, *function_anchors],
+        key=lambda item: (
+            int(item["evidence"]["line"]),
+            0 if item["kind"] == "variable" else 1,
+            str(item["name"]).casefold(),
+        ),
+    )
+    return (
+        anchors,
+        _class_field_names(
+            parsed["text"],
+            parsed["tokens"],
+            class_item["body_range"][0],
+            class_item["body_range"][1],
+        ),
+        [item["name"] for item in variable_anchors],
+    )
+
+
+def _inherits_uinterface(base_types: list[str]) -> bool:
+    return any(
+        base_type.rsplit("::", 1)[-1] == "UInterface"
+        for base_type in base_types
+    )
+
+
+def _type_anchor_facts(
     loaded: dict[str, Any],
     variables: list[dict[str, Any]],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[dict[str, list[dict[str, Any]]], list[dict[str, Any]]]:
     project_root = loaded["project_root"]
     engine_root = loaded["engine_root"]
-    results: list[dict[str, Any]] = []
+    classes: list[dict[str, Any]] = []
+    structs: list[dict[str, Any]] = []
+    enums: list[dict[str, Any]] = []
+    interface_sources: list[dict[str, Any]] = []
     problems: list[dict[str, Any]] = []
     for path, parsed in loaded["parsed_files"]:
         for class_item in parsed["classes"]:
@@ -188,49 +290,16 @@ def _type_facts(
                 project_root,
                 engine_root,
             )
-            member_variable_details = [
-                {
-                    "name": item["name"],
-                    "type_expression": item["type_expression"],
-                    "macros": list(item.get("_macros", [])),
-                    "evidence": _type_unit_evidence(
-                        loaded, path, item["evidence"]
-                    ),
-                }
-                for item in variables
-                if item["scope"] == "member"
-                and item.get("owner") == class_item["name"]
-                and item["evidence"]["root"] == rooted_class_evidence["root"]
-                and item["evidence"]["path"] == rooted_class_evidence["path"]
-                and rooted_class_evidence["line"]
-                <= item["evidence"]["line"]
-                <= rooted_class_evidence.get(
-                    "end_line", rooted_class_evidence["line"]
+            member_anchors, lexical_field_names, projected_field_names = (
+                _member_anchors(
+                    loaded,
+                    path,
+                    parsed,
+                    class_item,
+                    variables,
+                    rooted_class_evidence,
                 )
-            ]
-            member_function_details = [
-                {
-                    "name": _callable_name(
-                        member["name"], member["signature"]
-                    ),
-                    "signature": " ".join(member["signature"].split()),
-                    "macros": list(member.get("_macros", [])),
-                    "evidence": _type_unit_evidence(
-                        loaded, path, member["location"]
-                    ),
-                }
-                for member in class_item["members"]
-                if member["name"] not in _SOURCE_MACROS
-            ]
-            lexical_field_names = _class_field_names(
-                parsed["text"],
-                parsed["tokens"],
-                class_item["body_range"][0],
-                class_item["body_range"][1],
             )
-            projected_field_names = [
-                item["name"] for item in member_variable_details
-            ]
             if lexical_field_names != projected_field_names:
                 problems.append(
                     {
@@ -246,19 +315,35 @@ def _type_facts(
                         ),
                     }
                 )
-            results.append(
+            public_item = {
+                "name": class_item["name"],
+                "qualified_name": class_item["qualified_name"],
+                "owner": class_item["owner"],
+                "role": "definition",
+                "base_types": class_item["base_types"],
+                "macros": [
+                    str(macro["_expression"])
+                    for macro in type_macros
+                ],
+                "member_anchors": member_anchors,
+                "evidence": type_evidence,
+            }
+            (
+                classes
+                if class_item["kind"] == "class"
+                else structs
+            ).append(public_item)
+            interface_sources.append(
                 {
-                    "kind": class_item["kind"],
+                    "declaration_kind": class_item["kind"],
                     "name": class_item["name"],
+                    "qualified_name": class_item["qualified_name"],
+                    "owner": class_item["owner"],
                     "base_types": class_item["base_types"],
-                    "macros": [
-                        str(macro["_expression"])
+                    "macro_names": [
+                        str(macro["name"])
                         for macro in type_macros
                     ],
-                    "member_details": {
-                        "variables": member_variable_details,
-                        "functions": member_function_details,
-                    },
                     "evidence": type_evidence,
                 }
             )
@@ -268,7 +353,7 @@ def _type_facts(
             enum_macros = _type_macros(
                 loaded, parsed, path, enum_item
             )
-            results.append(
+            enums.append(
                 {
                     **{
                         key: value
@@ -287,13 +372,234 @@ def _type_facts(
                     ),
                 }
             )
+        for declaration in parsed.get("forward_declarations", []):
+            evidence = _type_unit_evidence(
+                loaded,
+                path,
+                declaration["location"],
+            )
+            if declaration["kind"] == "enum":
+                enums.append(
+                    {
+                        "kind": "enum",
+                        "name": declaration["name"],
+                        "qualified_name": declaration["qualified_name"],
+                        "owner": declaration["owner"],
+                        "role": "declaration",
+                        "scoped": declaration["scoped"],
+                        "macros": [],
+                        "evidence": evidence,
+                    }
+                )
+                continue
+            public_item = {
+                "name": declaration["name"],
+                "qualified_name": declaration["qualified_name"],
+                "owner": declaration["owner"],
+                "role": "declaration",
+                "base_types": [],
+                "macros": [],
+                "member_anchors": [],
+                "evidence": evidence,
+            }
+            (
+                classes
+                if declaration["kind"] == "class"
+                else structs
+            ).append(public_item)
+
+    uinterface_stems = {
+        item["name"][1:]
+        for item in interface_sources
+        if item["name"].startswith("U")
+        and len(item["name"]) > 1
+        and (
+            "UINTERFACE" in item["macro_names"]
+            or _inherits_uinterface(item["base_types"])
+        )
+    }
+    interface_candidates: list[dict[str, Any]] = []
+    generated_interface_macros = {
+        "GENERATED_BODY",
+        "GENERATED_IINTERFACE_BODY",
+        "GENERATED_UINTERFACE_BODY",
+    }
+    for item in interface_sources:
+        reasons: list[str] = []
+        if "UINTERFACE" in item["macro_names"]:
+            reasons.append("uinterface_macro")
+        if _inherits_uinterface(item["base_types"]):
+            reasons.append("inherits_uinterface")
+        if (
+            item["name"].startswith("I")
+            and len(item["name"]) > 1
+            and generated_interface_macros.intersection(
+                item["macro_names"]
+            )
+        ):
+            reasons.append("generated_body_i_prefix")
+        if (
+            item["name"].startswith("I")
+            and item["name"][1:] in uinterface_stems
+        ):
+            reasons.append("paired_uinterface")
+        if reasons:
+            interface_candidates.append(
+                {
+                    "name": item["name"],
+                    "qualified_name": item["qualified_name"],
+                    "owner": item["owner"],
+                    "declaration_kind": item["declaration_kind"],
+                    "reasons": reasons,
+                    "evidence": item["evidence"],
+                }
+            )
+
+    return (
+        {
+            "classes": sorted(classes, key=_anchor_sort_key),
+            "structs": sorted(structs, key=_anchor_sort_key),
+            "enums": sorted(enums, key=_anchor_sort_key),
+            "interface_candidates": sorted(
+                interface_candidates,
+                key=_anchor_sort_key,
+            ),
+        },
+        problems,
+    )
+
+
+def _path_matches_evidence(
+    path: Path,
+    evidence: dict[str, Any],
+    loaded: dict[str, Any],
+) -> bool:
+    location = _file_evidence(
+        path,
+        1,
+        loaded["project_root"],
+        loaded["engine_root"],
+    )
+    return (
+        location["root"] == evidence["root"]
+        and location["path"] == evidence["path"]
+    )
+
+
+def _global_variable_facts(
+    loaded: dict[str, Any],
+    variables: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+    for path, _parsed in loaded["parsed_files"]:
+        for item in variables:
+            if item["scope"] != "file" or not _path_matches_evidence(
+                path,
+                item["evidence"],
+                loaded,
+            ):
+                continue
+            results.append(
+                {
+                    "name": item["name"],
+                    "type_expression": item["type_expression"],
+                    "macros": list(item.get("_macros", [])),
+                    "evidence": _type_unit_evidence(
+                        loaded,
+                        path,
+                        item["evidence"],
+                    ),
+                }
+            )
+    unique = {
+        (
+            item["name"],
+            item["type_expression"],
+            item["evidence"]["unit"],
+            item["evidence"]["line"],
+        ): item
+        for item in results
+    }
+    return sorted(unique.values(), key=_anchor_sort_key)
+
+
+def _free_function_facts(
+    loaded: dict[str, Any],
+) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+    for path, parsed in loaded["parsed_files"]:
+        groups = (
+            ("definition", parsed["free_functions"]),
+            (
+                "declaration",
+                parse_free_function_declarations(
+                    parsed["text"],
+                    parsed["tokens"],
+                    parsed["forward"],
+                ),
+            ),
+        )
+        for role, functions in groups:
+            for function in functions:
+                results.append(
+                    {
+                        "name": function["name"],
+                        "signature": " ".join(
+                            function["signature"].split()
+                        ),
+                        "role": role,
+                        "evidence": _type_unit_evidence(
+                            loaded,
+                            path,
+                            function["location"],
+                        ),
+                    }
+                )
+    unique = {
+        (
+            item["name"],
+            item["signature"],
+            item["role"],
+            item["evidence"]["unit"],
+            item["evidence"]["line"],
+        ): item
+        for item in results
+    }
+    return sorted(unique.values(), key=_anchor_sort_key)
+
+
+def _unresolved_facts(
+    loaded: dict[str, Any],
+    unresolved: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+    for path, _parsed in loaded["parsed_files"]:
+        for item in unresolved:
+            if not _path_matches_evidence(
+                path,
+                item["evidence"],
+                loaded,
+            ):
+                continue
+            public_item = {
+                key: value
+                for key, value in item.items()
+                if key != "evidence"
+            }
+            public_item["evidence"] = _type_unit_evidence(
+                loaded,
+                path,
+                item["evidence"],
+            )
+            results.append(public_item)
     return sorted(
         results,
         key=lambda item: (
             0 if item["evidence"]["unit"] == "cpp" else 1,
-            item["evidence"]["line"],
+            int(item["evidence"]["line"]),
+            str(item.get("scope", "")),
         ),
-    ), problems
+    )
 
 
 def list_source_types(
@@ -319,21 +625,36 @@ def list_source_types(
         )
     )
     variables, unresolved = _source_declaration_facts(loaded)
-    types, type_problems = _type_facts(loaded, variables)
+    type_anchors, type_problems = _type_anchor_facts(
+        loaded,
+        variables,
+    )
+    unresolved_facts = _unresolved_facts(loaded, unresolved)
     return source_result(
         "ue-itps.cxx-types.v1",
         loaded,
         {
-            "types": types,
-            "unresolved_declarations": [
-                item for item in unresolved if item["scope"] == "member"
-            ],
+            **type_anchors,
+            "global_variables": _global_variable_facts(
+                loaded,
+                variables,
+            ),
+            "free_functions": _free_function_facts(loaded),
+            "unresolved_declarations": unresolved_facts,
         },
-        responsibility="Index class, struct, enum, inheritance, member-name, and UE type-macro facts.",
+        responsibility=(
+            "Index class, struct, enum, interface-candidate, global-variable, "
+            "free-function, and class/struct member anchors."
+        ),
         boundaries=[
-            "Member lists are lexical indexes and are not semantic summaries.",
+            "All anchors are lexical navigation facts and are not semantic summaries.",
+            "Class, struct, and enum anchors distinguish declarations from definitions; nested type owners are lexical class/struct owners and do not include namespace qualification.",
+            "Interface candidates are reported only from local UINTERFACE, UInterface inheritance, generated-body I-prefix, or paired U/I naming evidence.",
             "Type and member macros are attached by lexical declaration adjacency, not UHT semantic analysis.",
-            "The result is not a complete C++ type system, inheritance graph, or reflection result.",
+            "Global variables include file- and namespace-scope declarations; function locals and class/struct members are excluded.",
+            "Macro-like declarations are excluded from free functions, and call-shaped variable initializers are classified only when a value expression is lexically evident.",
+            "Free functions include declarations and definitions but are not overload-resolved.",
+            "The result is not a complete C++ symbol table, type system, inheritance graph, or reflection result.",
         ],
         additional_problems=[
             *type_problems,
@@ -341,21 +662,15 @@ def list_source_types(
                 [
                     {
                         "severity": "warning",
-                        "code": "source-type-member-declaration-unresolved",
-                        "count": len(
-                            [
-                                item
-                                for item in unresolved
-                                if item["scope"] == "member"
-                            ]
-                        ),
+                        "code": "source-type-declaration-unresolved",
+                        "count": len(unresolved),
                         "message": (
-                            "One or more member declarations could not be "
+                            "One or more declarations could not be "
                             "classified conservatively"
                         ),
                     }
                 ]
-                if any(item["scope"] == "member" for item in unresolved)
+                if unresolved
                 else []
             ),
         ],

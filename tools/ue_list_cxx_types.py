@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""List type facts from one explicitly selected C++ source unit."""
+"""List declaration anchors from one explicitly selected C++ source unit."""
 
 from pathlib import Path
 
@@ -9,14 +9,15 @@ from ue_project_tools.source_unit import list_source_types
 
 SCHEMA_VERSION = "ue-itps.cxx-types.v1"
 RESPONSIBILITY = (
-    "Index class, struct, enum, inheritance, member-name, and UE type-macro facts."
+    "Index class, struct, enum, interface-candidate, global-variable, "
+    "free-function, and class/struct member anchors."
 )
 
 
 def main() -> int:
     parser = cli_parser(
         "列出一个显式选择的 C++ 源码单元中的类型事实。",
-        "List type facts from one explicitly selected C++ source unit.",
+        "List declaration anchors from one explicitly selected C++ source unit.",
         schema_version=SCHEMA_VERSION,
         responsibility=RESPONSIBILITY,
     )

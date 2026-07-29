@@ -10,11 +10,11 @@ from .source_declarations import (
     _FORBIDDEN_CALLABLE_NAMES,
     _TYPE_KEYWORDS,
     _classify_declaration,
+    parse_free_function_declarations,
 )
 from .source_signatures import parameter_signature
 from .source_tokens import (
     Token,
-    _location,
     _raw,
     _raw_from_values,
     _split_arguments,
@@ -132,83 +132,11 @@ def _callable_part(
 
 
 def _top_level_declarations(parsed: dict[str, Any]) -> list[dict[str, Any]]:
-    text = parsed["text"]
-    tokens: list[Token] = parsed["tokens"]
-    forward: dict[int, int] = parsed["forward"]
-    declarations: list[dict[str, Any]] = []
-    brace_depth = 0
-    index = 0
-    excluded = {
-        "alignof",
-        "catch",
-        "decltype",
-        "for",
-        "if",
-        "sizeof",
-        "switch",
-        "while",
-    }
-    while index < len(tokens):
-        value = tokens[index].value
-        if value == "{":
-            brace_depth += 1
-            index += 1
-            continue
-        if value == "}":
-            brace_depth = max(0, brace_depth - 1)
-            index += 1
-            continue
-        if value != "(" or brace_depth or index not in forward or index == 0:
-            index += 1
-            continue
-        name_index = index - 1
-        name_token = tokens[name_index]
-        if (
-            name_token.kind != "identifier"
-            or name_token.value in excluded
-            or name_token.value in _SOURCE_MACROS
-            or name_token.value.startswith(_SOURCE_MACRO_PREFIXES)
-            or (name_index > 0 and tokens[name_index - 1].value == "::")
-        ):
-            index = forward[index] + 1
-            continue
-        start = name_index - 1
-        while start >= 0 and tokens[start].value not in {";", "{", "}"}:
-            start -= 1
-        start += 1
-        if any(
-            token.value in {"=", "return"}
-            for token in tokens[start:index]
-        ):
-            index = forward[index] + 1
-            continue
-        close = forward[index]
-        cursor = close + 1
-        while cursor < len(tokens) and tokens[cursor].value not in {";", "{"}:
-            cursor += 1
-        if cursor >= len(tokens) or tokens[cursor].value != ";" or start >= name_index:
-            index = close + 1
-            continue
-        classification = _classify_declaration(
-            tokens, forward, start, cursor
-        )
-        if (
-            classification["kind"] != "callable"
-            or classification.get("name_index") != name_index
-            or classification.get("parameter_open") != index
-        ):
-            index = close + 1
-            continue
-        declarations.append(
-            {
-                "name": name_token.value,
-                "parameters": _raw(text, tokens, index + 1, close),
-                "signature": _raw(text, tokens, start, cursor),
-                "location": _location(tokens[start], tokens[cursor]),
-            }
-        )
-        index = cursor + 1
-    return declarations
+    return parse_free_function_declarations(
+        parsed["text"],
+        parsed["tokens"],
+        parsed["forward"],
+    )
 
 
 def _callable_parts(

@@ -76,9 +76,19 @@ _DECLARATION_PREFIXES = {
 
 _MEMBER_ANNOTATION_MACROS = {
     "GENERATED_BODY",
+    "GENERATED_IINTERFACE_BODY",
     "GENERATED_UCLASS_BODY",
+    "GENERATED_UINTERFACE_BODY",
     "GENERATED_USTRUCT_BODY",
     "UFUNCTION",
+}
+
+_SOURCE_ANNOTATION_MACROS = _MEMBER_ANNOTATION_MACROS | {
+    "UCLASS",
+    "UENUM",
+    "UINTERFACE",
+    "UPROPERTY",
+    "USTRUCT",
 }
 
 
@@ -133,6 +143,8 @@ def _classify_declaration(
         start += 2
     if start >= end:
         return {"kind": "ignored", "reason": "empty"}
+    if tokens[start].value == "friend":
+        return {"kind": "ignored", "reason": "friend-declaration"}
     if tokens[start].value in _NON_DECLARATION_STARTS | {
         "class",
         "enum",
@@ -276,6 +288,24 @@ def _classify_declaration(
         "name": tokens[name_index].value,
         "name_index": name_index,
     }
+
+
+def _callable_has_initializer_expression(
+    tokens: list[Token],
+    forward: dict[int, int],
+    classification: dict[str, Any],
+) -> bool:
+    """Identify call-shaped declarators that contain value expressions."""
+    if classification.get("kind") != "callable":
+        return False
+    open_index = int(classification["parameter_open"])
+    close_index = forward.get(open_index)
+    if close_index is None:
+        return False
+    return any(
+        token.kind in {"char", "number", "string"}
+        for token in tokens[open_index + 1 : close_index]
+    )
 
 
 def _member_start(tokens: list[Token], lower: int, index: int) -> int:
@@ -647,7 +677,144 @@ def parse_classes(text: str, tokens: list[Token]) -> tuple[list[dict[str, Any]],
                 "_token_range": (index, body_end + 1),
             }
         )
+    for item in classes:
+        owner = _type_owner_at(classes, int(item["_token_range"][0]), item)
+        item["owner"] = owner["qualified_name"] if owner else None
+        item["qualified_name"] = (
+            f"{item['owner']}::{item['name']}"
+            if item["owner"]
+            else item["name"]
+        )
     return classes, forward, reverse
+
+
+def _type_owner_at(
+    classes: list[dict[str, Any]],
+    token_index: int,
+    selected: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    owners = [
+        item
+        for item in classes
+        if item is not selected
+        and int(item["body_range"][0])
+        <= token_index
+        < int(item["body_range"][1])
+    ]
+    if not owners:
+        return None
+    return min(
+        owners,
+        key=lambda item: (
+            int(item["body_range"][1])
+            - int(item["body_range"][0])
+        ),
+    )
+
+
+def _inside_template_parameters(
+    tokens: list[Token],
+    index: int,
+) -> bool:
+    depth = 0
+    cursor = index - 1
+    while cursor >= 0 and tokens[cursor].value not in {";", "{", "}"}:
+        value = tokens[cursor].value
+        if value in {">", ">>"}:
+            depth += 2 if value == ">>" else 1
+        elif value == "<":
+            if depth:
+                depth -= 1
+            else:
+                return (
+                    cursor > 0
+                    and tokens[cursor - 1].value == "template"
+                )
+        cursor -= 1
+    return False
+
+
+def parse_type_forward_declarations(
+    tokens: list[Token],
+    classes: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Read class, struct, and enum declarations without bodies."""
+    results: list[dict[str, Any]] = []
+    for index, token in enumerate(tokens):
+        if token.value not in {"class", "struct", "enum"}:
+            continue
+        if (
+            token.value in {"class", "struct"}
+            and index > 0
+            and tokens[index - 1].value == "enum"
+        ):
+            continue
+        if _inside_template_parameters(tokens, index):
+            continue
+
+        cursor = index + 1
+        scoped = False
+        if (
+            token.value == "enum"
+            and cursor < len(tokens)
+            and tokens[cursor].value in {"class", "struct"}
+        ):
+            scoped = True
+            cursor += 1
+        terminator = next(
+            (
+                candidate
+                for candidate in range(cursor, len(tokens))
+                if tokens[candidate].value in {"{", ";"}
+            ),
+            None,
+        )
+        if (
+            terminator is None
+            or tokens[terminator].value != ";"
+        ):
+            continue
+        colon = next(
+            (
+                candidate
+                for candidate in range(cursor, terminator)
+                if tokens[candidate].value == ":"
+            ),
+            None,
+        )
+        name_end = colon if colon is not None else terminator
+        candidates = [
+            candidate
+            for candidate in range(cursor, name_end)
+            if tokens[candidate].kind == "identifier"
+            and tokens[candidate].value not in {"final"}
+        ]
+        if not candidates:
+            continue
+        name_index = candidates[-1]
+        if any(
+            int(item["_token_range"][0]) == index
+            for item in classes
+        ):
+            continue
+        owner = _type_owner_at(classes, index)
+        owner_name = owner["qualified_name"] if owner else None
+        item: dict[str, Any] = {
+            "kind": token.value,
+            "name": tokens[name_index].value,
+            "owner": owner_name,
+            "qualified_name": (
+                f"{owner_name}::{tokens[name_index].value}"
+                if owner_name
+                else tokens[name_index].value
+            ),
+            "location": _location(token, tokens[terminator]),
+            "_token_range": (index, terminator + 1),
+        }
+        if token.value == "enum":
+            item["scoped"] = scoped
+        results.append(item)
+    return results
 
 
 def _class_members(
@@ -728,20 +895,7 @@ def parse_external_definitions(
     tokens: list[Token],
     forward: dict[int, int],
 ) -> list[dict[str, Any]]:
-    namespace_braces: set[int] = set()
-    for namespace_index, token in enumerate(tokens):
-        if token.value != "namespace":
-            continue
-        cursor = namespace_index + 1
-        while cursor < len(tokens) and tokens[cursor].value not in {"{", ";"}:
-            cursor += 1
-        if (
-            cursor < len(tokens)
-            and tokens[cursor].value == "{"
-            and cursor in forward
-        ):
-            namespace_braces.add(cursor)
-
+    namespace_braces = _namespace_braces(tokens, forward)
     results: list[dict[str, Any]] = []
     active_braces: list[int] = []
     index = 1
@@ -823,6 +977,26 @@ def parse_external_definitions(
     return results
 
 
+def _namespace_braces(
+    tokens: list[Token],
+    forward: dict[int, int],
+) -> set[int]:
+    namespace_braces: set[int] = set()
+    for namespace_index, token in enumerate(tokens):
+        if token.value != "namespace":
+            continue
+        cursor = namespace_index + 1
+        while cursor < len(tokens) and tokens[cursor].value not in {"{", ";"}:
+            cursor += 1
+        if (
+            cursor < len(tokens)
+            and tokens[cursor].value == "{"
+            and cursor in forward
+        ):
+            namespace_braces.add(cursor)
+    return namespace_braces
+
+
 def parse_free_functions(
     text: str,
     tokens: list[Token],
@@ -842,19 +1016,32 @@ def parse_free_functions(
         "while",
     }
     results: list[dict[str, Any]] = []
-    brace_depth = 0
+    namespace_braces = _namespace_braces(tokens, forward)
+    active_braces: list[int] = []
     index = 0
     while index < len(tokens):
         value = tokens[index].value
         if value == "{":
-            brace_depth += 1
+            active_braces.append(index)
             index += 1
             continue
         if value == "}":
-            brace_depth = max(0, brace_depth - 1)
+            if (
+                active_braces
+                and forward.get(active_braces[-1]) == index
+            ):
+                active_braces.pop()
             index += 1
             continue
-        if value != "(" or brace_depth or index not in forward or index == 0:
+        if (
+            value != "("
+            or any(
+                brace not in namespace_braces
+                for brace in active_braces
+            )
+            or index not in forward
+            or index == 0
+        ):
             index += 1
             continue
 
@@ -898,4 +1085,128 @@ def parse_free_functions(
             }
         )
         index = body_end + 1
+    return results
+
+
+def parse_free_function_declarations(
+    text: str,
+    tokens: list[Token],
+    forward: dict[int, int],
+) -> list[dict[str, Any]]:
+    """Read file- or namespace-scope free-function declarations."""
+    excluded = {
+        "alignof",
+        "catch",
+        "decltype",
+        "for",
+        "if",
+        "sizeof",
+        "static_assert",
+        "switch",
+        "while",
+    }
+    namespace_braces = _namespace_braces(tokens, forward)
+    results: list[dict[str, Any]] = []
+    active_braces: list[int] = []
+    index = 0
+    while index < len(tokens):
+        value = tokens[index].value
+        if value == "{":
+            active_braces.append(index)
+            index += 1
+            continue
+        if value == "}":
+            if (
+                active_braces
+                and forward.get(active_braces[-1]) == index
+            ):
+                active_braces.pop()
+            index += 1
+            continue
+        if (
+            value != "("
+            or any(
+                brace not in namespace_braces
+                for brace in active_braces
+            )
+            or index not in forward
+            or index == 0
+        ):
+            index += 1
+            continue
+
+        name_index = index - 1
+        name_token = tokens[name_index]
+        if (
+            name_token.kind != "identifier"
+            or name_token.value in excluded
+            or name_token.value in _SOURCE_ANNOTATION_MACROS
+            or name_token.value.startswith(
+                (
+                    "DECLARE_",
+                    "DEFINE_",
+                    "IMPLEMENT_",
+                    "UE_DECLARE_",
+                    "UE_DEFINE_",
+                )
+            )
+            or (name_index > 0 and tokens[name_index - 1].value == "::")
+        ):
+            index = forward[index] + 1
+            continue
+
+        declaration_start = _member_start(tokens, 0, name_index)
+        if any(
+            token.value in {"=", "return"}
+            for token in tokens[declaration_start:index]
+        ):
+            index = forward[index] + 1
+            continue
+
+        close = forward[index]
+        cursor = close + 1
+        while cursor < len(tokens) and tokens[cursor].value not in {";", "{"}:
+            cursor += 1
+        if (
+            cursor >= len(tokens)
+            or tokens[cursor].value != ";"
+            or declaration_start >= name_index
+        ):
+            index = close + 1
+            continue
+        classification = _classify_declaration(
+            tokens,
+            forward,
+            declaration_start,
+            cursor,
+        )
+        if (
+            classification["kind"] != "callable"
+            or classification.get("name_index") != name_index
+            or classification.get("parameter_open") != index
+            or _callable_has_initializer_expression(
+                tokens,
+                forward,
+                classification,
+            )
+        ):
+            index = close + 1
+            continue
+        results.append(
+            {
+                "name": name_token.value,
+                "parameters": _raw(text, tokens, index + 1, close),
+                "signature": _raw(
+                    text,
+                    tokens,
+                    declaration_start,
+                    cursor,
+                ),
+                "location": _location(
+                    tokens[declaration_start],
+                    tokens[cursor],
+                ),
+            }
+        )
+        index = cursor + 1
     return results

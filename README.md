@@ -65,7 +65,7 @@ python tools/ue_inspect_module_entry.py --help
 | 构建 | `ue_inspect_cs_function.py` | `--source --function` | 检查一个 C# 文件中的同名成员函数 | `ue-itps.cs-function.v1` |
 | 模块 | `ue_inspect_module_entry.py` | `--rules` | 检查模块注册、回调清理和生命周期状态 | `ue-itps.module-entry-state.v12` |
 | C++ | `ue_list_cxx_includes.py` | `--source` | 列出直接 include、条件和文件来源 | `ue-itps.cxx-includes.v1` |
-| C++ | `ue_list_cxx_types.py` | `--source` | 列出类型、成员和相邻 UE 宏 | `ue-itps.cxx-types.v1` |
+| C++ | `ue_list_cxx_types.py` | `--source` | 列出类型、Interface 候选、全局变量、自由函数和成员锚点 | `ue-itps.cxx-types.v1` |
 | C++ | `ue_inspect_cxx_function.py` | `--source --function` | 检查全部同名函数定义及外部引用 | `ue-itps.cxx-function.v1` |
 
 `ue_resolve_plugins.py` 的 Profile 参数为：
@@ -92,7 +92,7 @@ python tools/ue_inspect_module_entry.py --help
 
 明确选择一个 .h/.hpp/.cpp/.cc
 ├─ include
-├─ 类型和成员
+├─ 类型、Interface 候选、全局变量、自由函数和成员锚点
 └─ 按函数名检查定义
 ```
 
@@ -157,17 +157,17 @@ python -m pip install -r requirements-dev.txt
 python -m unittest discover -s tests -v
 ```
 
-当前共有 45 项测试，全部使用临时目录构造最小 Engine、项目、Plugin、规则文件和 C++ 源码，不依赖本机 Unreal Engine，也不会修改真实项目。
+当前共有 52 项测试，全部使用临时目录构造最小 Engine、项目、Plugin、规则文件和 C++ 源码，不依赖本机 Unreal Engine，也不会修改真实项目。
 
 | 测试模块 | 数量 | 关注点 |
 |---|---:|---|
 | `test_contract_surface.py` | 8 | 16 个 CLI、正式 Schema、双语帮助、统一错误信封和退出码 |
 | `test_project_layer.py` | 10 | 项目发现、描述符、Engine、Module、Target、Plugin、C++ 源码、路径 |
 | `test_build_layer.py` | 9 | `.uplugin`、ModuleRules、TargetRules、C# 函数、模块入口 |
-| `test_source_layer.py` | 10 | C++ 上下文、include、类型、函数、头文件推导 |
+| `test_source_layer.py` | 17 | C++ 上下文、include、声明锚点、函数、头文件推导 |
 | `test_boundary_cases.py` | 7 | 歧义、非法输入、重复定位、损坏语法、保守失败 |
 | `test_navigation_workflow.py` | 1 | 16 个 CLI 的完整显式导航流程 |
-| **合计** | **45** | 当前公开行为与关键失败边界 |
+| **合计** | **52** | 当前公开行为与关键失败边界 |
 
 ## 仓库结构
 
@@ -194,7 +194,8 @@ python -m unittest discover -s tests -v
 - Plugin 解析只覆盖 `.uproject` 的直接引用，不计算完整传递闭包。
 - Build.cs 和 Target.cs 只解析受支持的 C# 子集，不执行规则代码。
 - include 的唯一物理候选不等于编译器实际选中或依赖声明正确。
-- 类型与函数结果是词法事实，不是完整 C++ 类型系统或调用图。
+- Class、Struct 和 Enum 锚点使用 `role` 区分声明/定义；嵌套 Class/Struct 使用 `owner` 和 `qualified_name` 保留词法层级。
+- 声明锚点与函数结果是词法事实；Interface 候选不等于 UHT 已确认接口，也不是完整 C++ 符号表、类型系统或调用图。
 - 模块生命周期结果是保守静态投影，不证明实际加载顺序、线程或运行状态。
 - 路径分类不读取目录内容，也不提供删除安全性结论。
 - 编译、启动、资产、配置合并、网络与平台行为仍需 Unreal 权威工具验证。

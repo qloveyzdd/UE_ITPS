@@ -13,6 +13,7 @@ from .source_declarations import (
     parse_classes,
     parse_external_definitions,
     parse_free_functions,
+    parse_type_forward_declarations,
 )
 from .source_flow import condition_spans, control_spans
 from .source_operations import parse_operations
@@ -304,6 +305,10 @@ def parse_cpp_file(path: Path) -> dict[str, Any]:
     classes, forward, reverse = parse_classes(text, tokens)
     external = parse_external_definitions(text, tokens, forward)
     free_functions = parse_free_functions(text, tokens, forward)
+    forward_declarations = parse_type_forward_declarations(
+        tokens,
+        classes,
+    )
     return {
         "path": normalized(resolved),
         "text": text,
@@ -313,6 +318,7 @@ def parse_cpp_file(path: Path) -> dict[str, Any]:
         "classes": classes,
         "external_definitions": external,
         "free_functions": free_functions,
+        "forward_declarations": forward_declarations,
         "registration_macros": registration_macros(text, tokens),
         "problems": delimiter_problems(tokens),
     }

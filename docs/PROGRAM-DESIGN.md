@@ -24,7 +24,7 @@ UE ITPS 解决的是“如何从一个明确的 Unreal Engine 项目或源码入
 |---|---|---|
 | Engine 身份 | 关联值、候选根目录、`Build.version` | 实际构建或启动环境 |
 | Module / Target | 描述符、Build.cs、Target.cs、注册宏 | UnrealBuildTool |
-| UE 反射 | 类型、成员和相邻宏的词法事实 | UnrealHeaderTool |
+| UE 反射 | 类型、Interface 候选、全局变量、自由函数、成员锚点和相邻宏的词法事实 | UnrealHeaderTool |
 | include | 拼写、条件、唯一物理候选和 owner | 编译器与 UBT include path |
 | Plugin | `.uproject` 直接声明和物理描述符 | 完整 UBT Plugin 选择 |
 | 模块生命周期 | 注册、受支持回调、清理和状态投影 | Editor 或程序运行时 |
@@ -74,7 +74,7 @@ UE ITPS 解决的是“如何从一个明确的 Unreal Engine 项目或源码入
 三个工具共享源码上下文和 `source_unit` 约定，但按需加载各自需要的分析：
 
 - include 工具只提取直接 include、预处理条件和物理来源。
-- type 工具解析类型、继承、成员名和相邻 UE 宏。
+- type 工具按类别输出 Class、Struct、Enum、Interface 候选、Global Variable、Free Function，以及 Class/Struct 的成员锚点和相邻 UE 宏。类型锚点区分声明/定义，并为嵌套 Class/Struct 保留词法 owner。
 - function 工具按函数名返回全部定义、声明关系、外部类型和成员调用。
 
 它们只读取明确选择的 `.h/.hpp/.cpp/.cc` 以及至多一个自动推导的同名配对文件，不递归读取 include。实现文件会寻找头文件，头文件也会寻找实现文件。
@@ -129,7 +129,7 @@ UE ITPS 解决的是“如何从一个明确的 Unreal Engine 项目或源码入
 
 - `source_tokens.py`：C#/C++ 共用词法 Token 和分隔符诊断。
 - `source_parser.py`：类、函数、注册宏及规则文件入口解析。
-- `source_declarations.py`：类型和成员声明。
+- `source_declarations.py`：类型、成员和文件/命名空间级自由函数声明。
 - `source_operations.py`：赋值、调用和表达式操作。
 - `source_flow.py`、`source_controls.py`：控制路径和条件元数据。
 - `rule_source.py`：ModuleRules 与 TargetRules 公开投影。
@@ -155,7 +155,7 @@ UE ITPS 解决的是“如何从一个明确的 Unreal Engine 项目或源码入
 
 - `source_context.py`：校验源码、发现最近项目、推导头文件、建立根路径和 Module 上下文。
 - `source_includes.py`、`source_include_facts.py`：include 提取、定位和公开投影。
-- `source_type_facts.py`：类型、成员和宏投影。
+- `source_type_facts.py`：类型、Interface 候选、全局变量、自由函数、成员锚点和宏投影。
 - `source_function_facts.py`：函数关系、稳定 ID、外部类型和调用投影。
 - `source_fact_common.py`、`source_signatures.py`：共享证据、声明和签名规范化。
 - `source_preprocessor.py`：预处理分支条件。

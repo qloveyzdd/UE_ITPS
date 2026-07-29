@@ -6,6 +6,7 @@ from typing import Any
 
 from .source_includes import rooted_path
 from .source_declarations import (
+    _callable_has_initializer_expression,
     _classify_declaration,
     _declaration_assignment,
 )
@@ -25,7 +26,9 @@ _SOURCE_MACROS = {
     "UPROPERTY",
     "UFUNCTION",
     "GENERATED_BODY",
+    "GENERATED_IINTERFACE_BODY",
     "GENERATED_UCLASS_BODY",
+    "GENERATED_UINTERFACE_BODY",
     "GENERATED_USTRUCT_BODY",
 }
 _SOURCE_MACRO_PREFIXES = ("DECLARE_", "IMPLEMENT_")
@@ -272,7 +275,20 @@ def _declaration_variables(
             statement_start,
             semicolon,
         )
-        if classification["kind"] in {"ignored", "callable"}:
+        if classification["kind"] == "callable":
+            if not _callable_has_initializer_expression(
+                tokens,
+                parsed["forward"],
+                classification,
+            ):
+                continue
+            classification = {
+                "kind": "variable",
+                "name": classification["name"],
+                "name_index": classification["name_index"],
+                "direct_initializer": True,
+            }
+        if classification["kind"] == "ignored":
             continue
         if classification["kind"] == "unresolved":
             item: dict[str, Any] = {
@@ -295,10 +311,23 @@ def _declaration_variables(
             continue
         name = classification["name"]
         name_index = int(classification["name_index"])
+        if (
+            scope == "file"
+            and name_index > statement_start
+            and tokens[name_index - 1].value == "::"
+        ):
+            continue
         assignment = _declaration_assignment(
             tokens, statement_start, semicolon
         )
-        if name_index == assignment - 1:
+        if classification.get("direct_initializer"):
+            type_expression = _raw(
+                text,
+                tokens,
+                statement_start,
+                name_index,
+            )
+        elif name_index == assignment - 1:
             type_expression = _raw(
                 text, tokens, statement_start, name_index
             )
@@ -349,6 +378,13 @@ def _source_declaration_facts(
         global_excluded = _excluded_token_ranges(
             parsed, include_classes=True, include_callables=True
         )
+        global_excluded.extend(
+            (
+                int(item["_token_range"][0]),
+                int(item["_token_range"][1]),
+            )
+            for item in parsed.get("forward_declarations", [])
+        )
         file_variables, file_unresolved = _declaration_variables(
             parsed,
             path,
@@ -368,6 +404,27 @@ def _source_declaration_facts(
                 for member in class_item["members"]
                 if member["body_range"] is not None
             ]
+            member_excluded.extend(
+                (
+                    int(nested["_token_range"][0]),
+                    int(nested["_token_range"][1]),
+                )
+                for nested in parsed["classes"]
+                if nested is not class_item
+                and int(class_item["body_range"][0])
+                <= int(nested["_token_range"][0])
+                < int(class_item["body_range"][1])
+            )
+            member_excluded.extend(
+                (
+                    int(item["_token_range"][0]),
+                    int(item["_token_range"][1]),
+                )
+                for item in parsed.get("forward_declarations", [])
+                if int(class_item["body_range"][0])
+                <= int(item["_token_range"][0])
+                < int(class_item["body_range"][1])
+            )
             member_variables, member_unresolved = _declaration_variables(
                 parsed,
                 path,

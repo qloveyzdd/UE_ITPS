@@ -115,8 +115,10 @@ class NavigationWorkflowTests(FixtureTestCase):
 
         cxx_functions = {
             member["name"]
-            for item in results["ue_list_cxx_types.py"]["types"]
-            for member in item.get("member_details", {}).get("functions", [])
+            for category in ("classes", "structs")
+            for item in results["ue_list_cxx_types.py"][category]
+            for member in item["member_anchors"]
+            if member["kind"] == "function"
         }
         self.assertIn("Execute", cxx_functions)
         self.assertEqual(
