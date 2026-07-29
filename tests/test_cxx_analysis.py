@@ -712,11 +712,6 @@ class CxxAnalysisTests(WorkspaceTestCase):
                     "evidence": {"unit": "cpp", "line": 10},
                 },
                 {
-                    "kind": "type",
-                    "spelling": "FCoreDelegates",
-                    "evidence": {"unit": "cpp", "line": 11},
-                },
-                {
                     "kind": "unknown",
                     "spelling": (
                         "FCoreDelegates::OnPostEngineInit."
@@ -753,6 +748,64 @@ class CxxAnalysisTests(WorkspaceTestCase):
                     "kind": "unknown",
                     "spelling": "ExternalRegistry.Service()",
                     "evidence": {"unit": "cpp", "line": 13},
+                },
+            ],
+        )
+
+    def test_function_calls_require_confirmed_symbol_categories(self) -> None:
+        write_text(self.fixture.header_file, "#pragma once")
+        write_text(
+            self.fixture.source_file,
+            """
+            class UConsumer
+            {
+                TFunction<void()> MemberCallback;
+                void Execute(TFunction<void()> Callback);
+            };
+            class FConfirmedType
+            {
+            public:
+                static void Sort();
+            };
+            void UConsumer::Execute(TFunction<void()> Callback)
+            {
+                TFunction<void()> LocalCallback = Callback;
+                Callback();
+                LocalCallback();
+                MemberCallback();
+                Algo::Sort(Values);
+                FConfirmedType::Sort();
+            }
+            """,
+        )
+        result = self.source_result(
+            "ue_inspect_cxx_function.py",
+            "--function",
+            "Execute",
+        )
+        self.assertEqual(
+            result["matches"][0]["external_symbols"],
+            [
+                {
+                    "kind": "type",
+                    "spelling": "TFunction<void()>",
+                    "evidence": {"unit": "cpp", "line": 11},
+                },
+                {
+                    "kind": "unknown",
+                    "spelling": "Algo::Sort(Values)",
+                    "evidence": {"unit": "cpp", "line": 17},
+                },
+                {
+                    "kind": "type",
+                    "spelling": "FConfirmedType",
+                    "evidence": {"unit": "cpp", "line": 18},
+                },
+                {
+                    "kind": "member_call",
+                    "spelling": "FConfirmedType::Sort()",
+                    "owner_type": "FConfirmedType",
+                    "evidence": {"unit": "cpp", "line": 18},
                 },
             ],
         )

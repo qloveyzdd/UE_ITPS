@@ -6,7 +6,7 @@ from typing import Any
 
 from .source_context import load_source_context, source_result
 from .source_controls import _member_chain_start
-from .source_declarations import _classify_declaration
+from .source_declarations import _TYPE_KEYWORDS, _classify_declaration
 from .source_fact_common import (
     _declaration_variables,
     _source_declaration_facts,
@@ -303,6 +303,7 @@ def _member_call_facts(
     part: dict[str, Any],
     loaded: dict[str, Any],
     symbol_types: dict[str, str],
+    confirmed_type_names: set[str],
 ) -> tuple[list[dict[str, Any]], set[int]]:
     parsed = loaded["parsed_by_path"][part["_path"]]
     text = parsed["text"]
@@ -339,7 +340,11 @@ def _member_call_facts(
             receiver_expression = _canonical_type_expression(
                 _raw_from_values(receiver_tokens)
             )
-            if _is_external_type_expression(receiver_expression, part):
+            if (
+                receiver_expression in confirmed_type_names
+                or receiver_expression.rsplit("::", 1)[-1]
+                in confirmed_type_names
+            ):
                 owner_type = receiver_expression
         elif receiver_identifiers:
             receiver_root = receiver_identifiers[0]
@@ -548,6 +553,7 @@ def _bare_call_facts(
     loaded: dict[str, Any],
     call_name_indices: set[int],
     known_type_names: set[str],
+    variable_names: set[str],
 ) -> list[dict[str, Any]]:
     parsed = loaded["parsed_by_path"][part["_path"]]
     text = parsed["text"]
@@ -588,6 +594,8 @@ def _bare_call_facts(
         name = tokens[name_index].value
         if (
             name in known_type_names
+            or name in variable_names
+            or name in _TYPE_KEYWORDS
             or name in ignored_macros
             or name in control_keywords
             or name.isupper()
@@ -628,6 +636,7 @@ def _bare_call_facts(
 def _qualified_type_facts(
     part: dict[str, Any],
     loaded: dict[str, Any],
+    confirmed_type_names: set[str],
 ) -> list[dict[str, Any]]:
     parsed = loaded["parsed_by_path"][part["_path"]]
     tokens: list[Token] = parsed["tokens"]
@@ -638,7 +647,8 @@ def _qualified_type_facts(
         if (
             token.kind != "identifier"
             or tokens[index + 1].value != "::"
-            or not _is_external_type_expression(token.value, part)
+            or token.value not in confirmed_type_names
+            or token.value == part["owner"]
             or (
                 index > start
                 and tokens[index - 1].value == "::"
@@ -655,6 +665,31 @@ def _qualified_type_facts(
             )
         )
     return results
+
+
+def _confirmed_type_names(
+    loaded: dict[str, Any],
+    type_facts: list[dict[str, Any]],
+) -> set[str]:
+    names = {
+        value
+        for _, parsed in loaded["parsed_files"]
+        for item in [
+            *parsed["classes"],
+            *parsed.get("forward_declarations", []),
+        ]
+        for value in {
+            item["name"],
+            item.get("qualified_name"),
+        }
+        if value
+    }
+    names.update(
+        outer_type
+        for item in type_facts
+        if (outer_type := _primary_type_name(item["spelling"]))
+    )
+    return names
 
 
 def _public_external_symbols(
@@ -730,6 +765,7 @@ def inspect_source_function(
                 "External means outside the selected function semantic unit, including symbols declared in the selected file or its companion.",
                 "Symbol kinds are lexical candidate categories, not call, read, write, or ownership relations.",
                 "Type names and receiver types are derived from locally visible declaration syntax; wrapped template types remain one expression.",
+                "A scope-qualified call is a member_call only when the selected source unit confirms its receiver as a type; otherwise it remains unknown.",
                 "Function addresses and callback targets are distinguished only when local callable declarations or recognized callback API syntax provide evidence.",
                 "Called functions, inheritance, overloads, macros, and included source are not followed.",
             ],
@@ -760,26 +796,26 @@ def inspect_source_function(
         symbol_types, type_facts, local_names = _function_symbol_context(
             candidate, loaded
         )
+        confirmed_type_names = _confirmed_type_names(
+            loaded, type_facts
+        )
         member_calls, member_call_indices = _member_call_facts(
-            candidate, loaded, symbol_types
+            candidate,
+            loaded,
+            symbol_types,
+            confirmed_type_names,
         )
         callable_names = {
             item["name"] for item in loaded["parts"]
         }
-        known_type_names = {
-            class_item["name"]
-            for _, source_parsed in loaded["parsed_files"]
-            for class_item in source_parsed["classes"]
-        }
-        known_type_names.update(
-            outer_type
-            for item in type_facts
-            if (outer_type := _primary_type_name(item["spelling"]))
-        )
         external_symbols = _public_external_symbols(
             [
                 *type_facts,
-                *_qualified_type_facts(candidate, loaded),
+                *_qualified_type_facts(
+                    candidate,
+                    loaded,
+                    confirmed_type_names,
+                ),
                 *_global_variable_facts(
                     candidate, loaded, local_names
                 ),
@@ -787,7 +823,8 @@ def inspect_source_function(
                     candidate,
                     loaded,
                     member_call_indices,
-                    known_type_names,
+                    confirmed_type_names,
+                    local_names,
                 ),
                 *member_calls,
                 *_function_address_facts(
@@ -821,6 +858,7 @@ def inspect_source_function(
             "External means outside the selected function semantic unit, including symbols declared in the selected file or its companion.",
             "Symbol kinds are lexical candidate categories, not call, read, write, or ownership relations.",
             "Type names and receiver types are derived from locally visible declaration syntax; wrapped template types remain one expression.",
+            "A scope-qualified call is a member_call only when the selected source unit confirms its receiver as a type; otherwise it remains unknown.",
             "Function addresses and callback targets are distinguished only when local callable declarations or recognized callback API syntax provide evidence.",
             "Called functions, inheritance, overloads, macros, and included source are not followed.",
         ],
