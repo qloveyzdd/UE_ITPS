@@ -5,14 +5,16 @@ import re
 from typing import Any
 
 from .common import iter_files, normalized
+from .source_callable_declarations import (
+    parse_external_definitions,
+    parse_free_functions,
+)
 from .source_controls import _registration_preprocessor_contexts
 from .source_controls import control_expression_ranges
 from .source_declarations import (
     _class_field_details,
     _local_declaration_details,
     parse_classes,
-    parse_external_definitions,
-    parse_free_functions,
     parse_type_forward_declarations,
 )
 from .source_flow import condition_spans, control_spans

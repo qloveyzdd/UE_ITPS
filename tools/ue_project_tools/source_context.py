@@ -95,6 +95,166 @@ def _lightweight_source(path: Path) -> dict[str, Any]:
     }
 
 
+def _parse_source_pair(
+    selected_source: Path | None,
+    selected_header: Path | None,
+    *,
+    load_cpp_analysis: bool,
+) -> list[tuple[Path, dict[str, Any]]]:
+    parsed_files: list[tuple[Path, dict[str, Any]]] = []
+    for path in (selected_source, selected_header):
+        if path is None:
+            continue
+        parsed = (
+            parse_cpp_file(path)
+            if load_cpp_analysis
+            else _lightweight_source(path)
+        )
+        parsed_files.append((path, parsed))
+    return parsed_files
+
+
+def _collect_include_facts(
+    parsed_files: list[tuple[Path, dict[str, Any]]],
+    records: list[dict[str, Any]],
+    project_root: Path,
+    engine_root: Path | None,
+    header_locations: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    includes: list[dict[str, Any]] = []
+    problems: list[dict[str, Any]] = []
+    messages = {
+        "ambiguous": "Include resolved to multiple filesystem candidates",
+        "not_found": "Include could not be located in known source roots",
+        "macro_unresolved": "Include macro could not be resolved statically",
+    }
+    retained_unresolved = {
+        "generated_header",
+        "generated_source",
+        "system_or_sdk_unresolved",
+    }
+    for path, parsed in parsed_files:
+        unit = _source_unit_kind(path)
+        for include in extract_includes(str(parsed["text"])):
+            resolution = resolve_include(
+                include,
+                path,
+                records,
+                project_root,
+                engine_root,
+            )
+            resolved_locations = [
+                *(
+                    [resolution["location"]]
+                    if "location" in resolution
+                    else []
+                ),
+                *[
+                    candidate["location"]
+                    for candidate in resolution.get("candidates", [])
+                ],
+            ]
+            if any(
+                location in header_locations
+                for location in resolved_locations
+            ):
+                continue
+
+            fact = {
+                "spelling": include["spelling"],
+                "conditions": include["conditions"],
+                "evidence": {
+                    "unit": unit,
+                    "line": int(include["line"]),
+                },
+                "resolution": resolution,
+            }
+            status = str(resolution["status"])
+            if status == "resolved":
+                fact["resolution"] = {
+                    key: value
+                    for key, value in resolution.items()
+                    if key != "status"
+                }
+                includes.append(fact)
+            elif status in retained_unresolved:
+                includes.append(fact)
+            else:
+                problems.append(
+                    {
+                        "severity": "warning",
+                        "code": (
+                            f"source-include-{status.replace('_', '-')}"
+                        ),
+                        "include": fact,
+                        "message": messages.get(
+                            status,
+                            "Include provenance could not be resolved",
+                        ),
+                    }
+                )
+    return includes, problems
+
+
+def _source_context_problems(
+    engine_result: dict[str, Any],
+    source_owner: dict[str, Any] | None,
+    source: Path,
+    source_is_header: bool,
+    companion_candidates: list[Path],
+    parsed_files: list[tuple[Path, dict[str, Any]]],
+    project_root: Path,
+    engine_root: Path | None,
+) -> list[dict[str, Any]]:
+    problems: list[dict[str, Any]] = []
+    if engine_result["status"] != "resolved":
+        problems.append(
+            {
+                "severity": "warning",
+                "code": "source-unit-engine-unresolved",
+                "message": (
+                    "Engine provenance could not be resolved; project source "
+                    "facts remain available but Engine ownership may be "
+                    "incomplete"
+                ),
+            }
+        )
+    if source_owner is None:
+        problems.append(
+            {
+                "severity": "warning",
+                "code": "source-unit-owner-unresolved",
+                "source": rooted_path(source, project_root, engine_root),
+                "message": "No enclosing Build.cs source boundary was found",
+            }
+        )
+    if len(companion_candidates) > 1:
+        companion_kind = "source" if source_is_header else "header"
+        problems.append(
+            {
+                "severity": "warning",
+                "code": f"source-unit-{companion_kind}-ambiguous",
+                "candidates": [
+                    rooted_path(candidate, project_root, engine_root)
+                    for candidate in companion_candidates
+                ],
+                "message": (
+                    "Multiple automatically derived companion "
+                    f"{companion_kind} files were found"
+                ),
+            }
+        )
+    for path, parsed in parsed_files:
+        problems.extend(
+            {
+                **problem,
+                "source": rooted_path(path, project_root, engine_root),
+            }
+            for problem in parsed["problems"]
+        )
+    return problems
+
+
 def load_source_context(
     source_file: Path,
     engine_override: Path | None = None,
@@ -152,134 +312,32 @@ def load_source_context(
         rooted_path(candidate, project_root, engine_root)
         for candidate in header_candidates
     ]
-
-    parsed_files: list[tuple[Path, dict[str, Any]]] = []
-    for path in (selected_source, selected_header):
-        if path is None:
-            continue
-        parsed = (
-            parse_cpp_file(path)
-            if load_cpp_analysis
-            else _lightweight_source(path)
-        )
-        parsed_files.append((path, parsed))
-    all_includes: list[dict[str, Any]] = []
-    include_problems: list[dict[str, Any]] = []
-
-    def collect_include(
-        include: dict[str, Any],
-        unit: str,
-        including_file: Path,
-    ) -> None:
-        resolution = resolve_include(
-            include,
-            including_file,
+    parsed_files = _parse_source_pair(
+        selected_source,
+        selected_header,
+        load_cpp_analysis=load_cpp_analysis,
+    )
+    includes, include_problems = (
+        _collect_include_facts(
+            parsed_files,
             records,
             project_root,
             engine_root,
+            header_locations,
         )
-        resolved_locations = [
-            *([resolution["location"]] if "location" in resolution else []),
-            *[
-                candidate["location"]
-                for candidate in resolution.get("candidates", [])
-            ],
-        ]
-        if any(location in header_locations for location in resolved_locations):
-            return
-
-        fact = {
-            "spelling": include["spelling"],
-            "conditions": include["conditions"],
-            "evidence": {
-                "unit": unit,
-                "line": int(include["line"]),
-            },
-            "resolution": resolution,
-        }
-        status = str(resolution["status"])
-        if status == "resolved":
-            fact["resolution"] = {
-                key: value
-                for key, value in resolution.items()
-                if key != "status"
-            }
-            all_includes.append(fact)
-            return
-        if status in {
-            "generated_header",
-            "generated_source",
-            "system_or_sdk_unresolved",
-        }:
-            all_includes.append(fact)
-            return
-
-        messages = {
-            "ambiguous": "Include resolved to multiple filesystem candidates",
-            "not_found": "Include could not be located in known source roots",
-            "macro_unresolved": "Include macro could not be resolved statically",
-        }
-        include_problems.append(
-            {
-                "severity": "warning",
-                "code": f"source-include-{status.replace('_', '-')}",
-                "include": fact,
-                "message": messages.get(
-                    status, "Include provenance could not be resolved"
-                ),
-            }
-        )
-
-    if load_includes:
-        for path, parsed in parsed_files:
-            for include in extract_includes(str(parsed["text"])):
-                collect_include(include, _source_unit_kind(path), path)
-
-    problems: list[dict[str, Any]] = []
-    if engine_result["status"] != "resolved":
-        problems.append(
-            {
-                "severity": "warning",
-                "code": "source-unit-engine-unresolved",
-                "message": (
-                    "Engine provenance could not be resolved; project source facts "
-                    "remain available but Engine ownership may be incomplete"
-                ),
-            }
-        )
-    if source_owner is None:
-        problems.append(
-            {
-                "severity": "warning",
-                "code": "source-unit-owner-unresolved",
-                "source": rooted_path(source, project_root, engine_root),
-                "message": "No enclosing Build.cs source boundary was found",
-            }
-        )
-    if len(companion_candidates) > 1:
-        companion_kind = "source" if source_is_header else "header"
-        problems.append(
-            {
-                "severity": "warning",
-                "code": f"source-unit-{companion_kind}-ambiguous",
-                "candidates": [
-                    rooted_path(candidate, project_root, engine_root)
-                    for candidate in companion_candidates
-                ],
-                "message": (
-                    "Multiple automatically derived companion "
-                    f"{companion_kind} files were found"
-                ),
-            }
-        )
-    for path, parsed in parsed_files:
-        for problem in parsed["problems"]:
-            problems.append(
-                {
-                    **problem,
-                    "source": rooted_path(path, project_root, engine_root),
-                }
-            )
+        if load_includes
+        else ([], [])
+    )
+    problems = _source_context_problems(
+        engine_result,
+        source_owner,
+        source,
+        source_is_header,
+        companion_candidates,
+        parsed_files,
+        project_root,
+        engine_root,
+    )
 
     source_fact = (
         rooted_path(selected_source, project_root, engine_root)
@@ -309,7 +367,7 @@ def load_source_context(
             "source": source_fact,
             "header": header_fact,
         },
-        "includes": all_includes,
+        "includes": includes,
         "include_problems": include_problems,
         "parsed_files": parsed_files,
         "parsed_by_path": {path: parsed for path, parsed in parsed_files},

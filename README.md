@@ -164,7 +164,10 @@ python -m unittest discover -s tests -v
 | `test_contract_surface.py` | 8 | 16 个 CLI、正式 Schema、双语帮助、统一错误信封和退出码 |
 | `test_project_layer.py` | 10 | 项目发现、描述符、Engine、Module、Target、Plugin、C++ 源码、路径 |
 | `test_build_layer.py` | 9 | `.uplugin`、ModuleRules、TargetRules、C# 函数、模块入口 |
-| `test_source_layer.py` | 17 | C++ 上下文、include、声明锚点、函数、头文件推导 |
+| `test_source_unit.py` | 8 | C++ 上下文和源码单元配对 |
+| `test_source_includes.py` | 3 | include 定位、状态和条件 |
+| `test_source_types.py` | 3 | 类型、成员和声明锚点 |
+| `test_source_functions.py` | 3 | 函数关系、外部引用和选择 |
 | `test_boundary_cases.py` | 7 | 歧义、非法输入、重复定位、损坏语法、保守失败 |
 | `test_navigation_workflow.py` | 1 | 16 个 CLI 的完整显式导航流程 |
 | **合计** | **52** | 当前公开行为与关键失败边界 |
@@ -178,7 +181,7 @@ python -m unittest discover -s tests -v
 │  └─ ue_project_tools/       # 发现、解析、验证与事实投影
 ├─ tests/
 │  ├─ fixture.py              # 共享最小 UE 夹具与 CLI 断言
-│  └─ test_*.py               # 45 项自动化测试
+│  └─ test_*.py               # 52 项自动化测试
 ├─ schemas/                   # Draft 2020-12 公共结果契约
 ├─ requirements-dev.txt       # Schema 测试依赖
 ├─ docs/PROGRAM-DESIGN.md     # 架构、契约和扩展规则

@@ -3,11 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .source_callable_declarations import parse_free_function_declarations
 from .source_context import load_source_context, source_result
 from .source_declarations import (
     _class_field_names,
     _type_owner_at,
-    parse_free_function_declarations,
 )
 from .source_tokens import (
     Token,
@@ -262,152 +262,113 @@ def _inherits_uinterface(base_types: list[str]) -> bool:
     )
 
 
-def _type_anchor_facts(
+def _type_definition_fact(
     loaded: dict[str, Any],
+    path: Path,
+    parsed: dict[str, Any],
+    class_item: dict[str, Any],
     variables: list[dict[str, Any]],
-) -> tuple[dict[str, list[dict[str, Any]]], list[dict[str, Any]]]:
-    project_root = loaded["project_root"]
-    engine_root = loaded["engine_root"]
-    classes: list[dict[str, Any]] = []
-    structs: list[dict[str, Any]] = []
-    enums: list[dict[str, Any]] = []
-    interface_sources: list[dict[str, Any]] = []
-    problems: list[dict[str, Any]] = []
-    for path, parsed in loaded["parsed_files"]:
-        for class_item in parsed["classes"]:
-            type_macros = _type_macros(
-                loaded, parsed, path, class_item
-            )
-            type_evidence = _type_evidence(
-                loaded,
-                path,
-                class_item["location"],
-                type_macros,
-            )
-            rooted_class_evidence = _public_location(
-                path,
-                class_item["location"],
-                project_root,
-                engine_root,
-            )
-            member_anchors, lexical_field_names, projected_field_names = (
-                _member_anchors(
-                    loaded,
-                    path,
-                    parsed,
-                    class_item,
-                    variables,
-                    rooted_class_evidence,
-                )
-            )
-            if lexical_field_names != projected_field_names:
-                problems.append(
-                    {
-                        "severity": "warning",
-                        "code": "source-type-member-projection-mismatch",
-                        "type": class_item["name"],
-                        "lexical_member_variables": lexical_field_names,
-                        "projected_member_variables": projected_field_names,
-                        "evidence": type_evidence,
-                        "message": (
-                            "Member-variable name and variable-detail "
-                            "projections disagree"
-                        ),
-                    }
-                )
-            public_item = {
-                "name": class_item["name"],
-                "qualified_name": class_item["qualified_name"],
-                "owner": class_item["owner"],
-                "role": "definition",
-                "base_types": class_item["base_types"],
-                "macros": [
-                    str(macro["_expression"])
-                    for macro in type_macros
-                ],
-                "member_anchors": member_anchors,
-                "evidence": type_evidence,
-            }
-            (
-                classes
-                if class_item["kind"] == "class"
-                else structs
-            ).append(public_item)
-            interface_sources.append(
-                {
-                    "declaration_kind": class_item["kind"],
-                    "name": class_item["name"],
-                    "qualified_name": class_item["qualified_name"],
-                    "owner": class_item["owner"],
-                    "base_types": class_item["base_types"],
-                    "macro_names": [
-                        str(macro["name"])
-                        for macro in type_macros
-                    ],
-                    "evidence": type_evidence,
-                }
-            )
-        for enum_item in _enums(
-            parsed, path, project_root, engine_root
-        ):
-            enum_macros = _type_macros(
-                loaded, parsed, path, enum_item
-            )
-            enums.append(
-                {
-                    **{
-                        key: value
-                        for key, value in enum_item.items()
-                        if key != "evidence"
-                    },
-                    "macros": [
-                        str(macro["_expression"])
-                        for macro in enum_macros
-                    ],
-                    "evidence": _type_evidence(
-                        loaded,
-                        path,
-                        enum_item["evidence"],
-                        enum_macros,
-                    ),
-                }
-            )
-        for declaration in parsed.get("forward_declarations", []):
-            evidence = _type_unit_evidence(
-                loaded,
-                path,
-                declaration["location"],
-            )
-            if declaration["kind"] == "enum":
-                enums.append(
-                    {
-                        "kind": "enum",
-                        "name": declaration["name"],
-                        "qualified_name": declaration["qualified_name"],
-                        "owner": declaration["owner"],
-                        "role": "declaration",
-                        "scoped": declaration["scoped"],
-                        "macros": [],
-                        "evidence": evidence,
-                    }
-                )
-                continue
-            public_item = {
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any] | None]:
+    type_macros = _type_macros(loaded, parsed, path, class_item)
+    type_evidence = _type_evidence(
+        loaded,
+        path,
+        class_item["location"],
+        type_macros,
+    )
+    rooted_class_evidence = _public_location(
+        path,
+        class_item["location"],
+        loaded["project_root"],
+        loaded["engine_root"],
+    )
+    member_anchors, lexical_field_names, projected_field_names = (
+        _member_anchors(
+            loaded,
+            path,
+            parsed,
+            class_item,
+            variables,
+            rooted_class_evidence,
+        )
+    )
+    problem = None
+    if lexical_field_names != projected_field_names:
+        problem = {
+            "severity": "warning",
+            "code": "source-type-member-projection-mismatch",
+            "type": class_item["name"],
+            "lexical_member_variables": lexical_field_names,
+            "projected_member_variables": projected_field_names,
+            "evidence": type_evidence,
+            "message": (
+                "Member-variable name and variable-detail projections disagree"
+            ),
+        }
+    public_item = {
+        "name": class_item["name"],
+        "qualified_name": class_item["qualified_name"],
+        "owner": class_item["owner"],
+        "role": "definition",
+        "base_types": class_item["base_types"],
+        "macros": [str(macro["_expression"]) for macro in type_macros],
+        "member_anchors": member_anchors,
+        "evidence": type_evidence,
+    }
+    interface_source = {
+        "declaration_kind": class_item["kind"],
+        "name": class_item["name"],
+        "qualified_name": class_item["qualified_name"],
+        "owner": class_item["owner"],
+        "base_types": class_item["base_types"],
+        "macro_names": [str(macro["name"]) for macro in type_macros],
+        "evidence": type_evidence,
+    }
+    return public_item, interface_source, problem
+
+
+def _forward_type_fact(
+    loaded: dict[str, Any],
+    path: Path,
+    declaration: dict[str, Any],
+) -> tuple[str, dict[str, Any]]:
+    evidence = _type_unit_evidence(
+        loaded,
+        path,
+        declaration["location"],
+    )
+    if declaration["kind"] == "enum":
+        return (
+            "enums",
+            {
+                "kind": "enum",
                 "name": declaration["name"],
                 "qualified_name": declaration["qualified_name"],
                 "owner": declaration["owner"],
                 "role": "declaration",
-                "base_types": [],
+                "scoped": declaration["scoped"],
                 "macros": [],
-                "member_anchors": [],
                 "evidence": evidence,
-            }
-            (
-                classes
-                if declaration["kind"] == "class"
-                else structs
-            ).append(public_item)
+            },
+        )
+    return (
+        "classes" if declaration["kind"] == "class" else "structs",
+        {
+            "name": declaration["name"],
+            "qualified_name": declaration["qualified_name"],
+            "owner": declaration["owner"],
+            "role": "declaration",
+            "base_types": [],
+            "macros": [],
+            "member_anchors": [],
+            "evidence": evidence,
+        },
+    )
 
+
+def _interface_candidate_facts(
+    interface_sources: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     uinterface_stems = {
         item["name"][1:]
         for item in interface_sources
@@ -418,12 +379,12 @@ def _type_anchor_facts(
             or _inherits_uinterface(item["base_types"])
         )
     }
-    interface_candidates: list[dict[str, Any]] = []
     generated_interface_macros = {
         "GENERATED_BODY",
         "GENERATED_IINTERFACE_BODY",
         "GENERATED_UINTERFACE_BODY",
     }
+    candidates: list[dict[str, Any]] = []
     for item in interface_sources:
         reasons: list[str] = []
         if "UINTERFACE" in item["macro_names"]:
@@ -444,7 +405,7 @@ def _type_anchor_facts(
         ):
             reasons.append("paired_uinterface")
         if reasons:
-            interface_candidates.append(
+            candidates.append(
                 {
                     "name": item["name"],
                     "qualified_name": item["qualified_name"],
@@ -454,14 +415,77 @@ def _type_anchor_facts(
                     "evidence": item["evidence"],
                 }
             )
+    return candidates
+
+
+def _type_anchor_facts(
+    loaded: dict[str, Any],
+    variables: list[dict[str, Any]],
+) -> tuple[dict[str, list[dict[str, Any]]], list[dict[str, Any]]]:
+    anchors: dict[str, list[dict[str, Any]]] = {
+        "classes": [],
+        "structs": [],
+        "enums": [],
+    }
+    interface_sources: list[dict[str, Any]] = []
+    problems: list[dict[str, Any]] = []
+    for path, parsed in loaded["parsed_files"]:
+        for class_item in parsed["classes"]:
+            public_item, interface_source, problem = _type_definition_fact(
+                loaded,
+                path,
+                parsed,
+                class_item,
+                variables,
+            )
+            bucket = (
+                "classes" if class_item["kind"] == "class" else "structs"
+            )
+            anchors[bucket].append(public_item)
+            interface_sources.append(interface_source)
+            if problem is not None:
+                problems.append(problem)
+        for enum_item in _enums(
+            parsed,
+            path,
+            loaded["project_root"],
+            loaded["engine_root"],
+        ):
+            enum_macros = _type_macros(loaded, parsed, path, enum_item)
+            anchors["enums"].append(
+                {
+                    **{
+                        key: value
+                        for key, value in enum_item.items()
+                        if key != "evidence"
+                    },
+                    "macros": [
+                        str(macro["_expression"])
+                        for macro in enum_macros
+                    ],
+                    "evidence": _type_evidence(
+                        loaded,
+                        path,
+                        enum_item["evidence"],
+                        enum_macros,
+                    ),
+                }
+            )
+        for declaration in parsed.get("forward_declarations", []):
+            bucket, public_item = _forward_type_fact(
+                loaded,
+                path,
+                declaration,
+            )
+            anchors[bucket].append(public_item)
 
     return (
         {
-            "classes": sorted(classes, key=_anchor_sort_key),
-            "structs": sorted(structs, key=_anchor_sort_key),
-            "enums": sorted(enums, key=_anchor_sort_key),
+            "classes": sorted(anchors["classes"], key=_anchor_sort_key),
+            "structs": sorted(anchors["structs"], key=_anchor_sort_key),
+            "enums": sorted(anchors["enums"], key=_anchor_sort_key),
             "interface_candidates": sorted(
-                interface_candidates,
+                _interface_candidate_facts(interface_sources),
                 key=_anchor_sort_key,
             ),
         },

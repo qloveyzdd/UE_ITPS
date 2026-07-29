@@ -129,7 +129,8 @@ UE ITPS 解决的是“如何从一个明确的 Unreal Engine 项目或源码入
 
 - `source_tokens.py`：C#/C++ 共用词法 Token 和分隔符诊断。
 - `source_parser.py`：类、函数、注册宏及规则文件入口解析。
-- `source_declarations.py`：类型、成员和文件/命名空间级自由函数声明。
+- `source_declarations.py`：类型、成员和声明分类。
+- `source_callable_declarations.py`：外部成员定义及文件/命名空间级自由函数声明。
 - `source_operations.py`：赋值、调用和表达式操作。
 - `source_flow.py`、`source_controls.py`：控制路径和条件元数据。
 - `rule_source.py`：ModuleRules 与 TargetRules 公开投影。
@@ -156,7 +157,9 @@ UE ITPS 解决的是“如何从一个明确的 Unreal Engine 项目或源码入
 - `source_context.py`：校验源码、发现最近项目、推导头文件、建立根路径和 Module 上下文。
 - `source_includes.py`、`source_include_facts.py`：include 提取、定位和公开投影。
 - `source_type_facts.py`：类型、Interface 候选、全局变量、自由函数、成员锚点和宏投影。
-- `source_function_facts.py`：函数关系、稳定 ID、外部类型和调用投影。
+- `source_function_index.py`：函数关系、稳定 ID 和函数索引投影。
+- `source_function_references.py`：单函数外部类型和调用投影。
+- `source_function_facts.py`：保留函数事实兼容导入入口。
 - `source_fact_common.py`、`source_signatures.py`：共享证据、声明和签名规范化。
 - `source_preprocessor.py`：预处理分支条件。
 - `source_unit.py`：保留兼容导入入口。
@@ -276,14 +279,17 @@ limits
 
 测试不读取 Lyra，不依赖已安装 Unreal Engine，不调用 UBT/UHT/Editor，也不修改真实项目。
 
-当前 45 项测试分布：
+当前 52 项测试分布：
 
 | 模块 | 数量 | 目标 |
 |---|---:|---|
 | `test_contract_surface.py` | 8 | CLI 清单、正式 Schema、帮助、退出码和统一 JSON 错误信封 |
 | `test_project_layer.py` | 10 | 项目级发现、导航事实和项目 C++ 源码清单 |
 | `test_build_layer.py` | 9 | Plugin、规则、C# 和模块入口 |
-| `test_source_layer.py` | 10 | C++ 上下文、include、类型和函数 |
+| `test_source_unit.py` | 8 | C++ 上下文和源码单元配对 |
+| `test_source_includes.py` | 3 | include 定位、状态和条件 |
+| `test_source_types.py` | 3 | 类型、成员和声明锚点 |
+| `test_source_functions.py` | 3 | 函数关系、外部引用和选择 |
 | `test_boundary_cases.py` | 7 | 歧义、损坏输入、保守失败与备用来源 |
 | `test_navigation_workflow.py` | 1 | 16 个 CLI 的端到端显式导航 |
 
