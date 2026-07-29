@@ -38,7 +38,7 @@ PUBLIC_CLIS = {
     "ue_inspect_module_entry.py": "ue-itps.module-entry-state.v12",
     "ue_list_cxx_includes.py": "ue-itps.cxx-includes.v1",
     "ue_list_cxx_types.py": "ue-itps.cxx-types.v1",
-    "ue_inspect_cxx_function.py": "ue-itps.cxx-function.v2",
+    "ue_inspect_cxx_function.py": "ue-itps.cxx-function.v1",
 }
 
 PATH_ARGUMENTS = {

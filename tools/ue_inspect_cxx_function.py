@@ -7,7 +7,7 @@ from ue_project_tools.common import cli_error_document, cli_parser, json_text
 from ue_project_tools.source_unit import inspect_source_function
 
 
-SCHEMA_VERSION = "ue-itps.cxx-function.v2"
+SCHEMA_VERSION = "ue-itps.cxx-function.v1"
 RESPONSIBILITY = (
     "Report external symbols referenced by all definitions matching one function name."
 )

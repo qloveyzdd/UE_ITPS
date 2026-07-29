@@ -753,7 +753,7 @@ def inspect_source_function(
     ]
     if not candidates:
         return source_result(
-            "ue-itps.cxx-function.v2",
+            "ue-itps.cxx-function.v1",
             loaded,
             {
                 "selection": {"name": function_name},
@@ -846,7 +846,7 @@ def inspect_source_function(
             }
         )
     return source_result(
-        "ue-itps.cxx-function.v2",
+        "ue-itps.cxx-function.v1",
         loaded,
         {
             "selection": {"name": function_name},

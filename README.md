@@ -74,7 +74,7 @@ python tools/ue_inspect_module_entry.py --help
 | Module | `ue_inspect_module_entry.py` | `--rules` | 检查注册、回调清理和生命周期状态 | `ue-itps.module-entry-state.v12` |
 | C++ | `ue_list_cxx_includes.py` | `--source` | 列出直接 include、条件和物理来源 | `ue-itps.cxx-includes.v1` |
 | C++ | `ue_list_cxx_types.py` | `--source` | 列出带命名空间、声明/定义角色和链接属性的语义单位锚点 | `ue-itps.cxx-types.v1` |
-| C++ | `ue_inspect_cxx_function.py` | `--source --function` | 检查全部同名定义及其引用的外部符号 | `ue-itps.cxx-function.v2` |
+| C++ | `ue_inspect_cxx_function.py` | `--source --function` | 检查全部同名定义及其引用的外部符号 | `ue-itps.cxx-function.v1` |
 
 `ue_resolve_plugins.py` 支持以下 Profile 参数：
 

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:ue-itps:schema:cxx-function:v2",
+  "$id": "urn:ue-itps:schema:cxx-function:v1",
   "title": "ue_inspect_cxx_function.py result",
   "oneOf": [
     {
@@ -14,7 +14,7 @@
         {
           "properties": {
             "schema_version": {
-              "const": "ue-itps.cxx-function.v2"
+              "const": "ue-itps.cxx-function.v1"
             }
           }
         }
@@ -37,7 +37,7 @@
       ],
       "properties": {
         "schema_version": {
-          "const": "ue-itps.cxx-function.v2"
+          "const": "ue-itps.cxx-function.v1"
         },
         "path_roots": {
           "type": "object"
