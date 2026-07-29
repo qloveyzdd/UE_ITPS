@@ -165,16 +165,16 @@ python -m pip install -r requirements-dev.txt
 python -m unittest discover -s tests -v
 ```
 
-当前共 67 项测试，全部在临时目录中构造最小 Engine、项目、Plugin、规则文件和 C++ 源码，不读取仓库内的 Lyra 或外部样例项目，也不会修改真实项目。
+当前共 76 项测试，全部在临时目录中构造最小 Engine、项目、Plugin、规则文件和 C++ 源码，不读取仓库内的 Lyra 或外部样例项目，也不会修改真实项目。
 
 | 测试模块 | 数量 | 覆盖重点 |
 |---|---:|---|
 | `test_public_contracts.py` | 16 | CLI/Schema 清单、双语帮助、退出码、错误信封、公共 JSON 规则 |
 | `test_project_navigation.py` | 14 | 项目发现、描述符、Engine、Module、Target、Plugin、源码清单和路径 |
 | `test_build_analysis.py` | 14 | `.uplugin`、ModuleRules、TargetRules、C# 函数和 Module 生命周期 |
-| `test_cxx_analysis.py` | 21 | 源码单元配对、include、类型、接口候选、函数与失败边界 |
+| `test_cxx_analysis.py` | 30 | 源码单元配对、include、类型、接口候选、函数与失败边界 |
 | `test_end_to_end_workflow.py` | 2 | 16 个 CLI 的完整导航和重复扫描确定性 |
-| **合计** | **67** | 当前公开行为、关键失败边界与确定性 |
+| **合计** | **76** | 当前公开行为、关键失败边界与确定性 |
 
 ## 仓库结构
 
@@ -186,7 +186,7 @@ python -m unittest discover -s tests -v
 ├─ schemas/                   # 16 个 CLI Schema 与 1 个公共 Schema
 ├─ tests/
 │  ├─ support.py              # 临时 UE 工作区与公共断言
-│  └─ test_*.py               # 64 项自动化测试
+│  └─ test_*.py               # 76 项自动化测试
 ├─ docs/PROGRAM-DESIGN.md     # 架构、契约和扩展规则
 └─ requirements-dev.txt       # 测试依赖
 ```

@@ -7,6 +7,11 @@ from typing import Any
 from .source_callable_declarations import parse_free_function_declarations
 from .source_context import load_source_context, source_result
 from .source_declarations import _FORBIDDEN_CALLABLE_NAMES, _TYPE_KEYWORDS
+from .source_namespaces import (
+    namespace_at,
+    observed_namespace_names,
+    qualified_name,
+)
 from .source_signatures import parameter_signature
 from .source_fact_common import (
     _SOURCE_MACROS,
@@ -55,6 +60,7 @@ def _identity_qualifiers(signature: str) -> tuple[str, ...]:
 
 def _function_id(
     kind: str,
+    namespace: str | None,
     owner: str | None,
     name: str,
     parameter_signature: list[list[str]],
@@ -63,13 +69,21 @@ def _function_id(
     parameters = ";".join(" ".join(group) for group in parameter_signature)
     qualifiers = ",".join(identity_qualifiers)
     return "|".join(
-        (kind, owner or "", name, f"({parameters})", qualifiers)
+        (
+            kind,
+            namespace or "",
+            owner or "",
+            name,
+            f"({parameters})",
+            qualifiers,
+        )
     )
 
 
 def _callable_part(
     *,
     kind: str,
+    namespace: str | None,
     owner: str | None,
     name: str,
     parameters: str,
@@ -88,14 +102,25 @@ def _callable_part(
     identity_qualifiers = _identity_qualifiers(signature)
     function_id = _function_id(
         kind,
+        namespace,
         owner,
         actual_name,
         normalized_parameters,
         identity_qualifiers,
     )
+    lexical_name = (
+        f"{owner}::{actual_name}"
+        if owner
+        else actual_name
+    )
     return {
         "function_id": function_id,
         "kind": kind,
+        "namespace": namespace,
+        "qualified_name": qualified_name(
+            namespace,
+            lexical_name,
+        ),
         "owner": owner,
         "name": actual_name,
         "parameters": parameters,
@@ -106,6 +131,7 @@ def _callable_part(
         "evidence": _public_location(path, location, project_root, engine_root),
         "_identity": (
             kind,
+            namespace or "",
             owner or "",
             actual_name,
             tuple(tuple(group) for group in normalized_parameters),
@@ -130,8 +156,19 @@ def _callable_parts(
     engine_root: Path | None,
 ) -> list[dict[str, Any]]:
     parts: list[dict[str, Any]] = []
+    known_namespaces = {
+        namespace
+        for _path, parsed in parsed_files
+        for namespace in observed_namespace_names(
+            parsed["namespace_scopes"]
+        )
+    }
     for path, parsed in parsed_files:
         for class_item in parsed["classes"]:
+            namespace = namespace_at(
+                parsed["namespace_scopes"],
+                int(class_item["_token_range"][0]),
+            )
             for member in class_item["members"]:
                 if member["name"] in _SOURCE_MACROS or member["name"].startswith(
                     _SOURCE_MACRO_PREFIXES
@@ -140,7 +177,8 @@ def _callable_parts(
                 parts.append(
                     _callable_part(
                         kind="method",
-                        owner=class_item["name"],
+                        namespace=namespace,
+                        owner=class_item["qualified_name"],
                         name=member["name"],
                         parameters=member["parameters"],
                         signature=member["signature"],
@@ -153,10 +191,35 @@ def _callable_parts(
                     )
                 )
         for definition in parsed["external_definitions"]:
+            lexical_namespace = namespace_at(
+                parsed["namespace_scopes"],
+                int(definition["_token_index"]),
+            )
+            qualifier_parts = str(
+                definition["qualifier"]
+            ).split("::")
+            namespace = lexical_namespace
+            for end in range(len(qualifier_parts) - 1, 0, -1):
+                prefix = "::".join(qualifier_parts[:end])
+                if prefix in known_namespaces:
+                    namespace = prefix
+                    break
+                nested = qualified_name(lexical_namespace, prefix)
+                if nested in known_namespaces:
+                    namespace = nested
+                    break
+            owner = str(definition["qualifier"])
+            namespace_prefix = f"{namespace}::" if namespace else None
+            if (
+                namespace_prefix
+                and owner.startswith(namespace_prefix)
+            ):
+                owner = owner[len(namespace_prefix) :]
             parts.append(
                 _callable_part(
                     kind="method",
-                    owner=definition["class_name"],
+                    namespace=namespace,
+                    owner=owner,
                     name=definition["name"],
                     parameters=definition["parameters"],
                     signature=definition["signature"],
@@ -169,9 +232,17 @@ def _callable_parts(
                 )
             )
         for function in parsed["free_functions"]:
+            namespace = (
+                function.get("_explicit_namespace")
+                or namespace_at(
+                    parsed["namespace_scopes"],
+                    int(function["_token_index"]),
+                )
+            )
             parts.append(
                 _callable_part(
                     kind="free_function",
+                    namespace=namespace,
                     owner=None,
                     name=function["name"],
                     parameters=function["parameters"],
@@ -185,9 +256,14 @@ def _callable_parts(
                 )
             )
         for declaration in _top_level_declarations(parsed):
+            namespace = namespace_at(
+                parsed["namespace_scopes"],
+                int(declaration["_token_index"]),
+            )
             parts.append(
                 _callable_part(
                     kind="free_function",
+                    namespace=namespace,
                     owner=None,
                     name=declaration["name"],
                     parameters=declaration["parameters"],
@@ -259,15 +335,25 @@ def _relations(parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     "function_id": _function_id(
                         identity[0],
                         identity[1] or None,
-                        identity[2],
-                        [list(group) for group in identity[3]],
-                        identity[4],
+                        identity[2] or None,
+                        identity[3],
+                        [list(group) for group in identity[4]],
+                        identity[5],
                     ),
                     "kind": identity[0],
-                    "owner": identity[1] or None,
-                    "name": identity[2],
-                    "parameter_signature": [list(group) for group in identity[3]],
-                    "identity_qualifiers": list(identity[4]),
+                    "namespace": identity[1] or None,
+                    "qualified_name": qualified_name(
+                        identity[1] or None,
+                        (
+                            f"{identity[2]}::{identity[3]}"
+                            if identity[2]
+                            else identity[3]
+                        ),
+                    ),
+                    "owner": identity[2] or None,
+                    "name": identity[3],
+                    "parameter_signature": [list(group) for group in identity[4]],
+                    "identity_qualifiers": list(identity[5]),
                 },
                 "status": status,
                 "declarations": [item["evidence"] for item in declarations],
@@ -290,6 +376,7 @@ def _function_facts(parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     relation_by_identity = {
         (
             relation["callable"]["kind"],
+            relation["callable"]["namespace"] or "",
             relation["callable"]["owner"] or "",
             relation["callable"]["name"],
             tuple(
@@ -318,14 +405,23 @@ def _function_facts(parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
         results.append(
             {
                 "kind": identity[0],
-                "owner": identity[1] or None,
-                "name": identity[2],
+                "namespace": identity[1] or None,
+                "qualified_name": qualified_name(
+                    identity[1] or None,
+                    (
+                        f"{identity[2]}::{identity[3]}"
+                        if identity[2]
+                        else identity[3]
+                    ),
+                ),
+                "owner": identity[2] or None,
+                "name": identity[3],
                 "function_id": items[0]["function_id"],
                 "parameters": items[0]["parameters"],
                 "parameter_signature": [
-                    list(group) for group in identity[3]
+                    list(group) for group in identity[4]
                 ],
-                "identity_qualifiers": list(identity[4]),
+                "identity_qualifiers": list(identity[5]),
                 "qualifiers": sorted(
                     {
                         qualifier

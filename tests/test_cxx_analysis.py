@@ -719,6 +719,206 @@ class CxxAnalysisTests(WorkspaceTestCase):
         self.assertNotIn("external_types", match)
         self.assertNotIn("external_methods", match)
 
+    def test_function_facts_keep_namespace_in_local_identity(self) -> None:
+        write_text(
+            self.fixture.header_file,
+            """
+            #pragma once
+            namespace A
+            {
+                void Tick();
+            }
+            """,
+        )
+        write_text(
+            self.fixture.source_file,
+            """
+            #include "SampleFeature.h"
+            namespace A
+            {
+                void Tick() {}
+            }
+            namespace B
+            {
+                void Tick() {}
+            }
+            """,
+        )
+        result = self.source_result(
+            "ue_inspect_cxx_function.py",
+            "--function",
+            "Tick",
+        )
+
+        self.assertEqual(result["match_count"], 2)
+        matches = {
+            item["function"]["qualified_name"]: item
+            for item in result["matches"]
+        }
+        self.assertEqual(set(matches), {"A::Tick", "B::Tick"})
+        self.assertEqual(
+            matches["A::Tick"]["function"]["namespace"],
+            "A",
+        )
+        self.assertEqual(
+            matches["B::Tick"]["function"]["namespace"],
+            "B",
+        )
+        self.assertEqual(
+            matches["A::Tick"]["function_id"],
+            "free_function|A||Tick|()|",
+        )
+        self.assertEqual(
+            matches["B::Tick"]["function_id"],
+            "free_function|B||Tick|()|",
+        )
+        self.assertEqual(
+            matches["A::Tick"]["relation"]["status"],
+            "matched",
+        )
+        self.assertEqual(
+            matches["B::Tick"]["relation"]["status"],
+            "source_only",
+        )
+
+    def test_function_facts_namespace_same_named_class_methods(self) -> None:
+        write_text(
+            self.fixture.header_file,
+            """
+            #pragma once
+            namespace A
+            {
+                class FWorker
+                {
+                    void Run();
+                };
+            }
+            namespace B
+            {
+                class FWorker
+                {
+                    void Run();
+                };
+            }
+            """,
+        )
+        write_text(
+            self.fixture.source_file,
+            """
+            #include "SampleFeature.h"
+            void A::FWorker::Run() {}
+            void B::FWorker::Run() {}
+            """,
+        )
+        result = self.source_result(
+            "ue_inspect_cxx_function.py",
+            "--function",
+            "Run",
+        )
+
+        matches = {
+            item["function"]["qualified_name"]: item
+            for item in result["matches"]
+        }
+        self.assertEqual(
+            set(matches),
+            {"A::FWorker::Run", "B::FWorker::Run"},
+        )
+        self.assertEqual(
+            matches["A::FWorker::Run"]["function_id"],
+            "method|A|FWorker|Run|()|",
+        )
+        self.assertEqual(
+            matches["B::FWorker::Run"]["function_id"],
+            "method|B|FWorker|Run|()|",
+        )
+        self.assertTrue(
+            all(
+                item["relation"]["status"] == "matched"
+                for item in matches.values()
+            )
+        )
+
+    def test_function_facts_keep_nested_class_owner_chain(self) -> None:
+        write_text(
+            self.fixture.header_file,
+            """
+            #pragma once
+            namespace A
+            {
+                class FOuterOne
+                {
+                    class FInner
+                    {
+                        void Run();
+                    };
+                };
+                class FOuterTwo
+                {
+                    class FInner
+                    {
+                        void Run();
+                    };
+                };
+            }
+            """,
+        )
+        write_text(
+            self.fixture.source_file,
+            """
+            #include "SampleFeature.h"
+            void A::FOuterOne::FInner::Run() {}
+            void A::FOuterTwo::FInner::Run() {}
+            """,
+        )
+        result = self.source_result(
+            "ue_inspect_cxx_function.py",
+            "--function",
+            "Run",
+        )
+
+        matches = {
+            item["function"]["qualified_name"]: item
+            for item in result["matches"]
+        }
+        self.assertEqual(
+            set(matches),
+            {
+                "A::FOuterOne::FInner::Run",
+                "A::FOuterTwo::FInner::Run",
+            },
+        )
+        self.assertEqual(
+            matches[
+                "A::FOuterOne::FInner::Run"
+            ]["function"]["owner"],
+            "FOuterOne::FInner",
+        )
+        self.assertEqual(
+            matches[
+                "A::FOuterTwo::FInner::Run"
+            ]["function"]["owner"],
+            "FOuterTwo::FInner",
+        )
+        self.assertEqual(
+            matches[
+                "A::FOuterOne::FInner::Run"
+            ]["function_id"],
+            "method|A|FOuterOne::FInner|Run|()|",
+        )
+        self.assertEqual(
+            matches[
+                "A::FOuterTwo::FInner::Run"
+            ]["function_id"],
+            "method|A|FOuterTwo::FInner|Run|()|",
+        )
+        self.assertTrue(
+            all(
+                item["relation"]["status"] == "matched"
+                for item in matches.values()
+            )
+        )
+
     def test_function_reports_external_symbol_categories_with_evidence(self) -> None:
         write_text(
             self.fixture.header_file,
@@ -897,6 +1097,265 @@ class CxxAnalysisTests(WorkspaceTestCase):
                     "spelling": "FConfirmedType::Sort()",
                     "owner_type": "FConfirmedType",
                     "evidence": {"unit": "cpp", "line": 18},
+                },
+            ],
+        )
+
+    def test_function_bare_calls_require_local_callable_facts(self) -> None:
+        write_text(self.fixture.header_file, "#pragma once")
+        write_text(
+            self.fixture.source_file,
+            """
+            void DeclaredFree();
+            class UChild
+            {
+            public:
+                void Run();
+                void LocalMethod();
+            };
+            void UChild::Run()
+            {
+                DeclaredFree();
+                LocalMethod();
+                Refresh();
+            }
+            """,
+        )
+        result = self.source_result(
+            "ue_inspect_cxx_function.py",
+            "--function",
+            "Run",
+        )
+        self.assertEqual(
+            result["matches"][0]["external_symbols"],
+            [
+                {
+                    "kind": "free_function",
+                    "spelling": "DeclaredFree",
+                    "evidence": {"unit": "cpp", "line": 10},
+                },
+                {
+                    "kind": "member_call",
+                    "spelling": "UChild->LocalMethod()",
+                    "owner_type": "UChild",
+                    "evidence": {"unit": "cpp", "line": 11},
+                },
+                {
+                    "kind": "unknown",
+                    "spelling": "Refresh()",
+                    "evidence": {"unit": "cpp", "line": 12},
+                },
+            ],
+        )
+
+    def test_function_preserves_qualified_global_variable_spelling(self) -> None:
+        write_text(self.fixture.header_file, "#pragma once")
+        write_text(
+            self.fixture.source_file,
+            """
+            namespace Gameplay
+            {
+                extern bool GEnabled;
+            }
+            class FObject
+            {
+            public:
+                static bool GEnabled;
+            };
+            void CheckGlobals(FObject* Object)
+            {
+                FObject ObjectValue;
+                if (Gameplay::GEnabled) {}
+                if (ObjectValue.GEnabled) {}
+                if (Object->GEnabled) {}
+                if (FObject::GEnabled) {}
+                if (GPlainEnabled) {}
+            }
+            """,
+        )
+        result = self.source_result(
+            "ue_inspect_cxx_function.py",
+            "--function",
+            "CheckGlobals",
+        )
+        symbols = result["matches"][0]["external_symbols"]
+        self.assertEqual(
+            [
+                item
+                for item in symbols
+                if item["kind"] == "global_variable"
+            ],
+            [
+                {
+                    "kind": "global_variable",
+                    "spelling": "Gameplay::GEnabled",
+                    "evidence": {"unit": "cpp", "line": 13},
+                },
+                {
+                    "kind": "global_variable",
+                    "spelling": "GPlainEnabled",
+                    "evidence": {"unit": "cpp", "line": 17},
+                },
+            ],
+        )
+        self.assertEqual(
+            {
+                item["spelling"]
+                for item in symbols
+                if item["kind"] == "unknown"
+            },
+            {
+                "ObjectValue.GEnabled",
+                "Object->GEnabled",
+                "FObject::GEnabled",
+            },
+        )
+
+    def test_function_requires_qualified_namespace_global_evidence(self) -> None:
+        write_text(self.fixture.header_file, "#pragma once")
+        write_text(
+            self.fixture.source_file,
+            """
+            namespace A
+            {
+                extern int Value;
+            }
+
+            namespace B
+            {
+                void Run()
+                {
+                    B::Value;
+                    A::Value;
+                    B::GHeuristic;
+                }
+            }
+            """,
+        )
+        result = self.source_result(
+            "ue_inspect_cxx_function.py",
+            "--function",
+            "Run",
+        )
+        self.assertEqual(
+            result["matches"][0]["external_symbols"],
+            [
+                {
+                    "kind": "unknown",
+                    "spelling": "B::Value",
+                    "evidence": {"unit": "cpp", "line": 10},
+                },
+                {
+                    "kind": "global_variable",
+                    "spelling": "A::Value",
+                    "evidence": {"unit": "cpp", "line": 11},
+                },
+                {
+                    "kind": "global_variable",
+                    "spelling": "B::GHeuristic",
+                    "evidence": {"unit": "cpp", "line": 12},
+                },
+            ],
+        )
+
+    def test_function_uses_namespace_facts_for_calls_and_addresses(self) -> None:
+        write_text(self.fixture.header_file, "#pragma once")
+        write_text(
+            self.fixture.source_file,
+            """
+            namespace Gameplay
+            {
+                void Create();
+                void Handle();
+            }
+            class FHandler
+            {
+            public:
+                static void Handle();
+            };
+            void TestNamespaceReferences()
+            {
+                Gameplay::Create();
+                Unknown::Create();
+                auto Callback = &Gameplay::Handle;
+                auto Member = &FHandler::Handle;
+            }
+            """,
+        )
+        result = self.source_result(
+            "ue_inspect_cxx_function.py",
+            "--function",
+            "TestNamespaceReferences",
+        )
+        self.assertEqual(
+            result["matches"][0]["external_symbols"],
+            [
+                {
+                    "kind": "free_function",
+                    "spelling": "Gameplay::Create",
+                    "evidence": {"unit": "cpp", "line": 13},
+                },
+                {
+                    "kind": "unknown",
+                    "spelling": "Unknown::Create()",
+                    "evidence": {"unit": "cpp", "line": 14},
+                },
+                {
+                    "kind": "function_address",
+                    "spelling": "Gameplay::Handle",
+                    "evidence": {"unit": "cpp", "line": 15},
+                },
+                {
+                    "kind": "function_address",
+                    "spelling": "FHandler::Handle",
+                    "owner_type": "FHandler",
+                    "evidence": {"unit": "cpp", "line": 16},
+                },
+                {
+                    "kind": "type",
+                    "spelling": "FHandler",
+                    "evidence": {"unit": "cpp", "line": 16},
+                },
+            ],
+        )
+
+    def test_function_resolves_member_address_in_current_namespace(self) -> None:
+        write_text(self.fixture.header_file, "#pragma once")
+        write_text(
+            self.fixture.source_file,
+            """
+            namespace A
+            {
+                class FHandler
+                {
+                public:
+                    static void Handle();
+                };
+                void Test()
+                {
+                    auto P = &FHandler::Handle;
+                }
+            }
+            """,
+        )
+        result = self.source_result(
+            "ue_inspect_cxx_function.py",
+            "--function",
+            "Test",
+        )
+        self.assertEqual(
+            result["matches"][0]["external_symbols"],
+            [
+                {
+                    "kind": "function_address",
+                    "spelling": "FHandler::Handle",
+                    "owner_type": "FHandler",
+                    "evidence": {"unit": "cpp", "line": 10},
+                },
+                {
+                    "kind": "type",
+                    "spelling": "FHandler",
+                    "evidence": {"unit": "cpp", "line": 10},
                 },
             ],
         )

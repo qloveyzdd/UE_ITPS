@@ -18,6 +18,12 @@ from .source_function_index import (
     _public_relation,
     _relations,
 )
+from .source_namespaces import (
+    namespace_at,
+    observed_namespace_names,
+    qualified_name,
+    resolve_observed_namespace,
+)
 from .source_tokens import (
     Token,
     _raw,
@@ -25,6 +31,9 @@ from .source_tokens import (
     _split_arguments,
     lex_source,
     token_pairs,
+)
+from .source_type_facts import (
+    _global_variable_facts as _declared_global_variable_facts,
 )
 
 
@@ -299,11 +308,42 @@ def _call_name_before_open(
     return None
 
 
+def _qualifier_is_confirmed_type(
+    qualifier: str,
+    confirmed_type_names: set[str],
+) -> bool:
+    normalized = qualifier.removeprefix("::")
+    segments = normalized.split("::")
+    return bool(
+        normalized in confirmed_type_names
+        or segments[0] in confirmed_type_names
+        or segments[-1] in confirmed_type_names
+    )
+
+
+def _resolved_namespace_for(
+    qualifier: str,
+    parsed: dict[str, Any],
+    token_index: int,
+    observed_namespaces: set[str],
+) -> str | None:
+    return resolve_observed_namespace(
+        qualifier.removeprefix("::"),
+        namespace_at(
+            parsed.get("namespace_scopes", []),
+            token_index,
+        ),
+        observed_namespaces,
+    )
+
+
 def _member_call_facts(
     part: dict[str, Any],
     loaded: dict[str, Any],
     symbol_types: dict[str, str],
     confirmed_type_names: set[str],
+    observed_namespaces: set[str],
+    free_function_names: set[str],
 ) -> tuple[list[dict[str, Any]], set[int]]:
     parsed = loaded["parsed_by_path"][part["_path"]]
     text = parsed["text"]
@@ -340,12 +380,40 @@ def _member_call_facts(
             receiver_expression = _canonical_type_expression(
                 _raw_from_values(receiver_tokens)
             )
-            if (
-                receiver_expression in confirmed_type_names
-                or receiver_expression.rsplit("::", 1)[-1]
-                in confirmed_type_names
+            if _qualifier_is_confirmed_type(
+                receiver_expression,
+                confirmed_type_names,
             ):
                 owner_type = receiver_expression
+            else:
+                namespace = _resolved_namespace_for(
+                    receiver_expression,
+                    parsed,
+                    name_index,
+                    observed_namespaces,
+                )
+                function_name = (
+                    qualified_name(
+                        namespace,
+                        tokens[name_index].value,
+                    )
+                    if namespace
+                    else None
+                )
+                if (
+                    function_name is not None
+                    and function_name in free_function_names
+                ):
+                    results.append(
+                        _symbol_fact(
+                            "free_function",
+                            function_name,
+                            part["_path"],
+                            tokens[callee_start].line,
+                            callee_start,
+                        )
+                    )
+                    continue
         elif receiver_identifiers:
             receiver_root = receiver_identifiers[0]
             owner_type = (
@@ -429,12 +497,12 @@ def _address_expression(
         if token.kind == "identifier"
     ]
     spelling = _raw_from_values(expression_tokens)
-    owner_type = (
+    qualifier = (
         _raw_from_values(expression_tokens[:-2])
         if len(identifiers) > 1
         else None
     )
-    return spelling, owner_type, expression_end
+    return spelling, qualifier, expression_end
 
 
 def _enclosing_callback_call(
@@ -466,7 +534,10 @@ def _function_address_facts(
     part: dict[str, Any],
     loaded: dict[str, Any],
     callable_names: set[str],
+    callable_qualified_names: set[str],
     variable_names: set[str],
+    confirmed_type_names: set[str],
+    observed_namespaces: set[str],
 ) -> list[dict[str, Any]]:
     parsed = loaded["parsed_by_path"][part["_path"]]
     tokens: list[Token] = parsed["tokens"]
@@ -479,14 +550,58 @@ def _function_address_facts(
         address = _address_expression(tokens, index, end)
         if address is None:
             continue
-        spelling, owner_type, _ = address
+        spelling, qualifier, _ = address
         target_name = spelling.rsplit("::", 1)[-1]
+        owner_type = (
+            qualifier
+            if qualifier is not None
+            and _qualifier_is_confirmed_type(
+                qualifier,
+                confirmed_type_names,
+            )
+            else None
+        )
+        namespace = (
+            _resolved_namespace_for(
+                qualifier,
+                parsed,
+                index,
+                observed_namespaces,
+            )
+            if qualifier is not None
+            and owner_type is None
+            else None
+        )
+        resolved_spelling = (
+            qualified_name(namespace, target_name)
+            if namespace is not None
+            else spelling
+        )
+        lexical_callable_names = {
+            spelling,
+            *(
+                qualified_name(namespace, spelling)
+                for namespace in _namespace_chain(part["namespace"])
+            ),
+        }
+        known_callable = (
+            resolved_spelling in callable_qualified_names
+            or bool(
+                lexical_callable_names.intersection(
+                    callable_qualified_names
+                )
+            )
+            or (
+                qualifier is None
+                and target_name in callable_names
+            )
+        )
         is_callback = _enclosing_callback_call(
             tokens, forward, index, start
         )
         if not is_callback and (
             target_name in variable_names
-            or (owner_type is None and target_name not in callable_names)
+            or not known_callable
         ):
             results.append(
                 _symbol_fact(
@@ -515,37 +630,171 @@ def _global_variable_facts(
     part: dict[str, Any],
     loaded: dict[str, Any],
     local_names: set[str],
+    confirmed_type_names: set[str],
+    observed_namespaces: set[str],
 ) -> list[dict[str, Any]]:
     parsed = loaded["parsed_by_path"][part["_path"]]
     tokens: list[Token] = parsed["tokens"]
+    reverse: dict[int, int] = parsed["reverse"]
     start, end = part["_body_range"]
-    known_globals = {
-        item["name"]
-        for item in _source_declaration_facts(loaded)[0]
-        if item["scope"] == "file"
+    declared_variables = _source_declaration_facts(loaded)[0]
+    declared_globals = _declared_global_variable_facts(
+        loaded,
+        declared_variables,
+    )
+    known_global_names = {
+        item["name"] for item in declared_globals
+    }
+    known_global_qualified_names = {
+        item["qualified_name"] for item in declared_globals
     }
     results: list[dict[str, Any]] = []
     for index in range(start, end):
         token = tokens[index]
+        heuristic_global = bool(
+            re.fullmatch(r"G[A-Z][A-Za-z0-9_]*", token.value)
+        )
         if (
             token.kind != "identifier"
             or token.value in local_names
             or (
-                token.value not in known_globals
-                and not re.fullmatch(r"G[A-Z][A-Za-z0-9_]*", token.value)
+                token.value not in known_global_names
+                and not heuristic_global
             )
         ):
+            continue
+        operator = (
+            tokens[index - 1].value
+            if index - 1 >= start
+            else None
+        )
+        if operator in {".", "->"}:
+            spelling_start = _member_chain_start(
+                tokens, reverse, index, start
+            )
+            results.append(
+                _symbol_fact(
+                    "unknown",
+                    _raw_from_values(
+                        tokens[spelling_start : index + 1]
+                    ),
+                    part["_path"],
+                    tokens[spelling_start].line,
+                    spelling_start,
+                )
+            )
+            continue
+        spelling_start = index
+        if operator == "::":
+            while (
+                spelling_start - 2 >= start
+                and tokens[spelling_start - 1].value == "::"
+                and tokens[spelling_start - 2].kind == "identifier"
+            ):
+                spelling_start -= 2
+            if (
+                spelling_start - 1 >= start
+                and tokens[spelling_start - 1].value == "::"
+            ):
+                spelling_start -= 1
+            qualifier = _raw_from_values(
+                tokens[spelling_start : index - 1]
+            ).removeprefix("::")
+            qualifier_is_type = _qualifier_is_confirmed_type(
+                qualifier,
+                confirmed_type_names,
+            )
+            qualifier_is_namespace = (
+                not qualifier_is_type
+                and (
+                    resolved_namespace := _resolved_namespace_for(
+                        qualifier,
+                        parsed,
+                        index,
+                        observed_namespaces,
+                    )
+                )
+                is not None
+            )
+            qualified_global = (
+                qualified_name(
+                    resolved_namespace,
+                    token.value,
+                )
+                if qualifier_is_namespace
+                else None
+            )
+            if (
+                not qualifier_is_namespace
+                or (
+                    not heuristic_global
+                    and qualified_global
+                    not in known_global_qualified_names
+                )
+            ):
+                results.append(
+                    _symbol_fact(
+                        "unknown",
+                        _raw_from_values(
+                            tokens[spelling_start : index + 1]
+                        ),
+                        part["_path"],
+                        tokens[spelling_start].line,
+                        spelling_start,
+                    )
+                )
+                continue
+        elif (
+            not heuristic_global
+            and not any(
+                qualified_name(namespace, token.value)
+                in known_global_qualified_names
+                for namespace in [
+                    *_namespace_chain(
+                        namespace_at(
+                            parsed["namespace_scopes"],
+                            index,
+                        )
+                    ),
+                    None,
+                ]
+            )
+        ):
+            results.append(
+                _symbol_fact(
+                    "unknown",
+                    token.value,
+                    part["_path"],
+                    token.line,
+                    index,
+                )
+            )
             continue
         results.append(
             _symbol_fact(
                 "global_variable",
-                token.value,
+                _raw_from_values(
+                    tokens[spelling_start : index + 1]
+                ),
                 part["_path"],
-                token.line,
-                index,
+                tokens[spelling_start].line,
+                spelling_start,
             )
         )
     return results
+
+
+def _namespace_chain(namespace: str | None) -> list[str]:
+    chain: list[str] = []
+    current = namespace
+    while current is not None:
+        chain.append(current)
+        current = (
+            current.rsplit("::", 1)[0]
+            if "::" in current
+            else None
+        )
+    return chain
 
 
 def _bare_call_facts(
@@ -554,6 +803,7 @@ def _bare_call_facts(
     call_name_indices: set[int],
     known_type_names: set[str],
     variable_names: set[str],
+    visible_free_functions: dict[str, str],
 ) -> list[dict[str, Any]]:
     parsed = loaded["parsed_by_path"][part["_path"]]
     text = parsed["text"]
@@ -563,7 +813,9 @@ def _bare_call_facts(
     methods = {
         item["name"]
         for item in loaded["parts"]
-        if item["kind"] == "method" and item["owner"] == part["owner"]
+        if item["kind"] == "method"
+        and item["namespace"] == part["namespace"]
+        and item["owner"] == part["owner"]
     }
     ignored_macros = {
         "check",
@@ -620,16 +872,57 @@ def _bare_call_facts(
                     owner_type=part["owner"],
                 )
             )
-        else:
+        elif name in visible_free_functions:
             results.append(
                 _symbol_fact(
                     "free_function",
-                    name,
+                    visible_free_functions[name],
                     part["_path"],
                     tokens[name_index].line,
                     name_index,
                 )
             )
+        else:
+            expression = _raw(
+                text, tokens, name_index, close_index + 1
+            )
+            results.append(
+                _symbol_fact(
+                    "unknown",
+                    expression,
+                    part["_path"],
+                    tokens[name_index].line,
+                    name_index,
+                )
+            )
+    return results
+
+
+def _visible_free_functions(
+    part: dict[str, Any],
+    parts: list[dict[str, Any]],
+) -> dict[str, str]:
+    namespaces: list[str | None] = []
+    current = part["namespace"]
+    while current:
+        namespaces.append(current)
+        current = (
+            current.rsplit("::", 1)[0]
+            if "::" in current
+            else None
+        )
+    namespaces.append(None)
+    results: dict[str, str] = {}
+    for namespace in namespaces:
+        for candidate in parts:
+            if (
+                candidate["kind"] == "free_function"
+                and candidate["namespace"] == namespace
+            ):
+                results.setdefault(
+                    candidate["name"],
+                    candidate["qualified_name"],
+                )
     return results
 
 
@@ -762,11 +1055,16 @@ def inspect_source_function(
             },
             responsibility="Report external symbols referenced by all definitions matching one function name.",
             boundaries=[
+                "Namespace is part of each function's local identity, qualified name, declaration-definition relation, and function_id within the selected source pair.",
+                "Method owners retain the full lexical enclosing class chain without repeating the namespace.",
+                "function_id is a compact source-pair identity and is not a project-level stable ID.",
                 "External means outside the selected function semantic unit, including symbols declared in the selected file or its companion.",
                 "Symbol kinds are lexical candidate categories, not call, read, write, or ownership relations.",
                 "Type names and receiver types are derived from locally visible declaration syntax; wrapped template types remain one expression.",
-                "A scope-qualified call is a member_call only when the selected source unit confirms its receiver as a type; otherwise it remains unknown.",
-                "Function addresses and callback targets are distinguished only when local callable declarations or recognized callback API syntax provide evidence.",
+                "A bare call is a member_call only for a matching current-class method, or a free_function only for a matching visible declaration in the selected source pair; otherwise it remains unknown.",
+                "A scope-qualified call is a member_call when its receiver is a confirmed type, or a free_function when its qualifier is an observed Namespace with a matching declaration; otherwise it remains unknown.",
+                "A namespace-qualified reference is a global_variable only when its fully qualified name matches a local variable declaration, or its name has conservative G* spelling evidence; type-qualified, member-shaped, unresolved, and other unmatched accesses remain unknown.",
+                "Function addresses and callback targets are distinguished only when local callable declarations or recognized callback API syntax provide evidence; callable matching resolves owner spellings through the current lexical Namespace, and owner_type is present only for confirmed type qualifiers.",
                 "Called functions, inheritance, overloads, macros, and included source are not followed.",
             ],
             additional_problems=[
@@ -781,6 +1079,7 @@ def inspect_source_function(
     relations = {
         (
             item["callable"]["kind"],
+            item["callable"]["namespace"] or "",
             item["callable"]["owner"] or "",
             item["callable"]["name"],
             tuple(
@@ -799,15 +1098,36 @@ def inspect_source_function(
         confirmed_type_names = _confirmed_type_names(
             loaded, type_facts
         )
+        observed_namespaces = {
+            namespace
+            for _, parsed in loaded["parsed_files"]
+            for namespace in observed_namespace_names(
+                parsed.get("namespace_scopes", [])
+            )
+        }
+        callable_names = {
+            item["name"] for item in loaded["parts"]
+        }
+        callable_qualified_names = {
+            item["qualified_name"] for item in loaded["parts"]
+        }
+        free_function_names = {
+            item["qualified_name"]
+            for item in loaded["parts"]
+            if item["kind"] == "free_function"
+        }
+        visible_free_functions = _visible_free_functions(
+            candidate,
+            loaded["parts"],
+        )
         member_calls, member_call_indices = _member_call_facts(
             candidate,
             loaded,
             symbol_types,
             confirmed_type_names,
+            observed_namespaces,
+            free_function_names,
         )
-        callable_names = {
-            item["name"] for item in loaded["parts"]
-        }
         external_symbols = _public_external_symbols(
             [
                 *type_facts,
@@ -817,7 +1137,11 @@ def inspect_source_function(
                     confirmed_type_names,
                 ),
                 *_global_variable_facts(
-                    candidate, loaded, local_names
+                    candidate,
+                    loaded,
+                    local_names,
+                    confirmed_type_names,
+                    observed_namespaces,
                 ),
                 *_bare_call_facts(
                     candidate,
@@ -825,13 +1149,17 @@ def inspect_source_function(
                     member_call_indices,
                     confirmed_type_names,
                     local_names,
+                    visible_free_functions,
                 ),
                 *member_calls,
                 *_function_address_facts(
                     candidate,
                     loaded,
                     callable_names,
+                    callable_qualified_names,
                     local_names,
+                    confirmed_type_names,
+                    observed_namespaces,
                 ),
             ]
         )
@@ -855,11 +1183,16 @@ def inspect_source_function(
         },
         responsibility="Report external symbols referenced by all definitions matching one function name.",
         boundaries=[
+            "Namespace is part of each function's local identity, qualified name, declaration-definition relation, and function_id within the selected source pair.",
+            "Method owners retain the full lexical enclosing class chain without repeating the namespace.",
+            "function_id is a compact source-pair identity and is not a project-level stable ID.",
             "External means outside the selected function semantic unit, including symbols declared in the selected file or its companion.",
             "Symbol kinds are lexical candidate categories, not call, read, write, or ownership relations.",
             "Type names and receiver types are derived from locally visible declaration syntax; wrapped template types remain one expression.",
-            "A scope-qualified call is a member_call only when the selected source unit confirms its receiver as a type; otherwise it remains unknown.",
-            "Function addresses and callback targets are distinguished only when local callable declarations or recognized callback API syntax provide evidence.",
+            "A bare call is a member_call only for a matching current-class method, or a free_function only for a matching visible declaration in the selected source pair; otherwise it remains unknown.",
+            "A scope-qualified call is a member_call when its receiver is a confirmed type, or a free_function when its qualifier is an observed Namespace with a matching declaration; otherwise it remains unknown.",
+            "A namespace-qualified reference is a global_variable only when its fully qualified name matches a local variable declaration, or its name has conservative G* spelling evidence; type-qualified, member-shaped, unresolved, and other unmatched accesses remain unknown.",
+            "Function addresses and callback targets are distinguished only when local callable declarations or recognized callback API syntax provide evidence; callable matching resolves owner spellings through the current lexical Namespace, and owner_type is present only for confirmed type qualifiers.",
             "Called functions, inheritance, overloads, macros, and included source are not followed.",
         ],
     )

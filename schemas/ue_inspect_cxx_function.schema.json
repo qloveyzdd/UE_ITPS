@@ -81,10 +81,11 @@
       ],
       "properties": {
         "function_id": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         },
         "function": {
-          "type": "object"
+          "$ref": "#/$defs/function"
         },
         "relation": {
           "type": "object"
@@ -94,6 +95,58 @@
           "items": {
             "$ref": "#/$defs/externalSymbol"
           }
+        }
+      },
+      "additionalProperties": false
+    },
+    "function": {
+      "type": "object",
+      "required": [
+        "kind",
+        "namespace",
+        "qualified_name",
+        "owner",
+        "name",
+        "parameters",
+        "signature",
+        "qualifiers",
+        "role"
+      ],
+      "properties": {
+        "kind": {
+          "enum": ["method", "free_function"]
+        },
+        "namespace": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "qualified_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner": {
+          "type": ["string", "null"]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parameters": {
+          "type": "string"
+        },
+        "signature": {
+          "type": "string",
+          "minLength": 1
+        },
+        "qualifiers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "role": {
+          "enum": ["declaration", "definition"]
         }
       },
       "additionalProperties": false
