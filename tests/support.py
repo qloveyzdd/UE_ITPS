@@ -22,7 +22,7 @@ if str(TOOLS_ROOT) not in sys.path:
     sys.path.insert(0, str(TOOLS_ROOT))
 
 
-CLI_SCHEMAS = {
+PUBLIC_CLIS = {
     "ue_find_projects.py": "ue-itps.project-discovery.v1",
     "ue_read_project_descriptor.py": "ue-itps.project-descriptor.v1",
     "ue_resolve_engine.py": "ue-itps.engine-resolution.v1",
@@ -41,6 +41,24 @@ CLI_SCHEMAS = {
     "ue_inspect_cxx_function.py": "ue-itps.cxx-function.v1",
 }
 
+PATH_ARGUMENTS = {
+    "ue_read_project_descriptor.py": "--project",
+    "ue_resolve_engine.py": "--project",
+    "ue_inspect_modules.py": "--project",
+    "ue_inspect_targets.py": "--project",
+    "ue_list_project_cxx_sources.py": "--project",
+    "ue_resolve_plugins.py": "--project",
+    "ue_classify_project_paths.py": "--project",
+    "ue_read_plugin_descriptor.py": "--plugin",
+    "ue_inspect_module_rules.py": "--rules",
+    "ue_inspect_target_rules.py": "--target",
+    "ue_inspect_cs_function.py": "--source",
+    "ue_inspect_module_entry.py": "--rules",
+    "ue_list_cxx_includes.py": "--source",
+    "ue_list_cxx_types.py": "--source",
+    "ue_inspect_cxx_function.py": "--source",
+}
+
 
 @lru_cache(maxsize=1)
 def schema_registry() -> Registry:
@@ -56,8 +74,8 @@ def schema_registry() -> Registry:
 
 @lru_cache(maxsize=None)
 def result_validator(script: str) -> Draft202012Validator:
-    schema_path = SCHEMAS_ROOT / f"{Path(script).stem}.schema.json"
-    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    path = SCHEMAS_ROOT / f"{Path(script).stem}.schema.json"
+    schema = json.loads(path.read_text(encoding="utf-8"))
     return Draft202012Validator(schema, registry=schema_registry())
 
 
@@ -68,7 +86,7 @@ def assert_schema_valid(
 ) -> None:
     errors = sorted(
         result_validator(script).iter_errors(result),
-        key=lambda item: list(item.absolute_path),
+        key=lambda error: list(error.absolute_path),
     )
     test_case.assertEqual(
         errors,
@@ -115,37 +133,43 @@ def parse_cli(
     )
     test_case.assertEqual(completed.stderr, "")
     result = json.loads(completed.stdout)
-    test_case.assertEqual(result["schema_version"], CLI_SCHEMAS[script])
+    test_case.assertEqual(result["schema_version"], PUBLIC_CLIS[script])
     assert_schema_valid(test_case, script, result)
     return result
 
 
-class EnvelopeAssertions(unittest.TestCase):
-    def assert_envelope(self, result: dict[str, Any]) -> None:
-        self.assertGreaterEqual(len(result), 3)
+class ContractAssertions(unittest.TestCase):
+    def assert_result_contract(self, result: dict[str, Any]) -> None:
         self.assertEqual(next(iter(result)), "schema_version")
         self.assertEqual(list(result)[-2:], ["validation", "limits"])
         validation = result["validation"]
         self.assertIn(validation["status"], {"ok", "warning", "error"})
-        self.assertEqual(
-            validation["problem_count"],
-            len(validation["problems"]),
-        )
-        self.assertIsInstance(result["limits"]["responsibility"], str)
+        self.assertEqual(validation["problem_count"], len(validation["problems"]))
+        self.assertTrue(result["limits"]["responsibility"])
         self.assertIsInstance(result["limits"]["boundaries"], list)
 
-    def assert_success_envelope(self, result: dict[str, Any]) -> None:
-        self.assert_envelope(result)
+    def assert_scan_success(self, result: dict[str, Any]) -> None:
+        self.assert_result_contract(result)
         self.assertNotEqual(result["validation"]["status"], "error")
 
+    def assert_request_failure(
+        self,
+        result: dict[str, Any],
+        *,
+        kind: str,
+    ) -> None:
+        self.assert_result_contract(result)
+        self.assertEqual(result["request"], {"status": "failed", "kind": kind})
+        self.assertEqual(result["validation"]["status"], "error")
 
-class FixtureTestCase(EnvelopeAssertions):
+
+class WorkspaceTestCase(ContractAssertions):
     fixture: SimpleNamespace
     temporary_directory: tempfile.TemporaryDirectory[str]
 
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()
-        self.fixture = create_fixture(Path(self.temporary_directory.name))
+        self.fixture = create_workspace(Path(self.temporary_directory.name))
 
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()
@@ -162,14 +186,14 @@ class FixtureTestCase(EnvelopeAssertions):
             *arguments,
             expected_code=expected_code,
         )
-        self.assert_envelope(result)
+        self.assert_result_contract(result)
         return result
 
 
-def create_fixture(workspace: Path) -> SimpleNamespace:
+def create_workspace(workspace: Path) -> SimpleNamespace:
     engine_root = workspace
-    project_root = workspace / "CurrentGame"
-    project_file = project_root / "CurrentGame.uproject"
+    project_root = workspace / "SampleGame"
+    project_file = project_root / "SampleGame.uproject"
 
     write_json(
         engine_root / "Engine" / "Build" / "Build.version",
@@ -181,7 +205,7 @@ def create_fixture(workspace: Path) -> SimpleNamespace:
             "CompatibleChangelist": 101,
             "IsLicenseeVersion": 0,
             "IsPromotedBuild": 0,
-            "BranchName": "Fixture",
+            "BranchName": "TestFixture",
         },
     )
     write_text(
@@ -234,29 +258,29 @@ def create_fixture(workspace: Path) -> SimpleNamespace:
             "FileVersion": 3,
             "EngineAssociation": "",
             "Category": "Tests",
-            "Description": "Current implementation fixture",
+            "Description": "Current UE ITPS behavior fixture",
             "Modules": [
                 {
-                    "Name": "CurrentGame",
+                    "Name": "SampleGame",
                     "Type": "Runtime",
                     "LoadingPhase": "Default",
                 }
             ],
             "Plugins": [
-                {"Name": "CurrentPlugin", "Enabled": True},
+                {"Name": "SamplePlugin", "Enabled": True},
                 {"Name": "DisabledPlugin", "Enabled": False},
             ],
             "CustomField": {"preserved": True},
         },
     )
 
-    game_rules = project_root / "Source" / "CurrentGame" / "CurrentGame.Build.cs"
+    game_rules = project_root / "Source" / "SampleGame" / "SampleGame.Build.cs"
     write_text(
         game_rules,
         """
-        public class CurrentGame : ModuleRules
+        public class SampleGame : ModuleRules
         {
-            public CurrentGame(ReadOnlyTargetRules Target) : base(Target)
+            public SampleGame(ReadOnlyTargetRules Target) : base(Target)
             {
                 PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
                 PublicDependencyModuleNames.AddRange(
@@ -276,29 +300,29 @@ def create_fixture(workspace: Path) -> SimpleNamespace:
         """,
     )
     game_entry = (
-        project_root / "Source" / "CurrentGame" / "Private" / "CurrentGameModule.cpp"
+        project_root / "Source" / "SampleGame" / "Private" / "SampleGameModule.cpp"
     )
     write_text(
         game_entry,
         """
         #include "Modules/ModuleManager.h"
         IMPLEMENT_PRIMARY_GAME_MODULE(
-            FDefaultGameModuleImpl, CurrentGame, "CurrentGame");
+            FDefaultGameModuleImpl, SampleGame, "SampleGame");
         """,
     )
 
-    target_file = project_root / "Source" / "CurrentGame.Target.cs"
+    target_file = project_root / "Source" / "SampleGame.Target.cs"
     write_text(
         target_file,
         """
-        public class CurrentGameTarget : TargetRules
+        public class SampleGameTarget : TargetRules
         {
-            private static readonly string SharedDefinition = "CURRENT";
+            private static readonly string SharedDefinition = "SAMPLE";
 
-            public CurrentGameTarget(TargetInfo Target) : base(Target)
+            public SampleGameTarget(TargetInfo Target) : base(Target)
             {
                 Type = TargetType.Game;
-                ExtraModuleNames.Add("CurrentGame");
+                ExtraModuleNames.Add("SampleGame");
                 ApplySharedSettings(Target);
             }
 
@@ -312,22 +336,36 @@ def create_fixture(workspace: Path) -> SimpleNamespace:
         }
         """,
     )
+    editor_target_file = project_root / "Source" / "SampleGameEditor.Target.cs"
+    write_text(
+        editor_target_file,
+        """
+        public class SampleGameEditorTarget : TargetRules
+        {
+            public SampleGameEditorTarget(TargetInfo Target) : base(Target)
+            {
+                Type = TargetType.Editor;
+                ExtraModuleNames.Add("SampleGame");
+            }
+        }
+        """,
+    )
 
-    plugin_root = project_root / "Plugins" / "CurrentPlugin"
-    plugin_file = plugin_root / "CurrentPlugin.uplugin"
+    plugin_root = project_root / "Plugins" / "SamplePlugin"
+    plugin_file = plugin_root / "SamplePlugin.uplugin"
     write_json(
         plugin_file,
         {
             "FileVersion": 3,
             "Version": 2,
             "VersionName": "2.0",
-            "FriendlyName": "Current Plugin",
+            "FriendlyName": "Sample Plugin",
             "Description": "Current implementation fixture plugin",
             "Category": "Tests",
             "CanContainContent": False,
             "Modules": [
                 {
-                    "Name": "CurrentPlugin",
+                    "Name": "SamplePlugin",
                     "Type": "Runtime",
                     "LoadingPhase": "Default",
                 }
@@ -335,13 +373,13 @@ def create_fixture(workspace: Path) -> SimpleNamespace:
             "Plugins": [{"Name": "GameplayTags", "Enabled": True}],
         },
     )
-    plugin_rules = plugin_root / "Source" / "CurrentPlugin" / "CurrentPlugin.Build.cs"
+    plugin_rules = plugin_root / "Source" / "SamplePlugin" / "SamplePlugin.Build.cs"
     write_text(
         plugin_rules,
         """
-        public class CurrentPlugin : ModuleRules
+        public class SamplePlugin : ModuleRules
         {
-            public CurrentPlugin(ReadOnlyTargetRules Target) : base(Target)
+            public SamplePlugin(ReadOnlyTargetRules Target) : base(Target)
             {
                 PublicDependencyModuleNames.Add("Core");
                 PrivateDependencyModuleNames.Add("GameplayTags");
@@ -350,20 +388,20 @@ def create_fixture(workspace: Path) -> SimpleNamespace:
         """,
     )
     plugin_entry = (
-        plugin_root / "Source" / "CurrentPlugin" / "Private" / "CurrentPluginModule.cpp"
+        plugin_root / "Source" / "SamplePlugin" / "Private" / "SamplePluginModule.cpp"
     )
     write_text(
         plugin_entry,
         """
         #include "Modules/ModuleManager.h"
 
-        class FCurrentPluginModule : public IModuleInterface
+        class FSamplePluginModule : public IModuleInterface
         {
         public:
             virtual void StartupModule() override
             {
                 ReadyHandle = FCoreDelegates::OnPostEngineInit.AddRaw(
-                    this, &FCurrentPluginModule::HandleReady);
+                    this, &FSamplePluginModule::HandleReady);
             }
 
             virtual void ShutdownModule() override
@@ -375,15 +413,15 @@ def create_fixture(workspace: Path) -> SimpleNamespace:
             FDelegateHandle ReadyHandle;
         };
 
-        IMPLEMENT_MODULE(FCurrentPluginModule, CurrentPlugin)
+        IMPLEMENT_MODULE(FSamplePluginModule, SamplePlugin)
         """,
     )
 
     source_file = (
-        project_root / "Source" / "CurrentGame" / "Private" / "CurrentFeature.cpp"
+        project_root / "Source" / "SampleGame" / "Private" / "SampleFeature.cpp"
     )
     header_file = (
-        project_root / "Source" / "CurrentGame" / "Public" / "CurrentFeature.h"
+        project_root / "Source" / "SampleGame" / "Public" / "SampleFeature.h"
     )
     write_text(
         header_file,
@@ -392,17 +430,17 @@ def create_fixture(workspace: Path) -> SimpleNamespace:
 
         #include "CoreMinimal.h"
         #include "GameplayTagContainer.h"
-        #include "CurrentFeature.generated.h"
+        #include "SampleFeature.generated.h"
 
         UENUM(BlueprintType)
-        enum class ECurrentMode : uint8
+        enum class ESampleMode : uint8
         {
             Default,
             Active
         };
 
         USTRUCT(BlueprintType)
-        struct FCurrentFeature
+        struct FSampleFeature
         {
             GENERATED_BODY()
 
@@ -411,7 +449,7 @@ def create_fixture(workspace: Path) -> SimpleNamespace:
         };
 
         UCLASS()
-        class UCurrentObject : public UObject
+        class USampleObject : public UObject
         {
             GENERATED_BODY()
 
@@ -426,10 +464,10 @@ def create_fixture(workspace: Path) -> SimpleNamespace:
     write_text(
         source_file,
         """
-        #include "CurrentFeature.h"
+        #include "SampleFeature.h"
         #include "CoreMinimal.h"
 
-        void UCurrentObject::Execute(UObject* Context) const
+        void USampleObject::Execute(UObject* Context) const
         {
             if (Context)
             {
@@ -448,6 +486,7 @@ def create_fixture(workspace: Path) -> SimpleNamespace:
         game_rules=game_rules,
         game_entry=game_entry,
         target_file=target_file,
+        editor_target_file=editor_target_file,
         plugin_root=plugin_root,
         plugin_file=plugin_file,
         plugin_rules=plugin_rules,

@@ -1,1 +1,1 @@
-"""UE ITPS automated tests."""
+"""UE ITPS 自动化测试。"""

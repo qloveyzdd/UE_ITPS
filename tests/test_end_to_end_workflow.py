@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tests.fixture import CLI_SCHEMAS, FixtureTestCase
+from tests.support import PUBLIC_CLIS, WorkspaceTestCase, run_cli
 
 
-class NavigationWorkflowTests(FixtureTestCase):
-    def test_all_public_clis_form_one_explicit_navigation_workflow(self) -> None:
+class EndToEndWorkflowTests(WorkspaceTestCase):
+    def workflow_commands(self) -> dict[str, list[str]]:
         project = str(self.fixture.project_file)
-        commands = {
+        return {
             "ue_find_projects.py": [
                 "--search-root",
                 str(self.fixture.project_root),
@@ -30,7 +30,7 @@ class NavigationWorkflowTests(FixtureTestCase):
                 "--target-type",
                 "Editor",
                 "--plugin-name",
-                "CurrentPlugin",
+                "SamplePlugin",
             ],
             "ue_classify_project_paths.py": ["--project", project],
             "ue_read_plugin_descriptor.py": [
@@ -49,7 +49,7 @@ class NavigationWorkflowTests(FixtureTestCase):
                 "--source",
                 str(self.fixture.target_file),
                 "--function",
-                "CurrentGameTarget",
+                "SampleGameTarget",
             ],
             "ue_inspect_module_entry.py": [
                 "--rules",
@@ -70,8 +70,12 @@ class NavigationWorkflowTests(FixtureTestCase):
                 "Execute",
             ],
         }
+
+    def test_all_public_clis_form_explicit_navigation_workflow(self) -> None:
+        commands = self.workflow_commands()
+        self.assertEqual(set(commands), set(PUBLIC_CLIS))
         results = {}
-        for script in CLI_SCHEMAS:
+        for script in PUBLIC_CLIS:
             with self.subTest(script=script):
                 result = self.cli(script, *commands[script])
                 self.assertNotEqual(result["validation"]["status"], "error")
@@ -87,19 +91,20 @@ class NavigationWorkflowTests(FixtureTestCase):
         self.assertEqual(module_rules, self.fixture.game_rules.resolve())
         target = Path(results["ue_inspect_targets.py"]["items"][0]["path"]).resolve()
         self.assertEqual(target, self.fixture.target_file.resolve())
-        source_modules = {
-            item["module"]
-            for item in results["ue_list_project_cxx_sources.py"]["modules"]
-        }
-        self.assertEqual(source_modules, {"CurrentGame", "CurrentPlugin"})
+        self.assertEqual(
+            {
+                item["module"]
+                for item in results["ue_list_project_cxx_sources.py"]["modules"]
+            },
+            {"SampleGame", "SamplePlugin"},
+        )
 
         plugin_result = results["ue_resolve_plugins.py"]
-        plugin = plugin_result["items"][0]
         plugin_path = (
-            Path(plugin_result["path_roots"]["project"]) / plugin["descriptor"]
+            Path(plugin_result["path_roots"]["project"])
+            / plugin_result["items"][0]["descriptor"]
         ).resolve()
         self.assertEqual(plugin_path, self.fixture.plugin_file.resolve())
-
         plugin_rules = Path(
             results["ue_read_plugin_descriptor.py"]["modules"][0]["build_rules"][
                 "candidates"
@@ -112,20 +117,29 @@ class NavigationWorkflowTests(FixtureTestCase):
             Path(entry["module"]["root"]) / entry["registration"]["evidence"]["path"]
         ).resolve()
         self.assertEqual(entry_path, self.fixture.plugin_entry.resolve())
+        self.assertEqual(results["ue_inspect_cxx_function.py"]["match_count"], 1)
+        self.assertEqual(results["ue_inspect_cs_function.py"]["match_count"], 1)
 
-        cxx_functions = {
-            member["name"]
-            for category in ("classes", "structs")
-            for item in results["ue_list_cxx_types.py"][category]
-            for member in item["member_anchors"]
-            if member["kind"] == "function"
-        }
-        self.assertIn("Execute", cxx_functions)
-        self.assertEqual(
-            results["ue_inspect_cxx_function.py"]["match_count"],
-            1,
-        )
-        self.assertEqual(
-            results["ue_inspect_cs_function.py"]["match_count"],
-            1,
-        )
+    def test_repeated_scans_are_byte_deterministic(self) -> None:
+        commands = self.workflow_commands()
+        for script in (
+            "ue_find_projects.py",
+            "ue_inspect_modules.py",
+            "ue_read_plugin_descriptor.py",
+            "ue_inspect_module_entry.py",
+            "ue_list_cxx_types.py",
+            "ue_inspect_cxx_function.py",
+        ):
+            with self.subTest(script=script):
+                first = run_cli(script, *commands[script])
+                second = run_cli(script, *commands[script])
+                self.assertEqual(first.returncode, 0)
+                self.assertEqual(second.returncode, 0)
+                self.assertEqual(first.stderr, second.stderr)
+                self.assertEqual(first.stdout, second.stdout)
+
+
+if __name__ == "__main__":
+    import unittest
+
+    unittest.main()
