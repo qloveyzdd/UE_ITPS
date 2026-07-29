@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .source_declarations import (
+from .source_declarators import (
     _SOURCE_ANNOTATION_MACROS,
     _callable_has_initializer_expression,
     _classify_declaration,

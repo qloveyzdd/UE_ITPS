@@ -249,7 +249,9 @@ limits
 | `test_public_contracts.py` | 16 | CLI、Schema、帮助、退出码、错误信封与严格 JSON |
 | `test_project_navigation.py` | 14 | 项目级发现、导航事实、Plugin 与 C++ 文件清单 |
 | `test_build_analysis.py` | 14 | `.uplugin`、规则、C# 函数和 Module 生命周期 |
-| `test_cxx_analysis.py` | 18 | 源码单元、include、类型、函数和歧义边界 |
+| `test_cxx_source_units.py` | 12 | 源码单元、include 和歧义边界 |
+| `test_cxx_types.py` | 5 | 类型、接口候选、命名空间和链接属性 |
+| `test_cxx_functions.py` | 13 | 函数身份、外部符号分类和失败边界 |
 | `test_end_to_end_workflow.py` | 2 | 16 个 CLI 的端到端导航与确定性 |
 
 执行方式：

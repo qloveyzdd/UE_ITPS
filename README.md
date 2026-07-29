@@ -172,7 +172,9 @@ python -m unittest discover -s tests -v
 | `test_public_contracts.py` | 16 | CLI/Schema 清单、双语帮助、退出码、错误信封、公共 JSON 规则 |
 | `test_project_navigation.py` | 14 | 项目发现、描述符、Engine、Module、Target、Plugin、源码清单和路径 |
 | `test_build_analysis.py` | 14 | `.uplugin`、ModuleRules、TargetRules、C# 函数和 Module 生命周期 |
-| `test_cxx_analysis.py` | 30 | 源码单元配对、include、类型、接口候选、函数与失败边界 |
+| `test_cxx_source_units.py` | 12 | 源码单元配对、include 与失败边界 |
+| `test_cxx_types.py` | 5 | 类型、接口候选、命名空间、角色与链接属性 |
+| `test_cxx_functions.py` | 13 | 函数身份、外部符号分类与失败边界 |
 | `test_end_to_end_workflow.py` | 2 | 16 个 CLI 的完整导航和重复扫描确定性 |
 | **合计** | **76** | 当前公开行为、关键失败边界与确定性 |
 

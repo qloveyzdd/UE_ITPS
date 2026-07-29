@@ -5,7 +5,7 @@ import re
 from typing import Any
 
 from .common import result_document
-from .source_declarations import _classify_declaration
+from .source_declarators import _classify_declaration
 from .source_parser import parse_csharp_file
 from .source_tokens import _raw, _split_arguments, lex_source, token_pairs
 

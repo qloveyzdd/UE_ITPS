@@ -13,7 +13,7 @@ from .source_controls import (
     control_expression_ranges,
     control_spans,
 )
-from .source_declarations import _declaration_name
+from .source_declarators import _declaration_name
 from .source_tokens import (
     Token,
     _evaluation,

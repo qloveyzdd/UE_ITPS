@@ -6,7 +6,7 @@ from typing import Any
 
 from .source_callable_declarations import parse_free_function_declarations
 from .source_context import load_source_context, source_result
-from .source_declarations import _FORBIDDEN_CALLABLE_NAMES, _TYPE_KEYWORDS
+from .source_declarators import _FORBIDDEN_CALLABLE_NAMES, _TYPE_KEYWORDS
 from .source_namespaces import (
     namespace_at,
     observed_namespace_names,
@@ -18,9 +18,9 @@ from .source_fact_common import (
     _SOURCE_MACRO_PREFIXES,
     _callable_name,
     _public_location,
-    _source_declaration_facts,
     _source_macros,
 )
+from .source_variable_facts import _source_declaration_facts
 
 
 def _qualifiers(signature: str) -> list[str]:

@@ -10,7 +10,6 @@ from .source_declarations import (
     _type_owner_at,
 )
 from .source_namespaces import (
-    ANONYMOUS_NAMESPACE,
     namespace_at,
     qualified_name,
 )
@@ -23,8 +22,13 @@ from .source_fact_common import (
     _callable_name,
     _file_evidence,
     _public_location,
-    _source_declaration_facts,
     _source_macros,
+)
+from .source_variable_facts import (
+    _global_variable_facts,
+    _has_anonymous_namespace,
+    _path_matches_evidence,
+    _source_declaration_facts,
 )
 
 def _enums(parsed: dict[str, Any], path: Path, project_root: Path, engine_root: Path | None) -> list[dict[str, Any]]:
@@ -515,126 +519,6 @@ def _type_anchor_facts(
         },
         problems,
     )
-
-
-def _path_matches_evidence(
-    path: Path,
-    evidence: dict[str, Any],
-    loaded: dict[str, Any],
-) -> bool:
-    location = _file_evidence(
-        path,
-        1,
-        loaded["project_root"],
-        loaded["engine_root"],
-    )
-    return (
-        location["root"] == evidence["root"]
-        and location["path"] == evidence["path"]
-    )
-
-
-def _global_variable_facts(
-    loaded: dict[str, Any],
-    variables: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    results: list[dict[str, Any]] = []
-    for path, parsed in loaded["parsed_files"]:
-        for item in variables:
-            if item["scope"] != "file" or not _path_matches_evidence(
-                path,
-                item["evidence"],
-                loaded,
-            ):
-                continue
-            namespace = namespace_at(
-                parsed["namespace_scopes"],
-                int(item["_name_index"]),
-            )
-            namespace = item.get("_explicit_namespace") or namespace
-            declaration_tokens = parsed["tokens"][
-                int(item["_token_range"][0]) :
-                int(item["_type_end_index"])
-            ]
-            modifiers = [token.value for token in declaration_tokens]
-            results.append(
-                {
-                    "name": item["name"],
-                    "namespace": namespace,
-                    "qualified_name": qualified_name(
-                        namespace,
-                        item["name"],
-                    ),
-                    "type_expression": item["type_expression"],
-                    "role": (
-                        "declaration"
-                        if "extern" in modifiers
-                        and not bool(item["_has_initializer"])
-                        else "definition"
-                    ),
-                    "linkage": _variable_linkage(
-                        namespace,
-                        modifiers,
-                    ),
-                    "macros": list(item.get("_macros", [])),
-                    "evidence": _type_unit_evidence(
-                        loaded,
-                        path,
-                        item["evidence"],
-                    ),
-                }
-            )
-    unique = {
-        (
-            item["qualified_name"],
-            item["type_expression"],
-            item["role"],
-            item["linkage"],
-            item["evidence"]["unit"],
-            item["evidence"]["line"],
-        ): item
-        for item in results
-    }
-    return sorted(unique.values(), key=_anchor_sort_key)
-
-
-def _has_anonymous_namespace(namespace: str | None) -> bool:
-    return bool(
-        namespace
-        and ANONYMOUS_NAMESPACE in namespace.split("::")
-    )
-
-
-def _top_level_const(modifiers: list[str]) -> bool:
-    if "constexpr" in modifiers:
-        return True
-    if "const" not in modifiers or "volatile" in modifiers:
-        return False
-    if "&" in modifiers or "&&" in modifiers:
-        return False
-    last_const = len(modifiers) - 1 - modifiers[::-1].index("const")
-    pointer_positions = [
-        index
-        for index, value in enumerate(modifiers)
-        if value == "*"
-    ]
-    return not pointer_positions or last_const > pointer_positions[-1]
-
-
-def _variable_linkage(
-    namespace: str | None,
-    modifiers: list[str],
-) -> str:
-    if _has_anonymous_namespace(namespace) or "static" in modifiers:
-        return "internal"
-    if (
-        "extern" not in modifiers
-        and "inline" not in modifiers
-        and "template" not in modifiers
-        and _top_level_const(modifiers)
-    ):
-        return "internal"
-    return "external"
 
 
 def _free_function_facts(
