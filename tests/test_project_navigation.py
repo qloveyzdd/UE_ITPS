@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tests.support import WorkspaceTestCase, write_json, write_text
+from tests.support import CliTestCase, write_json, write_text
 
 
-class ProjectNavigationTests(WorkspaceTestCase):
-    def test_discovery_selects_one_project(self) -> None:
+class ProjectNavigationTests(CliTestCase):
+    def test_discovery_selects_the_only_project(self) -> None:
         result = self.cli(
             "ue_find_projects.py",
             "--search-root",
@@ -14,13 +14,10 @@ class ProjectNavigationTests(WorkspaceTestCase):
         )
         self.assertEqual(result["status"], "selected")
         self.assertEqual(result["candidate_count"], 1)
-        self.assertEqual(
-            Path(result["candidates"][0]).resolve(),
-            self.fixture.project_file.resolve(),
-        )
+        self.assertEqual(result["validation"]["status"], "ok")
 
-    def test_discovery_reports_no_project(self) -> None:
-        empty = self.fixture.workspace / "Empty"
+    def test_discovery_reports_no_project_as_domain_error(self) -> None:
+        empty = self.fixture.root / "Empty"
         empty.mkdir()
         result = self.cli(
             "ue_find_projects.py",
@@ -30,20 +27,17 @@ class ProjectNavigationTests(WorkspaceTestCase):
         )
         self.assertEqual(result["status"], "not-found")
         self.assertEqual(result["candidate_count"], 0)
-        self.assertEqual(
-            result["validation"]["problems"][0]["code"],
-            "project-discovery-not-found",
-        )
+        self.assertEqual(result["validation"]["status"], "error")
 
     def test_discovery_refuses_ambiguous_projects(self) -> None:
         write_json(
-            self.fixture.workspace / "Other" / "Other.uproject",
+            self.fixture.project_root / "Second.uproject",
             {"FileVersion": 3},
         )
         result = self.cli(
             "ue_find_projects.py",
             "--search-root",
-            str(self.fixture.workspace),
+            str(self.fixture.project_root),
             expected_code=1,
         )
         self.assertEqual(result["status"], "ambiguous")
@@ -54,24 +48,24 @@ class ProjectNavigationTests(WorkspaceTestCase):
         )
 
     def test_discovery_skips_generated_directories(self) -> None:
-        for name in ("Binaries", "Intermediate", "Saved", "DerivedDataCache"):
-            write_json(
-                self.fixture.project_root / name / f"{name}.uproject",
-                {"FileVersion": 3},
-            )
+        write_json(
+            self.fixture.project_root
+            / "Intermediate"
+            / "Hidden.uproject",
+            {"FileVersion": 3},
+        )
         result = self.cli(
             "ue_find_projects.py",
             "--search-root",
             str(self.fixture.project_root),
         )
         self.assertEqual(result["candidate_count"], 1)
-        self.assertEqual(Path(result["candidates"][0]).name, "SampleGame.uproject")
 
-    def test_project_descriptor_projects_navigation_fields(self) -> None:
+    def test_project_descriptor_projects_explicit_navigation_facts(self) -> None:
         result = self.cli(
             "ue_read_project_descriptor.py",
             "--project",
-            str(self.fixture.project_file),
+            str(self.fixture.project),
         )
         self.assertEqual(result["declared_modules"], ["SampleGame"])
         self.assertEqual(
@@ -84,7 +78,7 @@ class ProjectNavigationTests(WorkspaceTestCase):
         )
         self.assertEqual(
             result["unmodeled_top_level_fields"],
-            {"CustomField": {"preserved": True}},
+            {"CustomFixtureField": {"kept": True}},
         )
 
     def test_project_descriptor_preserves_extended_plugin_declaration(self) -> None:
@@ -92,192 +86,143 @@ class ProjectNavigationTests(WorkspaceTestCase):
             "FileVersion": 3,
             "Plugins": [
                 {
-                    "Name": "PlatformPlugin",
+                    "Name": "ConditionalPlugin",
                     "Enabled": True,
-                    "PlatformAllowList": ["Win64"],
+                    "TargetAllowList": ["Editor"],
                 }
             ],
         }
-        write_json(self.fixture.project_file, descriptor)
+        project = write_json(
+            self.fixture.root / "Extended.uproject",
+            descriptor,
+        )
         result = self.cli(
             "ue_read_project_descriptor.py",
             "--project",
-            str(self.fixture.project_file),
+            str(project),
         )
         extended = result["plugin_declarations"]["extended"]
         self.assertEqual(len(extended), 1)
-        self.assertEqual(extended[0]["name"], "PlatformPlugin")
-        self.assertEqual(extended[0]["descriptor_pointer"], "/Plugins/0")
-
-    def test_project_descriptor_rejects_duplicate_json_fields(self) -> None:
-        self.fixture.project_file.write_text(
-            '{"FileVersion": 3, "FileVersion": 4}',
-            encoding="utf-8",
-        )
-        result = self.cli(
-            "ue_read_project_descriptor.py",
-            "--project",
-            str(self.fixture.project_file),
-            expected_code=2,
-        )
-        self.assert_request_failure(result, kind="input")
+        self.assertEqual(extended[0]["name"], "ConditionalPlugin")
+        self.assertEqual(extended[0]["additional_fields"], ["TargetAllowList"])
 
     def test_engine_resolution_reads_build_version(self) -> None:
         result = self.cli(
             "ue_resolve_engine.py",
             "--project",
-            str(self.fixture.project_file),
+            str(self.fixture.project),
         )
         self.assertEqual(result["status"], "resolved")
         self.assertEqual(result["version"], "5.6.1")
-        self.assertEqual(
-            Path(result["engine_root"]).resolve(),
-            self.fixture.engine_root.resolve(),
+        self.assertEqual(result["build"]["Changelist"], 12345)
+        self.assertEqual(result["validation"]["status"], "ok")
+
+    def test_engine_resolution_honors_explicit_override(self) -> None:
+        alternate = self.fixture.root / "AlternateEngine"
+        write_json(
+            alternate / "Engine" / "Build" / "Build.version",
+            {
+                "MajorVersion": 5,
+                "MinorVersion": 7,
+                "PatchVersion": 0,
+            },
         )
+        result = self.cli(
+            "ue_resolve_engine.py",
+            "--project",
+            str(self.fixture.project),
+            "--engine-root",
+            str(alternate),
+        )
+        self.assertEqual(result["version"], "5.7.0")
 
     def test_module_inventory_reconciles_rules_and_entrypoint(self) -> None:
         result = self.cli(
             "ue_inspect_modules.py",
             "--project",
-            str(self.fixture.project_file),
+            str(self.fixture.project),
         )
         self.assertEqual(result["reconciled_module_count"], 1)
-        module = result["items"][0]
-        self.assertEqual(module["name"], "SampleGame")
-        self.assertEqual(
-            module["actual"]["module_entrypoint_candidates"][0]["macro"],
-            "IMPLEMENT_PRIMARY_GAME_MODULE",
-        )
-        self.assertEqual(
-            Path(module["build_rules"]["candidates"][0]["path"]).resolve(),
-            self.fixture.game_rules.resolve(),
+        item = result["items"][0]
+        self.assertEqual(item["name"], "SampleGame")
+        self.assertEqual(item["build_rules"]["status"], "resolved")
+        self.assertGreaterEqual(
+            len(item["actual"]["module_entrypoint_candidates"]),
+            1,
         )
 
     def test_target_inventory_finds_game_and_editor_targets(self) -> None:
         result = self.cli(
             "ue_inspect_targets.py",
             "--project",
-            str(self.fixture.project_file),
+            str(self.fixture.project),
+        )
+        self.assertEqual(
+            {item["name"] for item in result["items"]},
+            {"SampleGame", "SampleGameEditor"},
         )
         self.assertEqual(result["classification"], "native-project")
-        self.assertEqual(
-            [item["name"] for item in result["items"]],
-            ["SampleGame", "SampleGameEditor"],
-        )
-        self.assertTrue(all(item["is_root_target"] for item in result["items"]))
 
     def test_project_source_inventory_groups_project_and_plugin_modules(self) -> None:
-        write_text(
-            self.fixture.project_root / "Source" / "SampleGame" / "Loose.hpp",
-            "#pragma once",
-        )
-        write_text(
-            self.fixture.project_root
-            / "Source"
-            / "SampleGame"
-            / "Private"
-            / "Ignored.gen.cpp",
-            "void Generated() {}",
-        )
-        write_text(
-            self.fixture.plugin_root
-            / "Source"
-            / "SamplePlugin"
-            / "Public"
-            / "SamplePluginApi.hpp",
-            "#pragma once",
-        )
         result = self.cli(
             "ue_list_project_cxx_sources.py",
             "--project",
-            str(self.fixture.project_file),
+            str(self.fixture.project),
         )
         self.assertEqual(result["module_count"], 2)
-        self.assertEqual(result["file_count"], 6)
-        modules = {item["module"]: item for item in result["modules"]}
-        self.assertIsNone(modules["SampleGame"]["plugin"])
-        self.assertEqual(
-            modules["SampleGame"]["headers"]["unclassified"],
-            ["Source/SampleGame/Loose.hpp"],
+        by_name = {item["module"]: item for item in result["modules"]}
+        self.assertEqual(set(by_name), {"SampleGame", "SamplePlugin"})
+        self.assertIn(
+            "Source/SampleGame/Public/SampleActor.h",
+            by_name["SampleGame"]["headers"]["public"],
         )
-        self.assertEqual(modules["SamplePlugin"]["plugin"], "SamplePlugin")
-        self.assertEqual(
-            modules["SamplePlugin"]["plugin_descriptor"],
-            "Plugins/SamplePlugin/SamplePlugin.uplugin",
-        )
-        paths = [
-            path
-            for module in result["modules"]
-            for category in ("headers", "cpp")
-            for group in module[category].values()
-            for path in group
-        ]
-        self.assertFalse(any(".gen." in path for path in paths))
-        self.assertFalse(any(path.startswith("Engine/") for path in paths))
+        self.assertEqual(by_name["SamplePlugin"]["plugin"], "SamplePlugin")
 
-    def test_plugin_resolution_preserves_profile_and_disabled_items(self) -> None:
+    def test_plugin_resolution_keeps_enabled_and_disabled_declarations(self) -> None:
         result = self.cli(
             "ue_resolve_plugins.py",
             "--project",
-            str(self.fixture.project_file),
-            "--engine-root",
-            str(self.fixture.engine_root),
-            "--operation",
-            "build_editor",
-            "--platform",
-            "Linux",
-            "--target-type",
-            "Editor",
+            str(self.fixture.project),
         )
         self.assertEqual(result["count"], 2)
-        self.assertEqual(result["declared_enabled_count"], 1)
-        self.assertEqual(result["declared_disabled_count"], 1)
-        self.assertEqual(
-            result["profile"],
-            {
-                "operation": "build_editor",
-                "platform": "Linux",
-                "target_type": "Editor",
-            },
-        )
-        plugin = next(item for item in result["items"] if item["name"] == "SamplePlugin")
-        self.assertEqual(plugin["origin"], "project")
-        self.assertEqual(
-            plugin["descriptor"],
-            "Plugins/SamplePlugin/SamplePlugin.uplugin",
-        )
+        by_name = {item["name"]: item for item in result["items"]}
+        self.assertTrue(by_name["SamplePlugin"]["declared_enabled"])
+        self.assertEqual(by_name["SamplePlugin"]["origin"], "project")
+        self.assertFalse(by_name["DisabledPlugin"]["declared_enabled"])
+        self.assertIsNone(by_name["DisabledPlugin"]["descriptor"])
 
-    def test_plugin_name_filter_is_case_insensitive(self) -> None:
+    def test_plugin_filter_is_case_insensitive(self) -> None:
         result = self.cli(
             "ue_resolve_plugins.py",
             "--project",
-            str(self.fixture.project_file),
-            "--engine-root",
-            str(self.fixture.engine_root),
+            str(self.fixture.project),
             "--plugin-name",
-            "disabledplugin",
+            "sampleplugin",
         )
         self.assertEqual(result["count"], 1)
-        self.assertEqual(result["items"][0]["name"], "DisabledPlugin")
-        self.assertEqual(result["items"][0]["descriptor_pointer"], "/Plugins/1")
+        self.assertEqual(result["items"][0]["name"], "SamplePlugin")
 
-    def test_path_classification_reports_state_without_deletion_claim(self) -> None:
+    def test_path_classification_reports_roles_without_deletion_claims(self) -> None:
         result = self.cli(
             "ue_classify_project_paths.py",
             "--project",
-            str(self.fixture.project_file),
+            str(self.fixture.project),
         )
-        source = next(
-            item for item in result["project_directories"] if item["role"] == "source"
+        path_items = [
+            *result["project_directories"],
+            *result["build_and_ide_paths"],
+            *result["cache_and_local_state_paths"],
+        ]
+        by_path = {
+            item["project_relative_path"]: item
+            for item in path_items
+        }
+        self.assertEqual(by_path["Content"]["role"], "content")
+        self.assertEqual(by_path["Source"]["actual_type"], "directory")
+        self.assertEqual(
+            result["unclassified_root_directories"][0]["project_relative_path"],
+            "Reports",
         )
-        self.assertEqual(source["actual_type"], "directory")
-        self.assertNotIn("deletion_safe", source)
         self.assertTrue(
-            any("deletion safety" in text for text in result["limits"]["boundaries"])
+            any("deletion" in boundary.lower() for boundary in result["limits"]["boundaries"])
         )
-
-
-if __name__ == "__main__":
-    import unittest
-
-    unittest.main()

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-import json
+from dataclasses import dataclass
 from functools import lru_cache
+import json
+import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
-from types import SimpleNamespace
+import textwrap
 from typing import Any
 import unittest
 
@@ -41,7 +43,7 @@ PUBLIC_CLIS = {
     "ue_inspect_cxx_function.py": "ue-itps.cxx-function.v1",
 }
 
-PATH_ARGUMENTS = {
+REQUIRED_PATH_ARGUMENTS = {
     "ue_read_project_descriptor.py": "--project",
     "ue_resolve_engine.py": "--project",
     "ue_inspect_modules.py": "--project",
@@ -60,140 +62,41 @@ PATH_ARGUMENTS = {
 }
 
 
-@lru_cache(maxsize=1)
-def schema_registry() -> Registry:
-    registry = Registry()
-    for path in sorted(SCHEMAS_ROOT.glob("*.schema.json")):
-        schema = json.loads(path.read_text(encoding="utf-8"))
-        registry = registry.with_resource(
-            schema["$id"],
-            Resource.from_contents(schema),
-        )
-    return registry
+def write_text(path: Path, content: str) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(textwrap.dedent(content).strip() + "\n", encoding="utf-8")
+    return path
 
 
-@lru_cache(maxsize=None)
-def result_validator(script: str) -> Draft202012Validator:
-    path = SCHEMAS_ROOT / f"{Path(script).stem}.schema.json"
-    schema = json.loads(path.read_text(encoding="utf-8"))
-    return Draft202012Validator(schema, registry=schema_registry())
-
-
-def assert_schema_valid(
-    test_case: unittest.TestCase,
-    script: str,
-    result: dict[str, Any],
-) -> None:
-    errors = sorted(
-        result_validator(script).iter_errors(result),
-        key=lambda error: list(error.absolute_path),
-    )
-    test_case.assertEqual(
-        errors,
-        [],
-        msg="\n".join(error.message for error in errors),
-    )
-
-
-def write_json(path: Path, value: Any) -> None:
+def write_json(path: Path, value: Any) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        json.dumps(value, ensure_ascii=False, indent=2),
+        json.dumps(value, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+    return path
 
 
-def write_text(path: Path, value: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(value.strip() + "\n", encoding="utf-8")
+@dataclass(frozen=True)
+class Fixture:
+    root: Path
+    engine_root: Path
+    project_root: Path
+    project: Path
+    module_rules: Path
+    game_target: Path
+    editor_target: Path
+    source_header: Path
+    source_cpp: Path
+    plugin: Path
+    plugin_rules: Path
+    plugin_source: Path
 
 
-def run_cli(script: str, *arguments: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, str(TOOLS_ROOT / script), *arguments],
-        cwd=REPOSITORY_ROOT,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=False,
-    )
-
-
-def parse_cli(
-    test_case: unittest.TestCase,
-    script: str,
-    *arguments: str,
-    expected_code: int = 0,
-) -> dict[str, Any]:
-    completed = run_cli(script, *arguments)
-    test_case.assertEqual(
-        completed.returncode,
-        expected_code,
-        msg=completed.stderr or completed.stdout,
-    )
-    test_case.assertEqual(completed.stderr, "")
-    result = json.loads(completed.stdout)
-    test_case.assertEqual(result["schema_version"], PUBLIC_CLIS[script])
-    assert_schema_valid(test_case, script, result)
-    return result
-
-
-class ContractAssertions(unittest.TestCase):
-    def assert_result_contract(self, result: dict[str, Any]) -> None:
-        self.assertEqual(next(iter(result)), "schema_version")
-        self.assertEqual(list(result)[-2:], ["validation", "limits"])
-        validation = result["validation"]
-        self.assertIn(validation["status"], {"ok", "warning", "error"})
-        self.assertEqual(validation["problem_count"], len(validation["problems"]))
-        self.assertTrue(result["limits"]["responsibility"])
-        self.assertIsInstance(result["limits"]["boundaries"], list)
-
-    def assert_scan_success(self, result: dict[str, Any]) -> None:
-        self.assert_result_contract(result)
-        self.assertNotEqual(result["validation"]["status"], "error")
-
-    def assert_request_failure(
-        self,
-        result: dict[str, Any],
-        *,
-        kind: str,
-    ) -> None:
-        self.assert_result_contract(result)
-        self.assertEqual(result["request"], {"status": "failed", "kind": kind})
-        self.assertEqual(result["validation"]["status"], "error")
-
-
-class WorkspaceTestCase(ContractAssertions):
-    fixture: SimpleNamespace
-    temporary_directory: tempfile.TemporaryDirectory[str]
-
-    def setUp(self) -> None:
-        self.temporary_directory = tempfile.TemporaryDirectory()
-        self.fixture = create_workspace(Path(self.temporary_directory.name))
-
-    def tearDown(self) -> None:
-        self.temporary_directory.cleanup()
-
-    def cli(
-        self,
-        script: str,
-        *arguments: str,
-        expected_code: int = 0,
-    ) -> dict[str, Any]:
-        result = parse_cli(
-            self,
-            script,
-            *arguments,
-            expected_code=expected_code,
-        )
-        self.assert_result_contract(result)
-        return result
-
-
-def create_workspace(workspace: Path) -> SimpleNamespace:
-    engine_root = workspace
-    project_root = workspace / "SampleGame"
-    project_file = project_root / "SampleGame.uproject"
+def create_fixture(root: Path) -> Fixture:
+    engine_root = root
+    project_root = root / "SampleGame"
+    project = project_root / "SampleGame.uproject"
 
     write_json(
         engine_root / "Engine" / "Build" / "Build.version",
@@ -201,11 +104,11 @@ def create_workspace(workspace: Path) -> SimpleNamespace:
             "MajorVersion": 5,
             "MinorVersion": 6,
             "PatchVersion": 1,
-            "Changelist": 101,
-            "CompatibleChangelist": 101,
+            "Changelist": 12345,
+            "CompatibleChangelist": 12000,
             "IsLicenseeVersion": 0,
-            "IsPromotedBuild": 0,
-            "BranchName": "TestFixture",
+            "IsPromotedBuild": 1,
+            "BranchName": "++UE5+Release-5.6",
         },
     )
     write_text(
@@ -249,16 +152,19 @@ def create_workspace(workspace: Path) -> SimpleNamespace:
         / "GameplayTags"
         / "Classes"
         / "GameplayTagContainer.h",
-        "#pragma once\nstruct FGameplayTag {};",
+        """
+        #pragma once
+        struct FGameplayTag {};
+        """,
     )
 
     write_json(
-        project_file,
+        project,
         {
             "FileVersion": 3,
             "EngineAssociation": "",
             "Category": "Tests",
-            "Description": "Current UE ITPS behavior fixture",
+            "Description": "Deterministic test fixture",
             "Modules": [
                 {
                     "Name": "SampleGame",
@@ -270,76 +176,68 @@ def create_workspace(workspace: Path) -> SimpleNamespace:
                 {"Name": "SamplePlugin", "Enabled": True},
                 {"Name": "DisabledPlugin", "Enabled": False},
             ],
-            "CustomField": {"preserved": True},
+            "AdditionalRootDirectories": [],
+            "AdditionalPluginDirectories": [],
+            "Enterprise": False,
+            "CustomFixtureField": {"kept": True},
         },
     )
 
-    game_rules = project_root / "Source" / "SampleGame" / "SampleGame.Build.cs"
-    write_text(
-        game_rules,
+    module_rules = write_text(
+        project_root / "Source" / "SampleGame" / "SampleGame.Build.cs",
         """
+        using UnrealBuildTool;
+
         public class SampleGame : ModuleRules
         {
             public SampleGame(ReadOnlyTargetRules Target) : base(Target)
             {
-                PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
+                PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
                 PublicDependencyModuleNames.AddRange(
-                    new string[] { "Core", "GameplayTags" });
+                    new string[] { "Core", "GameplayTags" }
+                );
+                ConfigureEditor(Target);
+            }
+
+            private void ConfigureEditor(ReadOnlyTargetRules Target)
+            {
                 if (Target.bBuildEditor)
                 {
                     PrivateDependencyModuleNames.Add("UnrealEd");
                 }
-                AddRuntimeModules();
-            }
-
-            private void AddRuntimeModules()
-            {
-                DynamicallyLoadedModuleNames.Add("Projects");
             }
         }
         """,
     )
-    game_entry = (
-        project_root / "Source" / "SampleGame" / "Private" / "SampleGameModule.cpp"
-    )
-    write_text(
-        game_entry,
+    game_target = write_text(
+        project_root / "Source" / "SampleGame.Target.cs",
         """
-        #include "Modules/ModuleManager.h"
-        IMPLEMENT_PRIMARY_GAME_MODULE(
-            FDefaultGameModuleImpl, SampleGame, "SampleGame");
-        """,
-    )
+        using UnrealBuildTool;
 
-    target_file = project_root / "Source" / "SampleGame.Target.cs"
-    write_text(
-        target_file,
-        """
         public class SampleGameTarget : TargetRules
         {
-            private static readonly string SharedDefinition = "SAMPLE";
+            private string Flavor = "Game";
 
             public SampleGameTarget(TargetInfo Target) : base(Target)
             {
                 Type = TargetType.Game;
+                DefaultBuildSettings = BuildSettingsVersion.V5;
                 ExtraModuleNames.Add("SampleGame");
-                ApplySharedSettings(Target);
+                Configure(Target);
             }
 
-            private static void ApplySharedSettings(TargetRules Target)
+            private void Configure(TargetInfo Target)
             {
-                if (Target.Configuration == UnrealTargetConfiguration.Shipping)
-                {
-                    Target.bUseLoggingInShipping = true;
-                }
+                LaunchModuleName = "SampleGame";
             }
         }
         """,
     )
-    editor_target_file = project_root / "Source" / "SampleGameEditor.Target.cs"
-    write_text(
-        editor_target_file,
+    editor_target = write_text(
+        project_root / "Source" / "SampleGameEditor.Target.cs",
         """
+        using UnrealBuildTool;
+
         public class SampleGameEditorTarget : TargetRules
         {
             public SampleGameEditorTarget(TargetInfo Target) : base(Target)
@@ -351,18 +249,108 @@ def create_workspace(workspace: Path) -> SimpleNamespace:
         """,
     )
 
-    plugin_root = project_root / "Plugins" / "SamplePlugin"
-    plugin_file = plugin_root / "SamplePlugin.uplugin"
-    write_json(
-        plugin_file,
+    source_header = write_text(
+        project_root
+        / "Source"
+        / "SampleGame"
+        / "Public"
+        / "SampleActor.h",
+        """
+        #pragma once
+        #include "CoreMinimal.h"
+        #include "SampleActor.generated.h"
+
+        namespace Gameplay
+        {
+        enum class ESampleState : uint8
+        {
+            Idle,
+            Active
+        };
+
+        UCLASS()
+        class ASampleActor : public AActor
+        {
+            GENERATED_BODY()
+
+        public:
+            UFUNCTION()
+            void BeginPlay();
+
+            void Helper();
+
+            UPROPERTY()
+            int32 Count;
+        };
+
+        extern int32 GSampleCount;
+        void Utility();
+        }
+        """,
+    )
+    source_cpp = write_text(
+        project_root
+        / "Source"
+        / "SampleGame"
+        / "Private"
+        / "SampleActor.cpp",
+        """
+        #include "SampleActor.h"
+        #include "GameplayTagContainer.h"
+
+        namespace Gameplay
+        {
+        int32 GSampleCount = 0;
+
+        void Utility()
+        {
+            ++GSampleCount;
+        }
+
+        void ASampleActor::BeginPlay()
+        {
+            FGameplayTag Tag;
+            Helper();
+            Utility();
+            ++GSampleCount;
+        }
+
+        void ASampleActor::Helper()
+        {
+            Count = 1;
+        }
+        }
+        """,
+    )
+    write_text(
+        project_root
+        / "Source"
+        / "SampleGame"
+        / "Private"
+        / "SampleGame.cpp",
+        """
+        #include "Modules/ModuleManager.h"
+        IMPLEMENT_PRIMARY_GAME_MODULE(
+            FDefaultGameModuleImpl,
+            SampleGame,
+            "SampleGame"
+        );
+        """,
+    )
+
+    plugin = write_json(
+        project_root / "Plugins" / "SamplePlugin" / "SamplePlugin.uplugin",
         {
             "FileVersion": 3,
-            "Version": 2,
-            "VersionName": "2.0",
+            "Version": 1,
+            "VersionName": "1.0",
             "FriendlyName": "Sample Plugin",
-            "Description": "Current implementation fixture plugin",
+            "Description": "Plugin fixture",
             "Category": "Tests",
+            "CreatedBy": "UE ITPS",
             "CanContainContent": False,
+            "IsBetaVersion": False,
+            "Installed": False,
             "Modules": [
                 {
                     "Name": "SamplePlugin",
@@ -370,29 +358,38 @@ def create_workspace(workspace: Path) -> SimpleNamespace:
                     "LoadingPhase": "Default",
                 }
             ],
-            "Plugins": [{"Name": "GameplayTags", "Enabled": True}],
+            "Plugins": [{"Name": "GameplayAbilities", "Enabled": True}],
         },
     )
-    plugin_rules = plugin_root / "Source" / "SamplePlugin" / "SamplePlugin.Build.cs"
-    write_text(
-        plugin_rules,
+    plugin_rules = write_text(
+        project_root
+        / "Plugins"
+        / "SamplePlugin"
+        / "Source"
+        / "SamplePlugin"
+        / "SamplePlugin.Build.cs",
         """
+        using UnrealBuildTool;
+
         public class SamplePlugin : ModuleRules
         {
             public SamplePlugin(ReadOnlyTargetRules Target) : base(Target)
             {
-                PublicDependencyModuleNames.Add("Core");
-                PrivateDependencyModuleNames.Add("GameplayTags");
+                PrivateDependencyModuleNames.Add("Core");
             }
         }
         """,
     )
-    plugin_entry = (
-        plugin_root / "Source" / "SamplePlugin" / "Private" / "SamplePluginModule.cpp"
-    )
-    write_text(
-        plugin_entry,
+    plugin_source = write_text(
+        project_root
+        / "Plugins"
+        / "SamplePlugin"
+        / "Source"
+        / "SamplePlugin"
+        / "Private"
+        / "SamplePluginModule.cpp",
         """
+        #include "CoreMinimal.h"
         #include "Modules/ModuleManager.h"
 
         class FSamplePluginModule : public IModuleInterface
@@ -400,97 +397,141 @@ def create_workspace(workspace: Path) -> SimpleNamespace:
         public:
             virtual void StartupModule() override
             {
-                ReadyHandle = FCoreDelegates::OnPostEngineInit.AddRaw(
-                    this, &FSamplePluginModule::HandleReady);
+                FCoreDelegates::OnPostEngineInit.AddRaw(
+                    this,
+                    &FSamplePluginModule::HandlePostEngineInit
+                );
             }
 
             virtual void ShutdownModule() override
             {
-                FCoreDelegates::OnPostEngineInit.Remove(ReadyHandle);
+                FCoreDelegates::OnPostEngineInit.RemoveAll(this);
             }
 
-            void HandleReady() {}
-            FDelegateHandle ReadyHandle;
+            void HandlePostEngineInit()
+            {
+                bReady = true;
+            }
+
+        private:
+            bool bReady = false;
         };
 
         IMPLEMENT_MODULE(FSamplePluginModule, SamplePlugin)
         """,
     )
 
-    source_file = (
-        project_root / "Source" / "SampleGame" / "Private" / "SampleFeature.cpp"
-    )
-    header_file = (
-        project_root / "Source" / "SampleGame" / "Public" / "SampleFeature.h"
-    )
-    write_text(
-        header_file,
-        """
-        #pragma once
+    (project_root / "Config").mkdir(parents=True, exist_ok=True)
+    (project_root / "Content").mkdir(parents=True, exist_ok=True)
+    (project_root / "Reports").mkdir(parents=True, exist_ok=True)
 
-        #include "CoreMinimal.h"
-        #include "GameplayTagContainer.h"
-        #include "SampleFeature.generated.h"
-
-        UENUM(BlueprintType)
-        enum class ESampleMode : uint8
-        {
-            Default,
-            Active
-        };
-
-        USTRUCT(BlueprintType)
-        struct FSampleFeature
-        {
-            GENERATED_BODY()
-
-            UPROPERTY(EditAnywhere)
-            FGameplayTag Tag;
-        };
-
-        UCLASS()
-        class USampleObject : public UObject
-        {
-            GENERATED_BODY()
-
-        public:
-            void Execute(UObject* Context) const;
-
-        private:
-            TObjectPtr<UObject> Helper;
-        };
-        """,
-    )
-    write_text(
-        source_file,
-        """
-        #include "SampleFeature.h"
-        #include "CoreMinimal.h"
-
-        void USampleObject::Execute(UObject* Context) const
-        {
-            if (Context)
-            {
-                Context->GetWorld();
-                Helper->GetName();
-            }
-        }
-        """,
-    )
-
-    return SimpleNamespace(
-        workspace=workspace,
+    return Fixture(
+        root=root,
         engine_root=engine_root,
         project_root=project_root,
-        project_file=project_file,
-        game_rules=game_rules,
-        game_entry=game_entry,
-        target_file=target_file,
-        editor_target_file=editor_target_file,
-        plugin_root=plugin_root,
-        plugin_file=plugin_file,
+        project=project,
+        module_rules=module_rules,
+        game_target=game_target,
+        editor_target=editor_target,
+        source_header=source_header,
+        source_cpp=source_cpp,
+        plugin=plugin,
         plugin_rules=plugin_rules,
-        plugin_entry=plugin_entry,
-        source_file=source_file,
-        header_file=header_file,
+        plugin_source=plugin_source,
     )
+
+
+def run_cli(
+    script: str,
+    *arguments: str,
+    cwd: Path | None = None,
+) -> subprocess.CompletedProcess[str]:
+    environment = os.environ.copy()
+    environment["PYTHONUTF8"] = "1"
+    return subprocess.run(
+        [sys.executable, str(TOOLS_ROOT / script), *arguments],
+        cwd=cwd or REPOSITORY_ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        env=environment,
+        check=False,
+    )
+
+
+@lru_cache(maxsize=1)
+def schema_registry() -> Registry:
+    registry = Registry()
+    for path in sorted(SCHEMAS_ROOT.glob("*.schema.json")):
+        schema = json.loads(path.read_text(encoding="utf-8"))
+        registry = registry.with_resource(
+            schema["$id"],
+            Resource.from_contents(schema),
+        )
+    return registry
+
+
+@lru_cache(maxsize=None)
+def validator_for(script: str) -> Draft202012Validator:
+    schema_path = SCHEMAS_ROOT / f"{Path(script).stem}.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    return Draft202012Validator(schema, registry=schema_registry())
+
+
+class CliTestCase(unittest.TestCase):
+    fixture: Fixture
+    _temporary_directory: tempfile.TemporaryDirectory[str]
+
+    def setUp(self) -> None:
+        self._temporary_directory = tempfile.TemporaryDirectory()
+        self.fixture = create_fixture(Path(self._temporary_directory.name))
+
+    def tearDown(self) -> None:
+        self._temporary_directory.cleanup()
+
+    def cli(
+        self,
+        script: str,
+        *arguments: str,
+        expected_code: int = 0,
+        cwd: Path | None = None,
+    ) -> dict[str, Any]:
+        completed = run_cli(script, *arguments, cwd=cwd)
+        self.assertEqual(
+            completed.returncode,
+            expected_code,
+            msg=completed.stderr or completed.stdout,
+        )
+        self.assertEqual(completed.stderr, "")
+        result = json.loads(completed.stdout)
+        self.assertEqual(result["schema_version"], PUBLIC_CLIS[script])
+        errors = sorted(
+            validator_for(script).iter_errors(result),
+            key=lambda error: list(error.absolute_path),
+        )
+        self.assertEqual(
+            errors,
+            [],
+            msg="\n".join(error.message for error in errors),
+        )
+        self.assert_result_contract(result)
+        return result
+
+    def assert_result_contract(self, result: dict[str, Any]) -> None:
+        self.assertEqual(next(iter(result)), "schema_version")
+        self.assertEqual(list(result)[-2:], ["validation", "limits"])
+        validation = result["validation"]
+        self.assertIn(validation["status"], {"ok", "warning", "error"})
+        self.assertEqual(validation["problem_count"], len(validation["problems"]))
+        self.assertTrue(result["limits"]["responsibility"])
+        self.assertIsInstance(result["limits"]["boundaries"], list)
+
+    def assert_request_failure(
+        self,
+        result: dict[str, Any],
+        *,
+        kind: str,
+    ) -> None:
+        self.assertEqual(result["request"], {"status": "failed", "kind": kind})
+        self.assertEqual(result["validation"]["status"], "error")
+        self.assertGreater(result["validation"]["problem_count"], 0)
