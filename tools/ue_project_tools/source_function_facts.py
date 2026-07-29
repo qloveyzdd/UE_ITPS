@@ -822,7 +822,7 @@ def inspect_source_function(
             },
             responsibility="Report external type and method references for all definitions matching one function name.",
             boundaries=[
-                "External means not defined by the selected .cpp or its companion header.",
+                "External means not defined by the selected C++ file or its companion.",
                 "Type names are derived from local declaration syntax; wrapped template types remain one expression.",
                 "Member-call receivers are replaced with locally declared type expressions when available.",
                 "Called methods, inheritance, overloads, and included source are not followed.",
@@ -880,7 +880,7 @@ def inspect_source_function(
         },
         responsibility="Report external type and method references for all definitions matching one function name.",
         boundaries=[
-            "External means not defined by the selected .cpp or its companion header.",
+            "External means not defined by the selected C++ file or its companion.",
             "Type names are derived from local declaration syntax; wrapped template types remain one expression.",
             "Member-call receivers are replaced with locally declared type expressions when available.",
             "Called methods, inheritance, overloads, and included source are not followed.",

@@ -19,7 +19,9 @@ from .source_parser import parse_cpp_file
 from .source_tokens import delimiter_problems, lex_source
 
 
-_SOURCE_SUFFIXES = {".cpp", ".cc"}
+_CPP_SUFFIXES = {".cpp", ".cc"}
+_HEADER_SUFFIXES = {".h", ".hpp"}
+_SOURCE_SUFFIXES = _CPP_SUFFIXES | _HEADER_SUFFIXES
 
 
 def _is_relative_to(path: Path, root: Path) -> bool:
@@ -40,10 +42,20 @@ def _validated_file(path: Path, suffixes: set[str], label: str) -> Path:
     return resolved
 
 
-def _automatic_headers(
+def _source_unit_kind(path: Path) -> str:
+    return "header" if path.suffix.casefold() in _HEADER_SUFFIXES else "cpp"
+
+
+def _automatic_companions(
     source: Path,
     source_owner: dict[str, Any] | None,
 ) -> list[Path]:
+    source_suffix = source.suffix.casefold()
+    companion_suffixes = (
+        _CPP_SUFFIXES
+        if source_suffix in _HEADER_SUFFIXES
+        else _HEADER_SUFFIXES
+    )
     candidate_bases = [source.parent / source.stem]
     if source_owner is not None:
         module_root = Path(source_owner["root"]).resolve()
@@ -66,7 +78,7 @@ def _automatic_headers(
     candidates = {
         candidate.resolve()
         for base in candidate_bases
-        for suffix in (".h", ".hpp")
+        for suffix in companion_suffixes
         if (candidate := base.with_suffix(suffix)).is_file()
     }
     return sorted(candidates, key=lambda path: normalized(path).casefold())
@@ -126,19 +138,31 @@ def load_source_context(
         additional_plugin_roots,
     )
     source_owner = owner_for_path(source, records)
-    header_candidates = _automatic_headers(source, source_owner)
-    selected_header = header_candidates[0] if len(header_candidates) == 1 else None
+    companion_candidates = _automatic_companions(source, source_owner)
+    selected_companion = (
+        companion_candidates[0] if len(companion_candidates) == 1 else None
+    )
+    source_is_header = source.suffix.casefold() in _HEADER_SUFFIXES
+    selected_source = selected_companion if source_is_header else source
+    selected_header = source if source_is_header else selected_companion
+    header_candidates = (
+        [source] if source_is_header else companion_candidates
+    )
     header_locations = [
         rooted_path(candidate, project_root, engine_root)
         for candidate in header_candidates
     ]
 
-    parsed_source = (
-        parse_cpp_file(source)
-        if load_cpp_analysis
-        else _lightweight_source(source)
-    )
-    parsed_files: list[tuple[Path, dict[str, Any]]] = [(source, parsed_source)]
+    parsed_files: list[tuple[Path, dict[str, Any]]] = []
+    for path in (selected_source, selected_header):
+        if path is None:
+            continue
+        parsed = (
+            parse_cpp_file(path)
+            if load_cpp_analysis
+            else _lightweight_source(path)
+        )
+        parsed_files.append((path, parsed))
     all_includes: list[dict[str, Any]] = []
     include_problems: list[dict[str, Any]] = []
 
@@ -207,18 +231,9 @@ def load_source_context(
         )
 
     if load_includes:
-        for include in extract_includes(str(parsed_source["text"])):
-            collect_include(include, "cpp", source)
-    if selected_header is not None:
-        parsed_header = (
-            parse_cpp_file(selected_header)
-            if load_cpp_analysis
-            else _lightweight_source(selected_header)
-        )
-        parsed_files.append((selected_header, parsed_header))
-        if load_includes:
-            for include in extract_includes(str(parsed_header["text"])):
-                collect_include(include, "header", selected_header)
+        for path, parsed in parsed_files:
+            for include in extract_includes(str(parsed["text"])):
+                collect_include(include, _source_unit_kind(path), path)
 
     problems: list[dict[str, Any]] = []
     if engine_result["status"] != "resolved":
@@ -241,13 +256,20 @@ def load_source_context(
                 "message": "No enclosing Build.cs source boundary was found",
             }
         )
-    if len(header_candidates) > 1:
+    if len(companion_candidates) > 1:
+        companion_kind = "source" if source_is_header else "header"
         problems.append(
             {
                 "severity": "warning",
-                "code": "source-unit-header-ambiguous",
-                "candidates": header_locations,
-                "message": "Multiple automatically derived companion headers were found",
+                "code": f"source-unit-{companion_kind}-ambiguous",
+                "candidates": [
+                    rooted_path(candidate, project_root, engine_root)
+                    for candidate in companion_candidates
+                ],
+                "message": (
+                    "Multiple automatically derived companion "
+                    f"{companion_kind} files were found"
+                ),
             }
         )
     for path, parsed in parsed_files:
@@ -259,6 +281,11 @@ def load_source_context(
                 }
             )
 
+    source_fact = (
+        rooted_path(selected_source, project_root, engine_root)
+        if selected_source is not None
+        else None
+    )
     header_fact = (
         rooted_path(selected_header, project_root, engine_root)
         if selected_header is not None
@@ -279,7 +306,7 @@ def load_source_context(
             "source_owner": public_owner(source_owner),
         },
         "source_unit": {
-            "source": rooted_path(source, project_root, engine_root),
+            "source": source_fact,
             "header": header_fact,
         },
         "includes": all_includes,
@@ -312,7 +339,7 @@ def source_result(
         [*loaded["problems"], *(additional_problems or [])],
         responsibility=responsibility,
         boundaries=[
-            "Only the selected .cpp and one unambiguous automatically derived companion header are read as C++ source.",
+            "Only the selected .h/.hpp/.cpp/.cc file and one unambiguous automatically derived companion are read as C++ source.",
             *boundaries,
             "The result does not decide required dependencies, feature meaning, implementation correctness, or build-rule changes.",
             "Validation reports input and locally observable structural problems; ok does not prove compilation or runtime behavior.",

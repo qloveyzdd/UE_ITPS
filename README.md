@@ -90,13 +90,13 @@ python tools/ue_inspect_module_entry.py --help
    └─ 明确选择一个 Target.cs 或普通 .cs
       └─ 按函数名检查成员
 
-明确选择一个 .cpp/.cc
+明确选择一个 .h/.hpp/.cpp/.cc
 ├─ include
 ├─ 类型和成员
 └─ 按函数名检查定义
 ```
 
-当搜索根目录存在多个 `.uproject` 时，发现工具会返回歧义错误，不会擅自选择。C++ 工具只接受明确选择的 `.cpp/.cc`，并按同目录及常规 `Private -> Public/Classes` 映射自动寻找同名头文件。
+当搜索根目录存在多个 `.uproject` 时，发现工具会返回歧义错误，不会擅自选择。C++ 工具接受明确选择的 `.h/.hpp/.cpp/.cc`，并按同目录及常规 `Private <-> Public/Classes` 映射双向寻找同名实现文件或头文件；候选唯一时一并扫描，多个候选会返回 warning。
 
 ## 输出与退出码
 

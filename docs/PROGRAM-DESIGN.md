@@ -77,7 +77,7 @@ UE ITPS 解决的是“如何从一个明确的 Unreal Engine 项目或源码入
 - type 工具解析类型、继承、成员名和相邻 UE 宏。
 - function 工具按函数名返回全部定义、声明关系、外部类型和成员调用。
 
-它们只读取明确选择的 `.cpp/.cc` 以及至多一个自动推导的同名头文件，不递归读取 include。
+它们只读取明确选择的 `.h/.hpp/.cpp/.cc` 以及至多一个自动推导的同名配对文件，不递归读取 include。实现文件会寻找头文件，头文件也会寻找实现文件。
 
 ## 4. 实现分层
 
@@ -185,10 +185,10 @@ include、type 和 function 分析按需加载。公共 Schema 独立，内部�
 
 ### 5.4 C++ 源码
 
-1. 输入必须是一个明确 `.cpp/.cc`。
+1. 输入必须是一个明确 `.h/.hpp/.cpp/.cc`。
 2. 最近祖先层级必须只存在一个 `.uproject`。
-3. 头文件按同目录及 `Private -> Public/Classes` 同名映射推导。
-4. 零个头文件候选返回 `null`；多个候选返回 `null` 和 warning。
+3. 配对文件按同目录及 `Private <-> Public/Classes` 同名映射双向推导。
+4. 零个配对候选保留对应 `source_unit` 字段为 `null`；多个候选返回 `null` 和 warning。
 5. 函数工具按名称返回全部同名定义，并生成稳定 `function_id`。
 
 ## 6. 公共输出契约

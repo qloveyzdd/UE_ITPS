@@ -20,7 +20,7 @@ def main() -> int:
         schema_version=SCHEMA_VERSION,
         responsibility=RESPONSIBILITY,
     )
-    parser.add_argument("--source", required=True, metavar="FILE", help="显式选择的 .cpp/.cc 文件 / Explicitly selected .cpp/.cc file")
+    parser.add_argument("--source", required=True, metavar="FILE", help="显式选择的 .h/.hpp/.cpp/.cc 文件 / Explicitly selected .h/.hpp/.cpp/.cc file")
     parser.add_argument(
         "--function",
         required=True,

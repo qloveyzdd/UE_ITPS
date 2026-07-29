@@ -68,9 +68,12 @@ def _type_unit_evidence(
     path: Path,
     location: dict[str, Any],
 ) -> dict[str, Any]:
-    source_path = loaded["parsed_files"][0][0]
     evidence: dict[str, Any] = {
-        "unit": "cpp" if path == source_path else "header",
+        "unit": (
+            "header"
+            if path.suffix.casefold() in {".h", ".hpp"}
+            else "cpp"
+        ),
         "line": int(location["line"]),
     }
     end_line = int(location.get("end_line", location["line"]))

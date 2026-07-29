@@ -21,7 +21,7 @@ def list_source_includes(
         {"includes": loaded["includes"]},
         responsibility="Report non-companion direct include spellings and deterministic filesystem provenance.",
         boundaries=[
-            "The selected source's own companion-header include is represented by source_unit.header and omitted from includes.",
+            "The source unit's own companion-header include is represented by source_unit.header and omitted from includes.",
             "Ambiguous, missing, and unresolved-macro includes are moved to validation.",
             "Referenced files are located for provenance but are never recursively read.",
             "A resolved include is a unique filesystem candidate, not proof of the effective compiler include path.",
