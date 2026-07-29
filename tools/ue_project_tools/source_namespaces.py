@@ -55,5 +55,35 @@ def namespace_at(
     return "::".join(segments) if segments else None
 
 
+def observed_namespace_names(
+    scopes: list[dict[str, Any]],
+) -> set[str]:
+    names: set[str] = set()
+    for scope in scopes:
+        parent = namespace_at(scopes, int(scope["open"]))
+        segments = [
+            str(segment)
+            for segment in scope["segments"]
+        ]
+        if ANONYMOUS_NAMESPACE in segments:
+            continue
+        current = parent
+        for segment in segments:
+            current = f"{current}::{segment}" if current else segment
+            names.add(current)
+    return names
+
+
 def qualified_name(namespace: str | None, lexical_name: str) -> str:
     return f"{namespace}::{lexical_name}" if namespace else lexical_name
+
+
+def resolve_observed_namespace(
+    qualifier: str,
+    lexical_namespace: str | None,
+    observed_namespaces: set[str],
+) -> str | None:
+    if qualifier in observed_namespaces:
+        return qualifier
+    nested = qualified_name(lexical_namespace, qualifier)
+    return nested if nested in observed_namespaces else None

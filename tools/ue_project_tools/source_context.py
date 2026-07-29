@@ -16,6 +16,11 @@ from .source_includes import (
     rooted_path,
 )
 from .source_parser import parse_cpp_file
+from .source_namespaces import (
+    namespace_at,
+    observed_namespace_names,
+    resolve_observed_namespace,
+)
 from .source_tokens import delimiter_problems, lex_source
 
 
@@ -111,7 +116,52 @@ def _parse_source_pair(
             else _lightweight_source(path)
         )
         parsed_files.append((path, parsed))
+    if load_cpp_analysis:
+        _classify_namespace_qualified_definitions(parsed_files)
     return parsed_files
+
+
+def _classify_namespace_qualified_definitions(
+    parsed_files: list[tuple[Path, dict[str, Any]]],
+) -> None:
+    known_namespaces = {
+        namespace
+        for _path, parsed in parsed_files
+        for namespace in observed_namespace_names(
+            parsed["namespace_scopes"]
+        )
+    }
+    for _path, parsed in parsed_files:
+        member_definitions: list[dict[str, Any]] = []
+        for definition in parsed["external_definitions"]:
+            qualifier = str(definition["qualifier"])
+            namespace = resolve_observed_namespace(
+                qualifier,
+                namespace_at(
+                    parsed["namespace_scopes"],
+                    int(definition["_token_index"]),
+                ),
+                known_namespaces,
+            )
+            if namespace is None:
+                member_definitions.append(definition)
+                continue
+            parsed["free_functions"].append(
+                {
+                    "name": definition["name"],
+                    "parameters": definition["parameters"],
+                    "signature": definition["signature"],
+                    "location": definition["location"],
+                    "body_range": definition["body_range"],
+                    "_token_index": definition["_token_index"],
+                    "_name_index": definition["_name_index"],
+                    "_explicit_namespace": namespace,
+                }
+            )
+        parsed["external_definitions"] = member_definitions
+        parsed["free_functions"].sort(
+            key=lambda item: int(item["_token_index"])
+        )
 
 
 def _collect_include_facts(

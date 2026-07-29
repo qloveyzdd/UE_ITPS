@@ -95,10 +95,23 @@ def parse_external_definitions(
             index = close + 1
             continue
         body_end = forward[cursor]
-        signature_start = _member_start(tokens, 0, index - 1)
+        qualifier_start = index - 1
+        while (
+            qualifier_start >= 2
+            and tokens[qualifier_start - 1].value == "::"
+            and tokens[qualifier_start - 2].kind == "identifier"
+        ):
+            qualifier_start -= 2
+        qualifier = "::".join(
+            token.value
+            for token in tokens[qualifier_start:index]
+            if token.kind == "identifier"
+        )
+        signature_start = _member_start(tokens, 0, qualifier_start)
         results.append(
             {
                 "class_name": tokens[index - 1].value,
+                "qualifier": qualifier,
                 "name": tokens[name_index].value,
                 "parameters": _raw(text, tokens, open_index + 1, close),
                 "signature": _raw(text, tokens, signature_start, cursor),
@@ -107,6 +120,8 @@ def parse_external_definitions(
                     tokens[body_end],
                 ),
                 "body_range": (cursor + 1, body_end),
+                "_token_index": signature_start,
+                "_name_index": name_index,
             }
         )
         index = body_end + 1

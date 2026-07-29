@@ -5,6 +5,11 @@ import re
 from typing import Any
 
 from .source_includes import rooted_path
+from .source_namespaces import (
+    namespace_at,
+    observed_namespace_names,
+    resolve_observed_namespace,
+)
 from .source_declarations import (
     _callable_has_initializer_expression,
     _classify_declaration,
@@ -196,6 +201,7 @@ def _declaration_variables(
     project_root: Path,
     engine_root: Path | None,
     excluded_ranges: list[tuple[int, int]] | None = None,
+    known_namespaces: set[str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     text = parsed["text"]
     tokens: list[Token] = parsed["tokens"]
@@ -311,25 +317,58 @@ def _declaration_variables(
             continue
         name = classification["name"]
         name_index = int(classification["name_index"])
+        qualifier_start = name_index
+        while (
+            qualifier_start >= statement_start + 2
+            and tokens[qualifier_start - 1].value == "::"
+            and tokens[qualifier_start - 2].kind == "identifier"
+        ):
+            qualifier_start -= 2
+        explicit_namespace = (
+            "::".join(
+                token.value
+                for token in tokens[qualifier_start:name_index]
+                if token.kind == "identifier"
+            )
+            if qualifier_start < name_index
+            else None
+        )
+        resolved_namespace = (
+            resolve_observed_namespace(
+                explicit_namespace,
+                namespace_at(
+                    parsed["namespace_scopes"],
+                    statement_start,
+                ),
+                known_namespaces or set(),
+            )
+            if explicit_namespace is not None
+            else None
+        )
         if (
             scope == "file"
-            and name_index > statement_start
-            and tokens[name_index - 1].value == "::"
+            and explicit_namespace is not None
+            and resolved_namespace is None
         ):
             continue
         assignment = _declaration_assignment(
             tokens, statement_start, semicolon
+        )
+        declarator_start = (
+            qualifier_start
+            if explicit_namespace is not None
+            else name_index
         )
         if classification.get("direct_initializer"):
             type_expression = _raw(
                 text,
                 tokens,
                 statement_start,
-                name_index,
+                declarator_start,
             )
         elif name_index == assignment - 1:
             type_expression = _raw(
-                text, tokens, statement_start, name_index
+                text, tokens, statement_start, declarator_start
             )
         else:
             type_expression = _raw_from_values(
@@ -339,7 +378,7 @@ def _declaration_variables(
                         tokens[statement_start:assignment],
                         start=statement_start,
                     )
-                    if index != name_index
+                    if not declarator_start <= index <= name_index
                 ]
             )
         if not type_expression or type_expression in {
@@ -362,11 +401,14 @@ def _declaration_variables(
             "_macros": declaration_macros,
             "_token_range": (statement_start, semicolon + 1),
             "_name_index": name_index,
+            "_type_end_index": declarator_start,
             "_has_initializer": (
                 bool(classification.get("direct_initializer"))
                 or assignment < semicolon
             ),
         }
+        if resolved_namespace is not None:
+            item["_explicit_namespace"] = resolved_namespace
         if owner is not None:
             item["owner"] = owner
         results.append(item)
@@ -380,6 +422,13 @@ def _source_declaration_facts(
     engine_root = loaded["engine_root"]
     results: list[dict[str, Any]] = []
     unresolved: list[dict[str, Any]] = []
+    known_namespaces = {
+        namespace
+        for _path, parsed in loaded["parsed_files"]
+        for namespace in observed_namespace_names(
+            parsed["namespace_scopes"]
+        )
+    }
     for path, parsed in loaded["parsed_files"]:
         global_excluded = _excluded_token_ranges(
             parsed, include_classes=True, include_callables=True
@@ -401,6 +450,7 @@ def _source_declaration_facts(
             project_root=project_root,
             engine_root=engine_root,
             excluded_ranges=global_excluded,
+            known_namespaces=known_namespaces,
         )
         results.extend(file_variables)
         unresolved.extend(file_unresolved)

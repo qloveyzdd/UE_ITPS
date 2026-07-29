@@ -551,8 +551,10 @@ def _global_variable_facts(
                 parsed["namespace_scopes"],
                 int(item["_name_index"]),
             )
+            namespace = item.get("_explicit_namespace") or namespace
             declaration_tokens = parsed["tokens"][
-                int(item["_token_range"][0]) : int(item["_name_index"])
+                int(item["_token_range"][0]) :
+                int(item["_type_end_index"])
             ]
             modifiers = [token.value for token in declaration_tokens]
             results.append(
@@ -656,6 +658,10 @@ def _free_function_facts(
                 namespace = namespace_at(
                     parsed["namespace_scopes"],
                     int(function["_token_index"]),
+                )
+                namespace = (
+                    function.get("_explicit_namespace")
+                    or namespace
                 )
                 declaration_tokens = parsed["tokens"][
                     int(function["_token_index"]) :
@@ -788,6 +794,7 @@ def list_source_types(
             "Interface candidates are reported only from local UINTERFACE, UInterface inheritance, generated-body I-prefix, or paired U/I naming evidence.",
             "Type and member macros are attached by lexical declaration adjacency, not UHT semantic analysis.",
             "Global variables include file- and namespace-scope declarations; roles and linkage use only declaration-local syntax, and function locals and class/struct members are excluded.",
+            "A scope-qualified variable or function definition is classified as a namespace symbol only when its qualifier resolves to a namespace observed in the selected source pair; other qualified definitions remain member-shaped.",
             "Macro-like declarations are excluded from free functions, and call-shaped variable initializers are classified only when a value expression is lexically evident.",
             "Free functions include declarations and definitions with locally observed linkage but are not overload-resolved.",
             "The selected source and its uniquely derived companion are reported independently; declarations and definitions are not merged across files.",

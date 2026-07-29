@@ -536,6 +536,97 @@ class CxxAnalysisTests(WorkspaceTestCase):
             "internal",
         )
 
+    def test_type_facts_classify_namespace_qualified_definitions(self) -> None:
+        write_text(
+            self.fixture.header_file,
+            """
+            #pragma once
+            namespace Gameplay
+            {
+                extern int32 GCount;
+                void Initialize();
+            }
+            namespace Outer::Inner
+            {
+                extern int32 GNestedCount;
+                extern int32 GRelativeCount;
+                void InitializeNested();
+                void InitializeRelative();
+            }
+            class FSystem
+            {
+                static int32 GCount;
+                static void Initialize();
+            };
+            """,
+        )
+        write_text(
+            self.fixture.source_file,
+            """
+            #include "SampleFeature.h"
+            int32 Gameplay::GCount = 0;
+            int32 Outer::Inner::GNestedCount = 0;
+            int32 FSystem::GCount = 0;
+            void Gameplay::Initialize() {}
+            void Outer::Inner::InitializeNested() {}
+            void FSystem::Initialize() {}
+            namespace Outer
+            {
+                int32 Inner::GRelativeCount = 0;
+                void Inner::InitializeRelative() {}
+            }
+            """,
+        )
+        result = self.source_result("ue_list_cxx_types.py")
+
+        global_definitions = {
+            item["qualified_name"]: item
+            for item in result["global_variables"]
+            if item["role"] == "definition"
+        }
+        self.assertEqual(
+            set(global_definitions),
+            {
+                "Gameplay::GCount",
+                "Outer::Inner::GNestedCount",
+                "Outer::Inner::GRelativeCount",
+            },
+        )
+        self.assertTrue(
+            all(
+                item["type_expression"] == "int32"
+                and item["linkage"] == "external"
+                for item in global_definitions.values()
+            )
+        )
+        function_definitions = {
+            item["qualified_name"]
+            for item in result["free_functions"]
+            if item["role"] == "definition"
+        }
+        self.assertEqual(
+            function_definitions,
+            {
+                "Gameplay::Initialize",
+                "Outer::Inner::InitializeNested",
+                "Outer::Inner::InitializeRelative",
+            },
+        )
+        function_result = self.source_result(
+            "ue_inspect_cxx_function.py",
+            "--function",
+            "Initialize",
+        )
+        matches_by_owner = {
+            item["function"]["owner"]: item
+            for item in function_result["matches"]
+        }
+        self.assertEqual(set(matches_by_owner), {None, "FSystem"})
+        self.assertEqual(
+            matches_by_owner[None]["relation"]["status"],
+            "matched",
+        )
+
     def test_type_facts_handle_forward_nested_and_namespace_shapes(self) -> None:
         write_text(
             self.fixture.header_file,
