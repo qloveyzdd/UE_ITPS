@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:ue-itps:schema:cxx-function:v1",
+  "$id": "urn:ue-itps:schema:cxx-function:v2",
   "title": "ue_inspect_cxx_function.py result",
   "oneOf": [
     {
@@ -14,7 +14,7 @@
         {
           "properties": {
             "schema_version": {
-              "const": "ue-itps.cxx-function.v1"
+              "const": "ue-itps.cxx-function.v2"
             }
           }
         }
@@ -37,7 +37,7 @@
       ],
       "properties": {
         "schema_version": {
-          "const": "ue-itps.cxx-function.v1"
+          "const": "ue-itps.cxx-function.v2"
         },
         "path_roots": {
           "type": "object"
@@ -57,13 +57,96 @@
           "minimum": 0
         },
         "matches": {
-          "type": "array"
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/match"
+          }
         },
         "validation": {
           "$ref": "urn:ue-itps:schema:common:v1#/$defs/validation"
         },
         "limits": {
           "$ref": "urn:ue-itps:schema:common:v1#/$defs/limits"
+        }
+      },
+      "additionalProperties": false
+    },
+    "match": {
+      "type": "object",
+      "required": [
+        "function_id",
+        "function",
+        "relation",
+        "external_symbols"
+      ],
+      "properties": {
+        "function_id": {
+          "type": "string"
+        },
+        "function": {
+          "type": "object"
+        },
+        "relation": {
+          "type": "object"
+        },
+        "external_symbols": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/externalSymbol"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "externalSymbol": {
+      "type": "object",
+      "required": [
+        "kind",
+        "spelling",
+        "evidence"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "type",
+            "global_variable",
+            "free_function",
+            "member_call",
+            "function_address",
+            "callback_target",
+            "unknown"
+          ]
+        },
+        "spelling": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence": {
+          "$ref": "#/$defs/sourceEvidence"
+        }
+      },
+      "additionalProperties": false
+    },
+    "sourceEvidence": {
+      "type": "object",
+      "required": [
+        "unit",
+        "line"
+      ],
+      "properties": {
+        "unit": {
+          "enum": [
+            "cpp",
+            "header"
+          ]
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
         }
       },
       "additionalProperties": false

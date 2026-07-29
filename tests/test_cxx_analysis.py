@@ -390,6 +390,152 @@ class CxxAnalysisTests(WorkspaceTestCase):
             },
         )
 
+    def test_type_facts_report_namespaces_roles_and_linkage(self) -> None:
+        write_text(
+            self.fixture.header_file,
+            """
+            #pragma once
+            namespace Outer::Inner
+            {
+                class FForward;
+                struct FData {};
+                enum class EMode : uint8;
+                extern int32 GExternal;
+                static int32 GHeaderInternal;
+                const int32 GConstInternal = 1;
+                inline const int32 GInlineExternal = 2;
+                void Declared();
+                static void Hidden();
+            }
+            """,
+        )
+        write_text(
+            self.fixture.source_file,
+            """
+            #include "SampleFeature.h"
+            namespace Outer
+            {
+                namespace Inner
+                {
+                    int32 GExternal = 0;
+                    static int32 GSourceInternal = 0;
+                    void Declared() {}
+                    static void Hidden() {}
+                }
+            }
+            namespace
+            {
+                struct FAnonymous {};
+                int32 GAnonymous = 0;
+                void LocalOnly() {}
+            }
+            """,
+        )
+        result = self.source_result("ue_list_cxx_types.py")
+
+        forward = next(
+            item
+            for item in result["classes"]
+            if item["name"] == "FForward"
+        )
+        self.assertEqual(forward["namespace"], "Outer::Inner")
+        self.assertEqual(
+            forward["qualified_name"],
+            "Outer::Inner::FForward",
+        )
+        anonymous_type = next(
+            item
+            for item in result["structs"]
+            if item["name"] == "FAnonymous"
+        )
+        self.assertEqual(anonymous_type["namespace"], "(anonymous)")
+        self.assertEqual(
+            anonymous_type["qualified_name"],
+            "(anonymous)::FAnonymous",
+        )
+        mode = next(
+            item
+            for item in result["enums"]
+            if item["name"] == "EMode"
+        )
+        self.assertEqual(mode["namespace"], "Outer::Inner")
+        self.assertEqual(
+            mode["qualified_name"],
+            "Outer::Inner::EMode",
+        )
+
+        globals_by_key = {
+            (item["qualified_name"], item["role"]): item
+            for item in result["global_variables"]
+        }
+        self.assertEqual(
+            globals_by_key[
+                ("Outer::Inner::GExternal", "declaration")
+            ]["linkage"],
+            "external",
+        )
+        self.assertEqual(
+            globals_by_key[
+                ("Outer::Inner::GExternal", "definition")
+            ]["linkage"],
+            "external",
+        )
+        for name in (
+            "Outer::Inner::GHeaderInternal",
+            "Outer::Inner::GConstInternal",
+            "Outer::Inner::GSourceInternal",
+            "(anonymous)::GAnonymous",
+        ):
+            self.assertEqual(
+                globals_by_key[(name, "definition")]["linkage"],
+                "internal",
+            )
+        self.assertEqual(
+            globals_by_key[
+                ("Outer::Inner::GInlineExternal", "definition")
+            ]["linkage"],
+            "external",
+        )
+
+        functions_by_key = {
+            (
+                item["qualified_name"],
+                item["role"],
+                item["evidence"]["unit"],
+            ): item
+            for item in result["free_functions"]
+        }
+        self.assertEqual(
+            functions_by_key[
+                ("Outer::Inner::Declared", "declaration", "header")
+            ]["linkage"],
+            "external",
+        )
+        self.assertEqual(
+            functions_by_key[
+                ("Outer::Inner::Declared", "definition", "cpp")
+            ]["linkage"],
+            "external",
+        )
+        self.assertEqual(
+            functions_by_key[
+                ("Outer::Inner::Hidden", "declaration", "header")
+            ]["linkage"],
+            "internal",
+        )
+        self.assertEqual(
+            functions_by_key[
+                ("Outer::Inner::Hidden", "definition", "cpp")
+            ]["linkage"],
+            "internal",
+        )
+        self.assertEqual(
+            functions_by_key[
+                ("(anonymous)::LocalOnly", "definition", "cpp")
+            ]["linkage"],
+            "internal",
+        )
+
     def test_type_facts_handle_forward_nested_and_namespace_shapes(self) -> None:
         write_text(
             self.fixture.header_file,
@@ -453,12 +599,162 @@ class CxxAnalysisTests(WorkspaceTestCase):
         self.assertEqual(match["relation"]["status"], "matched")
         self.assertEqual(match["function"]["owner"], "USampleObject")
         self.assertEqual(
-            match["external_types"],
-            ["TObjectPtr<UObject>", "UObject"],
+            match["external_symbols"],
+            [
+                {
+                    "kind": "type",
+                    "spelling": "UObject",
+                    "evidence": {"unit": "cpp", "line": 4},
+                },
+                {
+                    "kind": "member_call",
+                    "spelling": "UObject->GetWorld()",
+                    "owner_type": "UObject",
+                    "evidence": {"unit": "cpp", "line": 8},
+                },
+                {
+                    "kind": "type",
+                    "spelling": "TObjectPtr<UObject>",
+                    "evidence": {"unit": "cpp", "line": 9},
+                },
+                {
+                    "kind": "member_call",
+                    "spelling": "TObjectPtr<UObject>->GetName()",
+                    "owner_type": "TObjectPtr<UObject>",
+                    "evidence": {"unit": "cpp", "line": 9},
+                },
+            ],
         )
+        self.assertNotIn("external_types", match)
+        self.assertNotIn("external_methods", match)
+
+    def test_function_reports_external_symbol_categories_with_evidence(self) -> None:
+        write_text(
+            self.fixture.header_file,
+            """
+            #pragma once
+            struct FMyConfig {};
+            class UMySystem
+            {
+            public:
+                void Initialize();
+            };
+            extern UMySystem* GDefaultSystem;
+            UMySystem* CreateDefaultSystem(const FMyConfig& Config);
+            void HandleReady();
+            class UConsumer
+            {
+            public:
+                void Execute(const FMyConfig& Config);
+                void HandleMember();
+            private:
+                FSimpleDelegate ReadyDelegate;
+            };
+            """,
+        )
+        write_text(
+            self.fixture.source_file,
+            """
+            #include "SampleFeature.h"
+            void UConsumer::Execute(const FMyConfig& Config)
+            {
+                UMySystem* System = GDefaultSystem;
+                if (!System)
+                {
+                    System = CreateDefaultSystem(Config);
+                }
+                System->Initialize();
+                auto Factory = &CreateDefaultSystem;
+                FCoreDelegates::OnPostEngineInit.AddStatic(&HandleReady);
+                ReadyDelegate.BindUObject(this, &UConsumer::HandleMember);
+                ExternalRegistry.Service();
+            }
+            """,
+        )
+        result = self.source_result(
+            "ue_inspect_cxx_function.py",
+            "--function",
+            "Execute",
+        )
+        symbols = result["matches"][0]["external_symbols"]
         self.assertEqual(
-            match["external_methods"],
-            ["UObject->GetWorld()", "TObjectPtr<UObject>->GetName()"],
+            symbols,
+            [
+                {
+                    "kind": "type",
+                    "spelling": "FMyConfig",
+                    "evidence": {"unit": "cpp", "line": 2},
+                },
+                {
+                    "kind": "type",
+                    "spelling": "UMySystem",
+                    "evidence": {"unit": "cpp", "line": 4},
+                },
+                {
+                    "kind": "global_variable",
+                    "spelling": "GDefaultSystem",
+                    "evidence": {"unit": "cpp", "line": 4},
+                },
+                {
+                    "kind": "free_function",
+                    "spelling": "CreateDefaultSystem",
+                    "evidence": {"unit": "cpp", "line": 7},
+                },
+                {
+                    "kind": "member_call",
+                    "spelling": "UMySystem->Initialize()",
+                    "owner_type": "UMySystem",
+                    "evidence": {"unit": "cpp", "line": 9},
+                },
+                {
+                    "kind": "function_address",
+                    "spelling": "CreateDefaultSystem",
+                    "evidence": {"unit": "cpp", "line": 10},
+                },
+                {
+                    "kind": "type",
+                    "spelling": "FCoreDelegates",
+                    "evidence": {"unit": "cpp", "line": 11},
+                },
+                {
+                    "kind": "unknown",
+                    "spelling": (
+                        "FCoreDelegates::OnPostEngineInit."
+                        "AddStatic(&HandleReady)"
+                    ),
+                    "evidence": {"unit": "cpp", "line": 11},
+                },
+                {
+                    "kind": "callback_target",
+                    "spelling": "HandleReady",
+                    "evidence": {"unit": "cpp", "line": 11},
+                },
+                {
+                    "kind": "type",
+                    "spelling": "FSimpleDelegate",
+                    "evidence": {"unit": "cpp", "line": 12},
+                },
+                {
+                    "kind": "member_call",
+                    "spelling": (
+                        "FSimpleDelegate.BindUObject("
+                        "this, &UConsumer::HandleMember)"
+                    ),
+                    "owner_type": "FSimpleDelegate",
+                    "evidence": {"unit": "cpp", "line": 12},
+                },
+                {
+                    "kind": "callback_target",
+                    "spelling": "UConsumer::HandleMember",
+                    "owner_type": "UConsumer",
+                    "evidence": {"unit": "cpp", "line": 12},
+                },
+                {
+                    "kind": "unknown",
+                    "spelling": "ExternalRegistry.Service()",
+                    "evidence": {"unit": "cpp", "line": 13},
+                },
+            ],
         )
 
     def test_same_name_overloads_have_stable_unique_ids(self) -> None:

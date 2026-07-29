@@ -19,6 +19,7 @@ from .source_declarations import (
 )
 from .source_flow import condition_spans, control_spans
 from .source_operations import parse_operations
+from .source_namespaces import namespace_scopes
 from .source_preprocessor import (
     preprocessor_conditions,
     preprocessor_control_contexts,
@@ -317,6 +318,7 @@ def parse_cpp_file(path: Path) -> dict[str, Any]:
         "tokens": tokens,
         "forward": forward,
         "reverse": reverse,
+        "namespace_scopes": namespace_scopes(tokens, forward),
         "classes": classes,
         "external_definitions": external,
         "free_functions": free_functions,

@@ -8,6 +8,7 @@ from .source_declarations import (
     _classify_declaration,
     _member_start,
 )
+from .source_namespaces import namespace_scopes
 from .source_tokens import Token, _location, _raw
 
 
@@ -15,20 +16,10 @@ def _namespace_braces(
     tokens: list[Token],
     forward: dict[int, int],
 ) -> set[int]:
-    namespace_braces: set[int] = set()
-    for namespace_index, token in enumerate(tokens):
-        if token.value != "namespace":
-            continue
-        cursor = namespace_index + 1
-        while cursor < len(tokens) and tokens[cursor].value not in {"{", ";"}:
-            cursor += 1
-        if (
-            cursor < len(tokens)
-            and tokens[cursor].value == "{"
-            and cursor in forward
-        ):
-            namespace_braces.add(cursor)
-    return namespace_braces
+    return {
+        int(scope["open"])
+        for scope in namespace_scopes(tokens, forward)
+    }
 
 
 def parse_external_definitions(
@@ -211,6 +202,8 @@ def parse_free_functions(
                     tokens[body_end],
                 ),
                 "body_range": (cursor + 1, body_end),
+                "_token_index": declaration_start,
+                "_name_index": name_index,
             }
         )
         index = body_end + 1
@@ -332,6 +325,8 @@ def parse_free_function_declarations(
                     tokens[declaration_start],
                     tokens[cursor],
                 ),
+                "_token_index": declaration_start,
+                "_name_index": name_index,
             }
         )
         index = cursor + 1

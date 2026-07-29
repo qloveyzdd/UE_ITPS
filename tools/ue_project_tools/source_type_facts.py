@@ -9,6 +9,11 @@ from .source_declarations import (
     _class_field_names,
     _type_owner_at,
 )
+from .source_namespaces import (
+    ANONYMOUS_NAMESPACE,
+    namespace_at,
+    qualified_name,
+)
 from .source_tokens import (
     Token,
 )
@@ -50,15 +55,14 @@ def _enums(parsed: dict[str, Any], path: Path, project_root: Path, engine_root: 
         close = forward[opening]
         owner = _type_owner_at(parsed["classes"], index)
         owner_name = owner["qualified_name"] if owner else None
+        namespace = namespace_at(parsed["namespace_scopes"], index)
+        lexical_name = f"{owner_name}::{name}" if owner_name else name
         results.append(
             {
                 "kind": "enum",
                 "name": name,
-                "qualified_name": (
-                    f"{owner_name}::{name}"
-                    if owner_name
-                    else name
-                ),
+                "namespace": namespace,
+                "qualified_name": qualified_name(namespace, lexical_name),
                 "owner": owner_name,
                 "role": "definition",
                 "scoped": scoped,
@@ -305,9 +309,17 @@ def _type_definition_fact(
                 "Member-variable name and variable-detail projections disagree"
             ),
         }
+    namespace = namespace_at(
+        parsed["namespace_scopes"],
+        int(class_item["_token_range"][0]),
+    )
     public_item = {
         "name": class_item["name"],
-        "qualified_name": class_item["qualified_name"],
+        "namespace": namespace,
+        "qualified_name": qualified_name(
+            namespace,
+            class_item["qualified_name"],
+        ),
         "owner": class_item["owner"],
         "role": "definition",
         "base_types": class_item["base_types"],
@@ -318,7 +330,7 @@ def _type_definition_fact(
     interface_source = {
         "declaration_kind": class_item["kind"],
         "name": class_item["name"],
-        "qualified_name": class_item["qualified_name"],
+        "qualified_name": public_item["qualified_name"],
         "owner": class_item["owner"],
         "base_types": class_item["base_types"],
         "macro_names": [str(macro["name"]) for macro in type_macros],
@@ -330,6 +342,7 @@ def _type_definition_fact(
 def _forward_type_fact(
     loaded: dict[str, Any],
     path: Path,
+    parsed: dict[str, Any],
     declaration: dict[str, Any],
 ) -> tuple[str, dict[str, Any]]:
     evidence = _type_unit_evidence(
@@ -337,13 +350,22 @@ def _forward_type_fact(
         path,
         declaration["location"],
     )
+    namespace = namespace_at(
+        parsed["namespace_scopes"],
+        int(declaration["_token_range"][0]),
+    )
+    public_qualified_name = qualified_name(
+        namespace,
+        declaration["qualified_name"],
+    )
     if declaration["kind"] == "enum":
         return (
             "enums",
             {
                 "kind": "enum",
                 "name": declaration["name"],
-                "qualified_name": declaration["qualified_name"],
+                "namespace": namespace,
+                "qualified_name": public_qualified_name,
                 "owner": declaration["owner"],
                 "role": "declaration",
                 "scoped": declaration["scoped"],
@@ -355,7 +377,8 @@ def _forward_type_fact(
         "classes" if declaration["kind"] == "class" else "structs",
         {
             "name": declaration["name"],
-            "qualified_name": declaration["qualified_name"],
+            "namespace": namespace,
+            "qualified_name": public_qualified_name,
             "owner": declaration["owner"],
             "role": "declaration",
             "base_types": [],
@@ -475,6 +498,7 @@ def _type_anchor_facts(
             bucket, public_item = _forward_type_fact(
                 loaded,
                 path,
+                parsed,
                 declaration,
             )
             anchors[bucket].append(public_item)
@@ -515,7 +539,7 @@ def _global_variable_facts(
     variables: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
-    for path, _parsed in loaded["parsed_files"]:
+    for path, parsed in loaded["parsed_files"]:
         for item in variables:
             if item["scope"] != "file" or not _path_matches_evidence(
                 path,
@@ -523,10 +547,33 @@ def _global_variable_facts(
                 loaded,
             ):
                 continue
+            namespace = namespace_at(
+                parsed["namespace_scopes"],
+                int(item["_name_index"]),
+            )
+            declaration_tokens = parsed["tokens"][
+                int(item["_token_range"][0]) : int(item["_name_index"])
+            ]
+            modifiers = [token.value for token in declaration_tokens]
             results.append(
                 {
                     "name": item["name"],
+                    "namespace": namespace,
+                    "qualified_name": qualified_name(
+                        namespace,
+                        item["name"],
+                    ),
                     "type_expression": item["type_expression"],
+                    "role": (
+                        "declaration"
+                        if "extern" in modifiers
+                        and not bool(item["_has_initializer"])
+                        else "definition"
+                    ),
+                    "linkage": _variable_linkage(
+                        namespace,
+                        modifiers,
+                    ),
                     "macros": list(item.get("_macros", [])),
                     "evidence": _type_unit_evidence(
                         loaded,
@@ -537,14 +584,55 @@ def _global_variable_facts(
             )
     unique = {
         (
-            item["name"],
+            item["qualified_name"],
             item["type_expression"],
+            item["role"],
+            item["linkage"],
             item["evidence"]["unit"],
             item["evidence"]["line"],
         ): item
         for item in results
     }
     return sorted(unique.values(), key=_anchor_sort_key)
+
+
+def _has_anonymous_namespace(namespace: str | None) -> bool:
+    return bool(
+        namespace
+        and ANONYMOUS_NAMESPACE in namespace.split("::")
+    )
+
+
+def _top_level_const(modifiers: list[str]) -> bool:
+    if "constexpr" in modifiers:
+        return True
+    if "const" not in modifiers or "volatile" in modifiers:
+        return False
+    if "&" in modifiers or "&&" in modifiers:
+        return False
+    last_const = len(modifiers) - 1 - modifiers[::-1].index("const")
+    pointer_positions = [
+        index
+        for index, value in enumerate(modifiers)
+        if value == "*"
+    ]
+    return not pointer_positions or last_const > pointer_positions[-1]
+
+
+def _variable_linkage(
+    namespace: str | None,
+    modifiers: list[str],
+) -> str:
+    if _has_anonymous_namespace(namespace) or "static" in modifiers:
+        return "internal"
+    if (
+        "extern" not in modifiers
+        and "inline" not in modifiers
+        and "template" not in modifiers
+        and _top_level_const(modifiers)
+    ):
+        return "internal"
+    return "external"
 
 
 def _free_function_facts(
@@ -565,13 +653,35 @@ def _free_function_facts(
         )
         for role, functions in groups:
             for function in functions:
+                namespace = namespace_at(
+                    parsed["namespace_scopes"],
+                    int(function["_token_index"]),
+                )
+                declaration_tokens = parsed["tokens"][
+                    int(function["_token_index"]) :
+                    int(function["_name_index"])
+                ]
                 results.append(
                     {
                         "name": function["name"],
+                        "namespace": namespace,
+                        "qualified_name": qualified_name(
+                            namespace,
+                            function["name"],
+                        ),
                         "signature": " ".join(
                             function["signature"].split()
                         ),
                         "role": role,
+                        "linkage": (
+                            "internal"
+                            if _has_anonymous_namespace(namespace)
+                            or any(
+                                token.value == "static"
+                                for token in declaration_tokens
+                            )
+                            else "external"
+                        ),
                         "evidence": _type_unit_evidence(
                             loaded,
                             path,
@@ -581,9 +691,10 @@ def _free_function_facts(
                 )
     unique = {
         (
-            item["name"],
+            item["qualified_name"],
             item["signature"],
             item["role"],
+            item["linkage"],
             item["evidence"]["unit"],
             item["evidence"]["line"],
         ): item
@@ -672,13 +783,15 @@ def list_source_types(
         ),
         boundaries=[
             "All anchors are lexical navigation facts and are not semantic summaries.",
-            "Class, struct, and enum anchors distinguish declarations from definitions; nested type owners are lexical class/struct owners and do not include namespace qualification.",
+            "Class, struct, and enum anchors distinguish declarations from definitions; qualified names include locally observed named or anonymous namespace scopes.",
+            "Nested type owners remain lexical class/struct owners; namespace qualification is carried separately.",
             "Interface candidates are reported only from local UINTERFACE, UInterface inheritance, generated-body I-prefix, or paired U/I naming evidence.",
             "Type and member macros are attached by lexical declaration adjacency, not UHT semantic analysis.",
-            "Global variables include file- and namespace-scope declarations; function locals and class/struct members are excluded.",
+            "Global variables include file- and namespace-scope declarations; roles and linkage use only declaration-local syntax, and function locals and class/struct members are excluded.",
             "Macro-like declarations are excluded from free functions, and call-shaped variable initializers are classified only when a value expression is lexically evident.",
-            "Free functions include declarations and definitions but are not overload-resolved.",
-            "The result is not a complete C++ symbol table, type system, inheritance graph, or reflection result.",
+            "Free functions include declarations and definitions with locally observed linkage but are not overload-resolved.",
+            "The selected source and its uniquely derived companion are reported independently; declarations and definitions are not merged across files.",
+            "The result does not create project-level IDs and is not a complete C++ symbol table, type system, inheritance graph, or reflection result.",
         ],
         additional_problems=[
             *type_problems,

@@ -360,6 +360,12 @@ def _declaration_variables(
                 end_line=tokens[semicolon].line,
             ),
             "_macros": declaration_macros,
+            "_token_range": (statement_start, semicolon + 1),
+            "_name_index": name_index,
+            "_has_initializer": (
+                bool(classification.get("direct_initializer"))
+                or assignment < semicolon
+            ),
         }
         if owner is not None:
             item["owner"] = owner

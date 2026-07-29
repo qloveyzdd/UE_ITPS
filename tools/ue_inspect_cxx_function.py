@@ -7,16 +7,16 @@ from ue_project_tools.common import cli_error_document, cli_parser, json_text
 from ue_project_tools.source_unit import inspect_source_function
 
 
-SCHEMA_VERSION = "ue-itps.cxx-function.v1"
+SCHEMA_VERSION = "ue-itps.cxx-function.v2"
 RESPONSIBILITY = (
-    "Report external type and method references for all definitions matching one function name."
+    "Report external symbols referenced by all definitions matching one function name."
 )
 
 
 def main() -> int:
     parser = cli_parser(
-        "读取指定名称的全部 C++ 函数定义及其外部类型和方法引用。",
-        "Read external type and method references from all C++ function definitions matching one name.",
+        "读取指定名称的全部 C++ 函数定义及其引用的外部符号。",
+        "Read external symbols referenced by all C++ function definitions matching one name.",
         schema_version=SCHEMA_VERSION,
         responsibility=RESPONSIBILITY,
     )

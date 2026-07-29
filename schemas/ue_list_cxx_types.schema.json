@@ -151,6 +151,7 @@
       "type": "object",
       "required": [
         "name",
+        "namespace",
         "qualified_name",
         "owner",
         "role",
@@ -162,6 +163,10 @@
       "properties": {
         "name": {
           "type": "string",
+          "minLength": 1
+        },
+        "namespace": {
+          "type": ["string", "null"],
           "minLength": 1
         },
         "qualified_name": {
@@ -203,6 +208,7 @@
       "required": [
         "kind",
         "name",
+        "namespace",
         "qualified_name",
         "owner",
         "role",
@@ -216,6 +222,10 @@
         },
         "name": {
           "type": "string",
+          "minLength": 1
+        },
+        "namespace": {
+          "type": ["string", "null"],
           "minLength": 1
         },
         "qualified_name": {
@@ -285,7 +295,11 @@
       "type": "object",
       "required": [
         "name",
+        "namespace",
+        "qualified_name",
         "type_expression",
+        "role",
+        "linkage",
         "macros",
         "evidence"
       ],
@@ -294,9 +308,23 @@
           "type": "string",
           "minLength": 1
         },
+        "namespace": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "qualified_name": {
+          "type": "string",
+          "minLength": 1
+        },
         "type_expression": {
           "type": "string",
           "minLength": 1
+        },
+        "role": {
+          "enum": ["declaration", "definition"]
+        },
+        "linkage": {
+          "enum": ["internal", "external"]
         },
         "macros": {
           "type": "array",
@@ -312,9 +340,25 @@
     },
     "freeFunctionAnchor": {
       "type": "object",
-      "required": ["name", "signature", "role", "evidence"],
+      "required": [
+        "name",
+        "namespace",
+        "qualified_name",
+        "signature",
+        "role",
+        "linkage",
+        "evidence"
+      ],
       "properties": {
         "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "namespace": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "qualified_name": {
           "type": "string",
           "minLength": 1
         },
@@ -324,6 +368,9 @@
         },
         "role": {
           "enum": ["declaration", "definition"]
+        },
+        "linkage": {
+          "enum": ["internal", "external"]
         },
         "evidence": {
           "$ref": "#/$defs/unitEvidence"

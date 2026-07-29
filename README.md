@@ -73,8 +73,8 @@ python tools/ue_inspect_module_entry.py --help
 | 构建 | `ue_inspect_cs_function.py` | `--source --function` | 检查一个 C# 文件中的全部同名成员函数 | `ue-itps.cs-function.v1` |
 | Module | `ue_inspect_module_entry.py` | `--rules` | 检查注册、回调清理和生命周期状态 | `ue-itps.module-entry-state.v12` |
 | C++ | `ue_list_cxx_includes.py` | `--source` | 列出直接 include、条件和物理来源 | `ue-itps.cxx-includes.v1` |
-| C++ | `ue_list_cxx_types.py` | `--source` | 列出类型、接口候选、全局变量、自由函数和成员锚点 | `ue-itps.cxx-types.v1` |
-| C++ | `ue_inspect_cxx_function.py` | `--source --function` | 检查全部同名定义及外部类型和方法引用 | `ue-itps.cxx-function.v1` |
+| C++ | `ue_list_cxx_types.py` | `--source` | 列出带命名空间、声明/定义角色和链接属性的语义单位锚点 | `ue-itps.cxx-types.v1` |
+| C++ | `ue_inspect_cxx_function.py` | `--source --function` | 检查全部同名定义及其引用的外部符号 | `ue-itps.cxx-function.v2` |
 
 `ue_resolve_plugins.py` 支持以下 Profile 参数：
 
@@ -165,16 +165,16 @@ python -m pip install -r requirements-dev.txt
 python -m unittest discover -s tests -v
 ```
 
-当前共 64 项测试，全部在临时目录中构造最小 Engine、项目、Plugin、规则文件和 C++ 源码，不读取仓库内的 Lyra 或外部样例项目，也不会修改真实项目。
+当前共 66 项测试，全部在临时目录中构造最小 Engine、项目、Plugin、规则文件和 C++ 源码，不读取仓库内的 Lyra 或外部样例项目，也不会修改真实项目。
 
 | 测试模块 | 数量 | 覆盖重点 |
 |---|---:|---|
 | `test_public_contracts.py` | 16 | CLI/Schema 清单、双语帮助、退出码、错误信封、公共 JSON 规则 |
 | `test_project_navigation.py` | 14 | 项目发现、描述符、Engine、Module、Target、Plugin、源码清单和路径 |
 | `test_build_analysis.py` | 14 | `.uplugin`、ModuleRules、TargetRules、C# 函数和 Module 生命周期 |
-| `test_cxx_analysis.py` | 18 | 源码单元配对、include、类型、接口候选、函数与失败边界 |
+| `test_cxx_analysis.py` | 20 | 源码单元配对、include、类型、接口候选、函数与失败边界 |
 | `test_end_to_end_workflow.py` | 2 | 16 个 CLI 的完整导航和重复扫描确定性 |
-| **合计** | **64** | 当前公开行为、关键失败边界与确定性 |
+| **合计** | **66** | 当前公开行为、关键失败边界与确定性 |
 
 ## 仓库结构
 
