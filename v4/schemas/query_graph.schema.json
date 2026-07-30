@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:schema:symbol-graph-query:v4",
+  "title": "UE ITPS v4 graph query result",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "selector",
+    "status",
+    "candidates",
+    "nodes",
+    "relations"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "ue-itps.symbol-graph-query.v4"
+    },
+    "selector": {"type": "string", "minLength": 1},
+    "status": {
+      "enum": ["selected", "ambiguous", "not_found"]
+    },
+    "selected_node_id": {"type": "string", "minLength": 1},
+    "depth": {"type": "integer", "minimum": 1, "maximum": 4},
+    "truncated": {"type": "boolean"},
+    "candidates": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/node"}
+    },
+    "nodes": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/node"}
+    },
+    "relations": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/relation"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"status": {"const": "selected"}},
+        "required": ["status"]
+      },
+      "then": {
+        "required": ["selected_node_id", "depth", "truncated"]
+      }
+    }
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "occurrence": {
+      "type": "object",
+      "required": [
+        "role",
+        "root",
+        "path",
+        "line",
+        "end_line",
+        "probe_schema"
+      ],
+      "properties": {
+        "role": {"type": "string"},
+        "root": {"type": "string"},
+        "path": {"type": "string"},
+        "line": {"type": "integer", "minimum": 1},
+        "end_line": {"type": ["integer", "null"], "minimum": 1},
+        "probe_schema": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "node": {
+      "type": "object",
+      "required": [
+        "node_id",
+        "kind",
+        "name",
+        "qualified_name",
+        "namespace",
+        "owner",
+        "signature",
+        "linkage",
+        "properties"
+      ],
+      "properties": {
+        "node_id": {"type": "string", "minLength": 1},
+        "kind": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "minLength": 1},
+        "qualified_name": {"type": ["string", "null"]},
+        "namespace": {"type": ["string", "null"]},
+        "owner": {"type": ["string", "null"]},
+        "signature": {"type": ["string", "null"]},
+        "linkage": {"type": ["string", "null"]},
+        "properties": {"type": "object"},
+        "distance": {"type": "integer", "minimum": 0},
+        "occurrences": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/occurrence"}
+        }
+      },
+      "additionalProperties": false
+    },
+    "evidence": {
+      "type": "object",
+      "required": [
+        "root",
+        "path",
+        "line",
+        "end_line",
+        "probe_schema",
+        "detail"
+      ],
+      "properties": {
+        "root": {"type": ["string", "null"]},
+        "path": {"type": ["string", "null"]},
+        "line": {"type": ["integer", "null"], "minimum": 1},
+        "end_line": {"type": ["integer", "null"], "minimum": 1},
+        "probe_schema": {"type": "string", "minLength": 1},
+        "detail": {"type": "object"}
+      },
+      "additionalProperties": false
+    },
+    "relation": {
+      "type": "object",
+      "required": [
+        "relation_id",
+        "source_id",
+        "kind",
+        "target_id",
+        "certainty",
+        "resolution_status",
+        "confidence",
+        "properties",
+        "evidence"
+      ],
+      "properties": {
+        "relation_id": {"type": "string", "minLength": 1},
+        "source_id": {"type": "string", "minLength": 1},
+        "kind": {"type": "string", "minLength": 1},
+        "target_id": {"type": "string", "minLength": 1},
+        "certainty": {
+          "enum": ["observed", "resolved", "inferred"]
+        },
+        "resolution_status": {
+          "enum": ["resolved", "unresolved", "ambiguous"]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "properties": {"type": "object"},
+        "evidence": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/evidence"}
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

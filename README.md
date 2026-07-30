@@ -11,6 +11,10 @@ UE ITPS 是一组确定性、只读的 Unreal Engine 项目检查工具。它从
 
 UE ITPS 提供静态文件与源码证据，不替代 UnrealBuildTool、UnrealHeaderTool、Editor、编译器或运行时验证。
 
+项目级符号关系数据库位于独立的 [`v4/`](v4/) 目录。v4 调用现有探针，
+但不修改 v1–v3 的 CLI、实现或 Schema；使用方式和当前边界见
+[`v4/README.md`](v4/README.md)。
+
 ## 环境要求
 
 - Python 3.10 或更高版本。

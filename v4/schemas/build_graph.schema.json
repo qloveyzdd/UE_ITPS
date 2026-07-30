@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:schema:symbol-graph-build:v4",
+  "title": "UE ITPS v4 graph build result",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "project",
+    "database",
+    "cache_directory",
+    "scan_id",
+    "source_unit_count",
+    "node_count",
+    "relation_count",
+    "warning_count",
+    "cache_hits",
+    "cache_misses",
+    "worker_count",
+    "problems"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "ue-itps.symbol-graph-build.v4"
+    },
+    "project": {
+      "type": "object",
+      "required": ["name", "descriptor"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "descriptor": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "database": {"type": "string", "minLength": 1},
+    "cache_directory": {"type": "string", "minLength": 1},
+    "scan_id": {"type": "string", "minLength": 1},
+    "source_unit_count": {"type": "integer", "minimum": 0},
+    "node_count": {"type": "integer", "minimum": 1},
+    "relation_count": {"type": "integer", "minimum": 0},
+    "warning_count": {"type": "integer", "minimum": 0},
+    "cache_hits": {"type": "integer", "minimum": 0},
+    "cache_misses": {"type": "integer", "minimum": 0},
+    "worker_count": {"type": "integer", "minimum": 1},
+    "problems": {
+      "type": "array",
+      "items": {"type": "object"}
+    }
+  },
+  "additionalProperties": false
+}
