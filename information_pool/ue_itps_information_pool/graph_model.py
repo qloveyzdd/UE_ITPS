@@ -206,17 +206,18 @@ class Graph:
             if location
             else probe_schema
         )
-        edge_id = relation_id(source_id, kind, target_id, evidence_key)
-        self.relations[edge_id] = {
-            "relation_id": edge_id,
-            "source_id": source_id,
-            "kind": kind,
-            "target_id": target_id,
-            "certainty": certainty,
-            "resolution_status": resolution_status,
-            "confidence": confidence,
-            "properties_json": json_value(properties or {}),
-        }
+        edge_id = relation_id(source_id, kind, target_id)
+        if edge_id not in self.relations:
+            self.relations[edge_id] = {
+                "relation_id": edge_id,
+                "source_id": source_id,
+                "kind": kind,
+                "target_id": target_id,
+                "certainty": certainty,
+                "resolution_status": resolution_status,
+                "confidence": confidence,
+                "properties_json": json_value(properties or {}),
+            }
         evidence_id = stable_id("evidence", edge_id, evidence_key)
         self.evidence[evidence_id] = {
             "evidence_id": evidence_id,
@@ -856,19 +857,6 @@ def _add_reference_relations(graph: Graph, unit: SourceUnitProbe) -> None:
                     "owner_type": candidate.get("owner_type"),
                     "candidates": resolution.candidates,
                 }
-                graph.add_relation(
-                    source_id=source_id,
-                    kind="REFERENCES",
-                    target_id=resolution.node_id,
-                    certainty="observed",
-                    resolution_status=resolution.status,
-                    confidence=(
-                        0.95 if resolution.status == "resolved" else 0.5
-                    ),
-                    probe_schema=schema,
-                    location=location,
-                    properties=properties,
-                )
                 semantic_kind = _semantic_kind(candidate_kind)
                 if semantic_kind and resolution.status == "resolved":
                     graph.add_relation(
@@ -879,6 +867,20 @@ def _add_reference_relations(graph: Graph, unit: SourceUnitProbe) -> None:
                         resolution_status="resolved",
                         confidence=0.85,
                         probe_schema="ue-itps.information-pool.relation-semantics.v1",
+                        location=location,
+                        properties=properties,
+                    )
+                else:
+                    graph.add_relation(
+                        source_id=source_id,
+                        kind="REFERENCES",
+                        target_id=resolution.node_id,
+                        certainty="observed",
+                        resolution_status=resolution.status,
+                        confidence=(
+                            0.95 if resolution.status == "resolved" else 0.5
+                        ),
+                        probe_schema=schema,
                         location=location,
                         properties=properties,
                     )

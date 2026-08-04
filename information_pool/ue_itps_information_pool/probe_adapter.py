@@ -115,8 +115,15 @@ def _probe_key(
     source_unit: str,
     probe_kind: str,
     selector: str = "",
+    instance: str = "",
 ) -> str:
-    return stable_id("probe", source_unit, probe_kind, selector)
+    return stable_id(
+        "probe",
+        source_unit,
+        probe_kind,
+        selector,
+        instance,
+    )
 
 
 def _unit_directory(cache_project_root: Path, unit_paths: tuple[str, ...]) -> Path:
@@ -455,7 +462,7 @@ def _raw_probe_results(unit: SourceUnitProbe) -> list[dict[str, Any]]:
     source_unit = "|".join(
         sorted(_project_fact_paths(unit.types), key=str.casefold)
     )
-    results: list[dict[str, Any]] = []
+    results: dict[str, dict[str, Any]] = {}
     for probe_kind, selector, document in (
         ("types", "", unit.types),
         ("includes", "", unit.includes),
@@ -469,22 +476,27 @@ def _raw_probe_results(unit: SourceUnitProbe) -> list[dict[str, Any]]:
             for document in unit.function_references
         ],
     ):
-        results.append(
-            {
-                "probe_key": _probe_key(
-                    source_unit,
-                    probe_kind,
-                    selector,
-                ),
-                "source_unit": source_unit,
-                "probe_kind": probe_kind,
-                "selector": selector,
-                "input_hash": unit.input_hash,
-                "schema_version": str(document["schema_version"]),
-                "payload_json": json_value(document),
-            }
+        instance = (
+            _digest(document)
+            if probe_kind == "function_references"
+            else ""
         )
-    return results
+        probe_key = _probe_key(
+            source_unit,
+            probe_kind,
+            selector,
+            instance,
+        )
+        results[probe_key] = {
+            "probe_key": probe_key,
+            "source_unit": source_unit,
+            "probe_kind": probe_kind,
+            "selector": selector,
+            "input_hash": unit.input_hash,
+            "schema_version": str(document["schema_version"]),
+            "payload_json": json_value(document),
+        }
+    return list(results.values())
 
 
 def _wire_to_unit(

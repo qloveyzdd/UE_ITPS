@@ -8,7 +8,7 @@ import sqlite3
 from typing import Any, Iterator
 
 
-POOL_SCHEMA_VERSION = 1
+POOL_SCHEMA_VERSION = 3
 
 
 DDL = """

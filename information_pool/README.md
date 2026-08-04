@@ -8,8 +8,8 @@
 
 ## 构建与激活
 
-工程必须位于 Git 中，HEAD 必须干净。信息池建议放在工程仓库之外；如果位于仓库
-内部，其目录和自定义缓存目录必须被 `.gitignore` 忽略。
+工程必须位于 Git 中，HEAD 对应的 UE 工程子树必须干净。信息池建议放在工程仓库
+之外；如果位于仓库内部，其目录和自定义缓存目录必须被 `.gitignore` 忽略。
 
 ```powershell
 python information_pool/build_information_pool.py `
@@ -57,6 +57,11 @@ python information_pool/query_information_pool.py `
 
 `--snapshot` 可选择历史 `generation_id` 或 `source_commit` 前缀；未指定时读取激活
 快照。`--relation-kind` 可重复使用，以限制影响、循环或路径查询的关系类型。
+
+语义关系按“源节点、关系类型、目标节点”唯一保存，多处源码位置作为同一关系的独立
+证据。已解析的调用和类型使用分别保存为 `CALLS`、`USES_TYPE`；只有无法进一步分类
+的引用才保存为 `REFERENCES`。类与结构体之间的 `path` 查询会将成员关系投影到所属
+类型，同时保留底层成员关系明细。
 
 ## 目录
 

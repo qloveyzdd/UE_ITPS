@@ -231,6 +231,58 @@ class CxxAnalysisTests(CliTestCase):
             all("line" in item["evidence"] for item in match["external_symbols"])
         )
 
+    def test_function_facts_resolve_control_initializer_receiver_type(self) -> None:
+        self.fixture.source_header.write_text(
+            self.fixture.source_header.read_text(encoding="utf-8").replace(
+                "extern int32 GSampleCount;",
+                """
+        class UAbilityBase
+        {
+        public:
+            void GetActivationGroup();
+        };
+
+extern int32 GSampleCount;""",
+            ),
+            encoding="utf-8",
+        )
+        self.fixture.source_cpp.write_text(
+            self.fixture.source_cpp.read_text(encoding="utf-8").replace(
+                """void ASampleActor::Helper()
+{
+    Count = 1;
+}""",
+                """void ASampleActor::Helper()
+{
+    if (UAbilityBase* Ability = Cast<UAbilityBase>(nullptr))
+    {
+        Ability->GetActivationGroup();
+    }
+}""",
+            ),
+            encoding="utf-8",
+        )
+
+        result = self.cli(
+            "ue_inspect_cxx_function.py",
+            "--source",
+            str(self.fixture.source_cpp),
+            "--function",
+            "Helper",
+        )
+        symbols = {
+            (item["kind"], item["spelling"], item.get("owner_type"))
+            for item in result["matches"][0]["external_symbols"]
+        }
+        self.assertIn(
+            (
+                "member_call",
+                "UAbilityBase->GetActivationGroup()",
+                "UAbilityBase",
+            ),
+            symbols,
+        )
+
     def test_same_name_overloads_receive_unique_function_ids(self) -> None:
         header = write_text(
             self.fixture.project_root

@@ -6,7 +6,7 @@ UE ITPS 是一组确定性、只读的 Unreal Engine 项目检查工具。它从
 
 - 21 个聚焦的 Python CLI，统一组成项目工具池。
 - 21 份 CLI JSON Schema 和 1 份公共 Schema。
-- 64 项自动化测试。
+- 65 项自动化测试。
 - 3 个与 Lyra 本地验证相关的辅助脚本；它们不属于 21 个正式只读 CLI。
 
 UE ITPS 提供静态文件与源码证据，不替代 UnrealBuildTool、UnrealHeaderTool、Editor、编译器或运行时验证。
@@ -15,6 +15,7 @@ UE ITPS 提供静态文件与源码证据，不替代 UnrealBuildTool、UnrealHe
 目录。信息池复用现有探针，以不可变 SQLite 快照保存项目结构、C++ 符号、关系和
 原始证据；候选快照通过验证后才会原子激活。使用方式和当前边界见
 [`information_pool/README.md`](information_pool/README.md)。
+本地关系浏览器位于 [`show/`](show/)，默认以类级聚合语义关系和最短路径展示快照。
 
 ## 环境要求
 

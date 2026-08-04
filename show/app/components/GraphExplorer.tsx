@@ -7,6 +7,7 @@ import {
   type Certainty,
   type DatabaseSummary,
   type GraphEdge,
+  type MemberExpansion,
   type GraphNode,
   type GraphResult,
   type SearchCandidate,
@@ -14,6 +15,7 @@ import {
 
 type Selection = { type: "node" | "edge"; id: string };
 type ExplorerMode = "single" | "multi";
+type ExpandedRelation = { parentEdge: GraphEdge; expansion: MemberExpansion };
 
 const NODE_KIND_LABELS: Record<string, string> = {
   project: "工程",
@@ -151,8 +153,23 @@ function NodeDetail({ node }: { node: GraphNode }) {
   );
 }
 
-function EdgeDetail({ edge, nodes }: { edge: GraphEdge; nodes: GraphNode[] }) {
+function EdgeDetail({
+  edge,
+  nodes,
+  expanded,
+  onToggleExpansion,
+}: {
+  edge: GraphEdge;
+  nodes: GraphNode[];
+  expanded: boolean;
+  onToggleExpansion?: () => void;
+}) {
   const names = new Map(nodes.map((node) => [node.id, node.qualifiedName]));
+  const visibleProperties = Object.fromEntries(
+    Object.entries(edge.properties).filter(
+      ([key]) => !["memberRelationCount", "memberRelations"].includes(key),
+    ),
+  );
   return (
     <div className="detail-content">
       <div className="detail-heading">
@@ -167,11 +184,36 @@ function EdgeDetail({ edge, nodes }: { edge: GraphEdge; nodes: GraphNode[] }) {
         <span>→</span>
         <strong>{names.get(edge.target) ?? edge.target}</strong>
       </div>
+      {onToggleExpansion && (
+        <button
+          className="expand-relation-button"
+          type="button"
+          aria-expanded={expanded}
+          onClick={onToggleExpansion}
+        >
+          {expanded ? "收起成员关系" : `在图中展开 ${edge.memberRelationCount} 条成员关系`}
+        </button>
+      )}
       <dl className="facts">
+        {edge.memberRelationCount > 0 && <><dt>成员关系</dt><dd>{edge.memberRelationCount} 条</dd></>}
         <dt>可信级别</dt><dd>{CERTAINTY_LABELS[edge.certainty]}</dd>
         <dt>解析状态</dt><dd>{edge.resolutionStatus}</dd>
         <dt>置信度</dt><dd>{Math.round(edge.confidence * 100)}%</dd>
       </dl>
+      {edge.memberRelations.length > 0 && (
+        <section className="detail-section">
+          <h3>成员关系明细</h3>
+          <ul className="member-relation-list">
+            {edge.memberRelations.map((relation) => (
+              <li key={relation.relationId}>
+                <code>{relation.sourceName}</code>
+                <span aria-label={relationLabel(edge.kind)}>→</span>
+                <code>{relation.targetName}</code>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {edge.evidence.length > 0 && (
         <section className="detail-section">
           <h3>关系证据</h3>
@@ -185,7 +227,7 @@ function EdgeDetail({ edge, nodes }: { edge: GraphEdge; nodes: GraphNode[] }) {
           </ul>
         </section>
       )}
-      <PropertyList properties={edge.properties} />
+      <PropertyList properties={visibleProperties} />
     </div>
   );
 }
@@ -203,6 +245,7 @@ export default function GraphExplorer() {
   const [candidates, setCandidates] = useState<SearchCandidate[]>([]);
   const [focusNodes, setFocusNodes] = useState<SearchCandidate[]>([]);
   const [graph, setGraph] = useState<GraphResult | null>(null);
+  const [expandedRelation, setExpandedRelation] = useState<ExpandedRelation | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [relationKinds, setRelationKinds] = useState<Set<string>>(new Set());
   const [certainties, setCertainties] = useState<Set<Certainty>>(
@@ -235,8 +278,21 @@ export default function GraphExplorer() {
       setMode(queryMode);
       setFocusNodes(nextFocusNodes);
       setGraph(result);
+      const defaultEdge = result.edges.find(
+        (edge) => edge.source === selectedId && edge.memberRelations.length > 0,
+      ) ?? result.edges.find((edge) => edge.memberRelations.length > 0);
+      setExpandedRelation(defaultEdge
+        ? {
+            parentEdge: defaultEdge,
+            expansion: database.queryMemberRelations(
+              defaultEdge.memberRelations.map((relation) => relation.relationId),
+            ),
+          }
+        : null);
       setRelationKinds(new Set(result.edges.map((edge) => edge.kind)));
-      setSelection({ type: "node", id: selectedId ?? result.centerId });
+      setSelection(defaultEdge
+        ? { type: "edge", id: defaultEdge.id }
+        : { type: "node", id: selectedId ?? result.centerId });
       setQuery("");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "关系图查询失败。");
@@ -267,6 +323,7 @@ export default function GraphExplorer() {
     setCandidates([]);
     setFocusNodes([]);
     setGraph(null);
+    setExpandedRelation(null);
     setSelection(null);
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
@@ -323,6 +380,10 @@ export default function GraphExplorer() {
       (edge) => relationKinds.has(edge.kind) && certainties.has(edge.certainty),
     );
   }, [graph, relationKinds, certainties]);
+  const activeExpansion = expandedRelation
+    && filteredEdges.some((edge) => edge.id === expandedRelation.parentEdge.id)
+    ? expandedRelation
+    : null;
   const visibleNodeCount = useMemo(() => {
     if (!graph) return 0;
     const ids = new Set<string>(graph.focusIds);
@@ -330,8 +391,8 @@ export default function GraphExplorer() {
       ids.add(edge.source);
       ids.add(edge.target);
     }
-    return ids.size;
-  }, [filteredEdges, graph]);
+    return ids.size + (activeExpansion?.expansion.edges.length ?? 0) * 2;
+  }, [activeExpansion, filteredEdges, graph]);
 
   useEffect(() => {
     if (!canvasRef.current || !graph) return;
@@ -344,6 +405,12 @@ export default function GraphExplorer() {
       connectedNodeIds.add(edge.source);
       connectedNodeIds.add(edge.target);
     }
+    const allNodes = [...graph.nodes];
+    for (const node of activeExpansion?.expansion.nodes ?? []) {
+      if (!allNodes.some((item) => item.id === node.id)) allNodes.push(node);
+    }
+    const rowCount = activeExpansion?.expansion.edges.length ?? 0;
+    const middleY = 90 + Math.max(0, rowCount - 1) * 55;
     const nodeElements: ElementDefinition[] = graph.nodes
       .filter((node) => visibleNodes.has(node.id))
       .map((node, index) => ({
@@ -351,6 +418,8 @@ export default function GraphExplorer() {
             id: node.id,
             label: node.name,
             kind: node.kind,
+            expanded: "no",
+            realId: node.id,
             focus: graph.focusIds.includes(node.id) ? "yes" : "no",
             isolatedFocus: graph.focusIds.includes(node.id)
               && !connectedNodeIds.has(node.id)
@@ -358,20 +427,117 @@ export default function GraphExplorer() {
               : "no",
           },
           position: {
-            x: (index % 100) * 44,
-            y: Math.floor(index / 100) * 44,
+            x: activeExpansion?.parentEdge.source === node.id
+              ? 60
+              : activeExpansion?.parentEdge.target === node.id
+                ? 840
+                : 450,
+            y: activeExpansion
+              ? node.id === activeExpansion.parentEdge.source
+                || node.id === activeExpansion.parentEdge.target
+                ? middleY
+                : middleY + (index + 1) * 36
+              : Math.floor(index / 100) * 44,
           },
         }));
-    const edgeElements: ElementDefinition[] = filteredEdges.map((edge) => ({
+    const overviewEdges = filteredEdges.filter(
+      (edge) => edge.id !== activeExpansion?.parentEdge.id,
+    );
+    const edgeElements: ElementDefinition[] = overviewEdges.map((edge) => ({
         data: {
           id: edge.id,
           source: edge.source,
           target: edge.target,
-          label: relationLabel(edge.kind),
+          label: edge.memberRelationCount > 1
+            ? `${relationLabel(edge.kind)} · ${edge.memberRelationCount}`
+            : relationLabel(edge.kind),
           kind: edge.kind,
           certainty: edge.certainty,
+          expanded: "no",
+          context: "no",
         },
       }));
+    if (activeExpansion) {
+      const addContextEdge = (id: string, source: string, target: string, label: string) => {
+        if (source === target) return;
+        edgeElements.push({
+          data: {
+            id,
+            source,
+            target,
+            label,
+            kind: "MEMBER_CONTEXT",
+            certainty: "resolved",
+            expanded: "no",
+            context: "yes",
+          },
+          selectable: false,
+        });
+      };
+      const expandedNodes = new Map(
+        activeExpansion.expansion.nodes.map((node) => [node.id, node]),
+      );
+      activeExpansion.expansion.edges.forEach((edge, index) => {
+        const sourceNode = expandedNodes.get(edge.source);
+        const targetNode = expandedNodes.get(edge.target);
+        if (!sourceNode || !targetNode) return;
+        const y = 90 + index * 110;
+        const visualSourceId = `expanded-node:${edge.id}:source`;
+        const visualTargetId = `expanded-node:${edge.id}:target`;
+        nodeElements.push(
+          {
+            data: {
+              id: visualSourceId,
+              realId: sourceNode.id,
+              label: sourceNode.name,
+              kind: sourceNode.kind,
+              expanded: "yes",
+              focus: "no",
+              isolatedFocus: "no",
+            },
+            position: { x: 290, y },
+          },
+          {
+            data: {
+              id: visualTargetId,
+              realId: targetNode.id,
+              label: targetNode.name,
+              kind: targetNode.kind,
+              expanded: "yes",
+              focus: "no",
+              isolatedFocus: "no",
+            },
+            position: { x: 610, y },
+          },
+        );
+        const firstEvidence = edge.evidence.find((item) => item.path && item.line !== null);
+        const location = firstEvidence?.line != null ? `L${firstEvidence.line}` : "";
+        edgeElements.push({
+          data: {
+            id: edge.id,
+            source: visualSourceId,
+            target: visualTargetId,
+            label: `${relationLabel(edge.kind)}${location ? ` · ${location}` : ""}`,
+            kind: edge.kind,
+            certainty: edge.certainty,
+            expanded: "yes",
+            context: "no",
+          },
+        });
+        addContextEdge(
+          `context:${activeExpansion.parentEdge.id}:source:${edge.id}`,
+          activeExpansion.parentEdge.source,
+          visualSourceId,
+          "成员",
+        );
+        addContextEdge(
+          `context:${activeExpansion.parentEdge.id}:target:${edge.id}`,
+          visualTargetId,
+          activeExpansion.parentEdge.target,
+          "所属",
+        );
+      });
+    }
     const progressive = nodeElements.length > 1000 || edgeElements.length > 5000;
     const styles: Stylesheet[] = [
       {
@@ -398,6 +564,7 @@ export default function GraphExplorer() {
       { selector: 'node[kind = "source_file"], node[kind = "external_file"]', style: { "background-color": "#3e8a68", shape: "round-tag" } },
       { selector: 'node[kind = "external_symbol"]', style: { "background-color": "#596273", "border-style": "dashed" } },
       { selector: 'node[focus = "yes"]', style: { "border-color": "#f4d35e", "border-width": 4, width: 54, height: 42, "font-size": 12, "font-weight": 600 } },
+      { selector: 'node[expanded = "yes"]', style: { "border-color": "#8dd9e6", "border-width": 2, width: 36, height: 36, "text-max-width": 170 } },
       { selector: 'node[isolatedFocus = "yes"]', style: { "border-color": "#ff8278", "border-style": "dashed" } },
       { selector: "node:selected", style: { "border-color": "#ffffff", "border-width": 3 } },
       {
@@ -411,6 +578,38 @@ export default function GraphExplorer() {
         },
       },
       { selector: 'edge[certainty = "inferred"]', style: { "line-style": "dashed", opacity: 0.6 } },
+      {
+        selector: 'edge[expanded = "yes"]',
+        style: {
+          width: 2.5,
+          "line-color": "#f4d35e",
+          "target-arrow-color": "#f4d35e",
+          label: "data(label)",
+          color: "#e8eef7",
+          "font-family": "Segoe UI, Microsoft YaHei, sans-serif",
+          "font-size": 10,
+          "text-background-color": "#111821",
+          "text-background-opacity": 0.92,
+          "text-background-padding": 3,
+          "text-rotation": "autorotate",
+        },
+      },
+      {
+        selector: 'edge[context = "yes"]',
+        style: {
+          width: 1,
+          opacity: 0.55,
+          "line-style": "dashed",
+          "line-color": "#6b7c93",
+          "target-arrow-color": "#6b7c93",
+          label: "data(label)",
+          color: "#8998ab",
+          "font-size": 8,
+          "text-background-color": "#0a0e14",
+          "text-background-opacity": 0.8,
+          "text-background-padding": 2,
+        },
+      },
       {
         selector: "edge:selected",
         style: {
@@ -434,13 +633,26 @@ export default function GraphExplorer() {
       style: styles,
       minZoom: 0.08,
       maxZoom: 3,
-      layout: progressive ? { name: "preset" } : graphLayout(visibleNodes.size, false),
+      layout: progressive
+        ? { name: "preset" }
+        : activeExpansion
+          ? { name: "preset", fit: true, padding: 52 }
+          : graphLayout(visibleNodes.size, false),
     });
-    cy.on("tap", "node", (event) => setSelection({ type: "node", id: event.target.id() }));
-    cy.on("tap", "edge", (event) => setSelection({ type: "edge", id: event.target.id() }));
-    cy.on("dbltap", "node", (event) => {
+    cy.on("tap", "node", (event) => {
+      const id = String(event.target.data("realId") ?? event.target.id());
+      setSelection({ type: "node", id });
+    });
+    cy.on("tap", "edge", (event) => {
       const id = event.target.id();
-      const node = graph.nodes.find((item) => item.id === id);
+      if (graph.edges.some((edge) => edge.id === id)
+        || activeExpansion?.expansion.edges.some((edge) => edge.id === id)) {
+        setSelection({ type: "edge", id });
+      }
+    });
+    cy.on("dbltap", "node", (event) => {
+      const id = String(event.target.data("realId") ?? event.target.id());
+      const node = allNodes.find((item) => item.id === id);
       if (node) void loadGraph([graphNodeCandidate(node)], id, "single");
     });
     cyRef.current = cy;
@@ -484,16 +696,42 @@ export default function GraphExplorer() {
       cy.destroy();
       if (cyRef.current === cy) cyRef.current = null;
     };
-  }, [filteredEdges, graph, graphNodeCandidate, loadGraph]);
+  }, [activeExpansion, filteredEdges, graph, graphNodeCandidate, loadGraph]);
 
   useEffect(() => () => databaseRef.current?.close(), []);
 
+  const detailNodes = useMemo(() => [
+    ...(graph?.nodes ?? []),
+    ...(activeExpansion?.expansion.nodes ?? []),
+  ], [activeExpansion, graph]);
   const selectedNode = selection?.type === "node"
-    ? graph?.nodes.find((node) => node.id === selection.id) ?? null
+    ? detailNodes.find((node) => node.id === selection.id) ?? null
     : null;
   const selectedEdge = selection?.type === "edge"
-    ? graph?.edges.find((edge) => edge.id === selection.id) ?? null
+    ? graph?.edges.find((edge) => edge.id === selection.id)
+      ?? activeExpansion?.expansion.edges.find((edge) => edge.id === selection.id)
+      ?? null
     : null;
+
+  const toggleMemberExpansion = (edge: GraphEdge) => {
+    if (expandedRelation?.parentEdge.id === edge.id) {
+      setExpandedRelation(null);
+      setSelection({ type: "edge", id: edge.id });
+      return;
+    }
+    const database = databaseRef.current;
+    if (!database || edge.memberRelations.length === 0) return;
+    try {
+      const expansion = database.queryMemberRelations(
+        edge.memberRelations.map((relation) => relation.relationId),
+      );
+      setExpandedRelation({ parentEdge: edge, expansion });
+      setSelection({ type: "edge", id: edge.id });
+      setError("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "成员关系展开失败。");
+    }
+  };
 
   const switchMode = (nextMode: ExplorerMode) => {
     if (nextMode === mode) return;
@@ -533,6 +771,7 @@ export default function GraphExplorer() {
     if (nextFocusNodes.length === 0) {
       setFocusNodes([]);
       setGraph(null);
+      setExpandedRelation(null);
       setSelection(null);
       setCandidates([]);
       setError("");
@@ -544,6 +783,7 @@ export default function GraphExplorer() {
   const clearFocusNodes = () => {
     setFocusNodes([]);
     setGraph(null);
+    setExpandedRelation(null);
     setSelection(null);
     setCandidates([]);
     setError("");
@@ -714,11 +954,20 @@ export default function GraphExplorer() {
             <>
               <div ref={canvasRef} className="graph-canvas" />
               <div className="graph-actions">
+                {activeExpansion && (
+                  <button onClick={() => setExpandedRelation(null)}>收起成员关系</button>
+                )}
                 <button onClick={() => cyRef.current?.fit(undefined, 42)}>适应画布</button>
-                <button onClick={() => cyRef.current?.layout(graphLayout(visibleNodeCount, true)).run()}>重新布局</button>
+                <button onClick={() => activeExpansion
+                  ? cyRef.current?.fit(undefined, 52)
+                  : cyRef.current?.layout(graphLayout(visibleNodeCount, true)).run()}
+                >{activeExpansion ? "适应链路" : "重新布局"}</button>
               </div>
               <div className="graph-status">
-                {visibleNodeCount} 个可见节点 · {filteredEdges.length} 条可见关系
+                {visibleNodeCount} 个可见节点 · {filteredEdges.length} 条类级关系
+                {activeExpansion
+                  ? <span>已展开 {activeExpansion.expansion.edges.length} 条具体成员关系</span>
+                  : <span>语义视图 · 点击关系可展开成员链路</span>}
                 {mode === "multi" && focusNodes.length === 1 && <span>请继续添加关注节点</span>}
                 {mode === "multi" && graph.requestedConnectionCount > 0 && (
                   <span>{graph.connectionCount}/{graph.requestedConnectionCount} 对节点已联通</span>
@@ -747,7 +996,16 @@ export default function GraphExplorer() {
               <NodeDetail node={selectedNode} />
             </>
           )}
-          {selectedEdge && graph && <EdgeDetail edge={selectedEdge} nodes={graph.nodes} />}
+          {selectedEdge && graph && (
+            <EdgeDetail
+              edge={selectedEdge}
+              nodes={detailNodes}
+              expanded={expandedRelation?.parentEdge.id === selectedEdge.id}
+              onToggleExpansion={selectedEdge.memberRelations.length > 0
+                ? () => toggleMemberExpansion(selectedEdge)
+                : undefined}
+            />
+          )}
           {!selectedNode && !selectedEdge && <div className="detail-empty"><strong>详细信息</strong><span>点击节点或关系查看代码证据。</span></div>}
         </aside>
       </div>

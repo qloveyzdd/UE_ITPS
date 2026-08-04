@@ -101,12 +101,10 @@ def relation_id(
     source_id: str,
     kind: str,
     target_id: str,
-    evidence_key: str,
 ) -> str:
     return stable_id(
         "relation",
         source_id,
         normalize_text(kind),
         target_id,
-        normalize_text(evidence_key),
     )

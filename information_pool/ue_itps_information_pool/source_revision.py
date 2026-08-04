@@ -8,6 +8,7 @@ import subprocess
 @dataclass(frozen=True)
 class SourceRevision:
     git_root: Path
+    project_root: Path
     commit: str
 
 
@@ -55,18 +56,26 @@ def resolve_source_revision(
                 "the information pool never labels working-tree facts as "
                 "another revision"
             )
+    project_root = project_file.parent
+    project_pathspec = project_root.relative_to(git_root).as_posix()
     dirty = _git(
         git_root,
         "status",
         "--porcelain=v1",
         "--untracked-files=all",
+        "--",
+        project_pathspec,
     )
     if dirty:
         raise ValueError(
-            "The UE project Git worktree must be clean before building an "
+            "The selected UE project tree must be clean before building an "
             "information-pool snapshot"
         )
-    return SourceRevision(git_root=git_root, commit=head)
+    return SourceRevision(
+        git_root=git_root,
+        project_root=project_root,
+        commit=head,
+    )
 
 
 def confirm_source_revision(revision: SourceRevision) -> None:
@@ -76,6 +85,8 @@ def confirm_source_revision(revision: SourceRevision) -> None:
         "status",
         "--porcelain=v1",
         "--untracked-files=all",
+        "--",
+        revision.project_root.relative_to(revision.git_root).as_posix(),
     )
     if current != revision.commit or dirty:
         raise ValueError(

@@ -636,6 +636,17 @@ def _path(
     assert isinstance(source, dict) and isinstance(target, dict)
     source_id = str(source["node_id"])
     target_id = str(target["node_id"])
+    if (
+        source["kind"] in {"class", "struct"}
+        and target["kind"] in {"class", "struct"}
+    ):
+        return _projected_type_path(
+            connection,
+            source,
+            target,
+            depth=depth,
+            relation_kinds=relation_kinds,
+        )
     queue: list[str] = [source_id]
     predecessor: dict[str, tuple[str, dict[str, Any]]] = {}
     distance = {source_id: 0}
@@ -679,6 +690,123 @@ def _path(
         node_ids.append(previous)
     node_ids.reverse()
     relations.reverse()
+    return {
+        "status": "selected",
+        "source": source,
+        "target": target,
+        "path": _nodes_by_id(connection, node_ids),
+        "relations": relations,
+    }
+
+
+def _projected_type_path(
+    connection: sqlite3.Connection,
+    source: dict[str, Any],
+    target: dict[str, Any],
+    *,
+    depth: int,
+    relation_kinds: tuple[str, ...],
+) -> dict[str, Any]:
+    node_rows = connection.execute(
+        "SELECT node_id, kind, qualified_name, owner FROM nodes"
+    ).fetchall()
+    owner_ids = {
+        str(row["qualified_name"]): str(row["node_id"])
+        for row in node_rows
+        if row["kind"] in {"class", "struct"}
+        and row["qualified_name"] is not None
+    }
+    projected_ids = {}
+    for row in node_rows:
+        node_id = str(row["node_id"])
+        qualified_name = str(row["qualified_name"] or "")
+        qualified_owner = (
+            qualified_name.rsplit("::", 1)[0]
+            if row["kind"] in {"member_function", "member_variable"}
+            and "::" in qualified_name
+            else ""
+        )
+        projected_ids[node_id] = owner_ids.get(
+            qualified_owner,
+            owner_ids.get(str(row["owner"] or ""), node_id),
+        )
+    kind_ph = ",".join("?" for _ in relation_kinds)
+    edge_groups: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+    for row in connection.execute(
+        f"""
+        SELECT relation_id, source_id, target_id, kind, certainty, confidence
+        FROM relations
+        WHERE kind IN ({kind_ph})
+          AND resolution_status = 'resolved'
+        ORDER BY source_id, target_id, kind, relation_id
+        """,
+        relation_kinds,
+    ):
+        projected_source = projected_ids[str(row["source_id"])]
+        projected_target = projected_ids[str(row["target_id"])]
+        if projected_source == projected_target:
+            continue
+        key = (projected_source, str(row["kind"]), projected_target)
+        edge_groups.setdefault(key, []).append(
+            {
+                "relation_id": str(row["relation_id"]),
+                "source_id": str(row["source_id"]),
+                "target_id": str(row["target_id"]),
+                "certainty": str(row["certainty"]),
+                "confidence": float(row["confidence"]),
+            }
+        )
+    adjacency: dict[str, list[tuple[str, tuple[str, str, str]]]] = {}
+    for key in sorted(edge_groups):
+        projected_source, _kind, projected_target = key
+        adjacency.setdefault(projected_source, []).append((projected_target, key))
+
+    source_id = str(source["node_id"])
+    target_id = str(target["node_id"])
+    queue = [source_id]
+    distance = {source_id: 0}
+    predecessor: dict[str, tuple[str, tuple[str, str, str]]] = {}
+    while queue and target_id not in distance:
+        current = queue.pop(0)
+        if distance[current] >= depth:
+            continue
+        for next_id, edge_key in adjacency.get(current, []):
+            if next_id in distance:
+                continue
+            distance[next_id] = distance[current] + 1
+            predecessor[next_id] = (current, edge_key)
+            queue.append(next_id)
+    if target_id not in distance:
+        return {
+            "status": "not_found",
+            "source": source,
+            "target": target,
+            "path": [],
+        }
+
+    node_ids = [target_id]
+    edge_keys: list[tuple[str, str, str]] = []
+    while node_ids[-1] != source_id:
+        previous, edge_key = predecessor[node_ids[-1]]
+        edge_keys.append(edge_key)
+        node_ids.append(previous)
+    node_ids.reverse()
+    edge_keys.reverse()
+    relations = []
+    for projected_source, kind, projected_target in edge_keys:
+        members = edge_groups[(projected_source, kind, projected_target)]
+        relations.append(
+            {
+                "relation_id": members[0]["relation_id"],
+                "source_id": projected_source,
+                "target_id": projected_target,
+                "kind": kind,
+                "certainty": members[0]["certainty"],
+                "confidence": max(item["confidence"] for item in members),
+                "member_relation_count": len(members),
+                "member_relations": members,
+            }
+        )
     return {
         "status": "selected",
         "source": source,

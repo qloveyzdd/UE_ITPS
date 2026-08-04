@@ -28,6 +28,10 @@ from ue_itps_information_pool import (  # noqa: E402
 from ue_itps_information_pool.batch_analyzer import analyze_source_unit  # noqa: E402
 from ue_itps_information_pool.graph_model import Graph  # noqa: E402
 from ue_itps_information_pool.identity import symbol_id  # noqa: E402
+from ue_itps_information_pool.probe_adapter import (  # noqa: E402
+    SourceUnitProbe,
+    _raw_probe_results,
+)
 from ue_project_tools.source_unit import (  # noqa: E402
     inspect_source_function,
     list_source_functions,
@@ -104,6 +108,80 @@ class InformationPoolWorkflowTests(unittest.TestCase):
         self.assertTrue(
             all(relation["certainty"] == "observed" for relation in references)
         )
+        call_targets = {relation["target_id"] for relation in calls}
+        self.assertFalse(
+            call_targets.intersection(
+                relation["target_id"] for relation in references
+            )
+        )
+
+    def test_relation_identity_merges_multiple_evidence_locations(self) -> None:
+        graph = Graph("SampleGame|SampleGame.uproject", "project:test")
+        for line in (10, 20):
+            graph.add_relation(
+                source_id="source",
+                kind="CALLS",
+                target_id="target",
+                certainty="inferred",
+                resolution_status="resolved",
+                confidence=0.85,
+                probe_schema="test",
+                location={
+                    "root": "project",
+                    "path": "Source/Test.cpp",
+                    "line": line,
+                },
+            )
+        self.assertEqual(len(graph.relations), 1)
+        self.assertEqual(len(graph.evidence), 2)
+
+    def test_class_path_projects_member_call_to_owner_types(self) -> None:
+        self.fixture.source_header.write_text(
+            self.fixture.source_header.read_text(encoding="utf-8").replace(
+                "extern int32 GSampleCount;",
+                """
+        class AHelperService : public AActor
+        {
+        public:
+            void Execute();
+        };
+
+extern int32 GSampleCount;""",
+            ),
+            encoding="utf-8",
+        )
+        self.fixture.source_cpp.write_text(
+            self.fixture.source_cpp.read_text(encoding="utf-8").replace(
+                """    FGameplayTag Tag;
+    Helper();""",
+                """    FGameplayTag Tag;
+    AHelperService Service;
+    Service.Execute();
+    Helper();""",
+            ).replace(
+                "void ASampleActor::Helper()",
+                """void AHelperService::Execute() {}
+
+void ASampleActor::Helper()""",
+            ),
+            encoding="utf-8",
+        )
+        self._commit("add helper service")
+        build_information_pool(self.fixture.project, self.pool)
+
+        result = query_information_pool(
+            self.pool,
+            "path",
+            selector="Gameplay::ASampleActor",
+            target="Gameplay::AHelperService",
+        )["result"]
+        self.assertEqual(result["status"], "selected")
+        self.assertEqual(
+            [item["qualified_name"] for item in result["path"]],
+            ["Gameplay::ASampleActor", "Gameplay::AHelperService"],
+        )
+        self.assertEqual([item["kind"] for item in result["relations"]], ["CALLS"])
+        self.assertEqual(result["relations"][0]["member_relation_count"], 1)
 
     def test_ambiguous_name_returns_candidates_without_guessing(self) -> None:
         build_information_pool(self.fixture.project, self.pool)
@@ -330,6 +408,61 @@ class InformationPoolWorkflowTests(unittest.TestCase):
         finally:
             connection.close()
 
+    def test_overloaded_function_probe_documents_have_distinct_keys(self) -> None:
+        source_unit = {
+            "source": {"root": "project", "path": "Source/Test.cpp"},
+            "header": {"root": "project", "path": "Source/Test.h"},
+        }
+        unit = SourceUnitProbe(
+            entry="Source/Test.cpp",
+            owner_by_path={},
+            types={"schema_version": "types", "source_unit": source_unit},
+            includes={"schema_version": "includes", "source_unit": source_unit},
+            functions={"schema_version": "functions", "source_unit": source_unit},
+            function_references=[
+                {
+                    "schema_version": "references",
+                    "source_unit": source_unit,
+                    "selection": {"name": "Overloaded"},
+                    "matches": [
+                        {
+                            "function_id": "overload:same-id",
+                            "function": {"signature": "int32 Overloaded()"},
+                        }
+                    ],
+                },
+                {
+                    "schema_version": "references",
+                    "source_unit": source_unit,
+                    "selection": {"name": "Overloaded"},
+                    "matches": [
+                        {
+                            "function_id": "overload:same-id",
+                            "function": {"signature": "float Overloaded()"},
+                        }
+                    ],
+                },
+                {
+                    "schema_version": "references",
+                    "source_unit": source_unit,
+                    "selection": {"name": "Overloaded"},
+                    "matches": [
+                        {
+                            "function_id": "overload:same-id",
+                            "function": {"signature": "int32 Overloaded()"},
+                        }
+                    ],
+                },
+            ],
+            input_hash="input",
+            cache_status="miss",
+            parse_count=1,
+        )
+        results = _raw_probe_results(unit)
+        keys = [item["probe_key"] for item in results]
+        self.assertEqual(len(keys), len(set(keys)))
+        self.assertEqual(len(results), 5)
+
     def test_cache_keeps_one_atomic_file_per_function_match(self) -> None:
         result = build_information_pool(
             self.fixture.project,
@@ -371,6 +504,10 @@ class InformationPoolWorkflowTests(unittest.TestCase):
         self.assertFalse((self.pool / "manifest.json").exists())
 
         self._git("restore", ".")
+        (self.root / "unrelated-tool-change.txt").write_text(
+            "not part of the selected UE project",
+            encoding="utf-8",
+        )
         result = build_information_pool(self.fixture.project, self.pool)
         self.assertEqual(result["source_commit"], self._git("rev-parse", "HEAD"))
 

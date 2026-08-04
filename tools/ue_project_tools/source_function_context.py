@@ -142,6 +142,76 @@ def _first_identifier_index(
     )
 
 
+def _control_initializer_variables(
+    parsed: dict[str, Any],
+    start: int,
+    end: int,
+) -> list[dict[str, Any]]:
+    tokens: list[Token] = parsed["tokens"]
+    forward: dict[int, int] = parsed["forward"]
+    results: list[dict[str, Any]] = []
+    for keyword_index in range(start, end - 1):
+        if (
+            tokens[keyword_index].value not in {"if", "switch", "while"}
+            or tokens[keyword_index + 1].value != "("
+            or keyword_index + 1 not in forward
+        ):
+            continue
+        open_index = keyword_index + 1
+        close_index = forward[open_index]
+        if close_index >= end:
+            continue
+        declaration_start = open_index + 1
+        declaration_end = close_index
+        cursor = declaration_start
+        while cursor < close_index:
+            if tokens[cursor].value == "(" and cursor in forward:
+                cursor = forward[cursor] + 1
+                continue
+            if tokens[cursor].value == ";":
+                declaration_end = cursor
+                break
+            cursor += 1
+        if not any(
+            tokens[index].value == "="
+            for index in range(declaration_start, declaration_end)
+        ):
+            continue
+        classification = _classify_declaration(
+            tokens,
+            forward,
+            declaration_start,
+            declaration_end,
+        )
+        if classification.get("kind") != "variable":
+            continue
+        name_index = int(classification["name_index"])
+        type_tokens = tokens[declaration_start:name_index]
+        if not type_tokens or any(
+            token.value in {".", "->"} for token in type_tokens
+        ):
+            continue
+        canonical_type = _canonical_type_expression(
+            _raw_from_values(type_tokens)
+        )
+        outer_type = _primary_type_name(canonical_type)
+        if (
+            not canonical_type
+            or not outer_type
+            or not outer_type[0].isupper()
+            or outer_type.isupper()
+        ):
+            continue
+        results.append(
+            {
+                "name": str(classification["name"]),
+                "type_expression": canonical_type,
+                "token_index": name_index,
+            }
+        )
+    return results
+
+
 def _function_symbol_context(
     part: dict[str, Any],
     loaded: dict[str, Any],
@@ -217,6 +287,21 @@ def _function_symbol_context(
                 )
                 or start
             )
+        type_facts.append(
+            _symbol_fact(
+                "type",
+                canonical_type,
+                part["_path"],
+                tokens[token_index].line,
+                token_index,
+            )
+        )
+    for variable in _control_initializer_variables(parsed, start, end):
+        canonical_type = str(variable["type_expression"])
+        symbols[str(variable["name"])] = canonical_type
+        if not _is_external_type_expression(canonical_type, part):
+            continue
+        token_index = int(variable["token_index"])
         type_facts.append(
             _symbol_fact(
                 "type",

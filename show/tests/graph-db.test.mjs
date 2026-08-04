@@ -82,12 +82,24 @@ async function createGraphDatabase() {
       ('z', 'class', 'Z', 'Z', NULL, NULL, NULL, NULL, '{}');
     INSERT INTO relations VALUES
       ('ab', 'a', 'b', 'CALLS', 'observed', 'resolved', 1, '{}'),
-      ('bd', 'b', 'd', 'REFERENCES', 'resolved', 'resolved', 0.9, '{}'),
+      ('bd', 'b', 'd', 'USES_TYPE', 'resolved', 'resolved', 0.9, '{}'),
       ('ac', 'a', 'c', 'CALLS', 'observed', 'resolved', 1, '{}'),
-      ('cd', 'c', 'd', 'REFERENCES', 'resolved', 'resolved', 0.9, '{}'),
+      ('cd', 'c', 'd', 'USES_TYPE', 'resolved', 'resolved', 0.9, '{}'),
       ('bx', 'b', 'x', 'CALLS', 'observed', 'resolved', 1, '{}'),
       ('xy', 'x', 'y', 'CALLS', 'observed', 'resolved', 1, '{}'),
       ('yb', 'y', 'b', 'CALLS', 'observed', 'resolved', 1, '{}');
+    INSERT INTO nodes VALUES
+      ('e', 'class', 'E', 'E', NULL, NULL, NULL, NULL, '{}'),
+      ('f', 'class', 'F', 'F', NULL, NULL, NULL, NULL, '{}'),
+      ('em', 'member_function', 'Run', 'E::Run', NULL, 'E', NULL, NULL, '{}'),
+      ('fm', 'member_function', 'Handle', 'F::Handle', NULL, 'F', NULL, NULL, '{}');
+    INSERT INTO relations VALUES
+      ('e-em', 'e', 'em', 'CONTAINS', 'resolved', 'resolved', 1, '{}'),
+      ('f-fm', 'f', 'fm', 'CONTAINS', 'resolved', 'resolved', 1, '{}'),
+      ('em-fm', 'em', 'fm', 'CALLS', 'inferred', 'resolved', 0.85, '{}'),
+      ('em-f', 'em', 'f', 'USES_TYPE', 'resolved', 'resolved', 0.9, '{}');
+    INSERT INTO relation_evidence VALUES
+      ('em-fm', 'project', 'Source/E.cpp', 42, 42, 'relation-semantics.v1', '{}');
   `);
 
   const insertNode = db.prepare("INSERT INTO nodes VALUES (?, 'class', ?, ?, NULL, NULL, NULL, NULL, '{}')");
@@ -123,15 +135,46 @@ test("数据库摘要读取信息池快照元数据", async () => {
   }
 });
 
-test("多节点查询保留所有有效联通关系，并排除无关支路", async () => {
+test("多节点查询只保留确定性的最短语义路径", async () => {
   const graphDb = await createGraphDatabase();
   try {
     const connected = graphDb.queryRelevantGraph(["a", "d", "z"]);
     assert.equal(connected.connectionCount, 1);
     assert.equal(connected.requestedConnectionCount, 3);
-    assert.deepEqual(connected.nodes.map((node) => node.id).sort(), ["a", "b", "c", "d", "z"]);
-    assert.deepEqual(connected.edges.map((edge) => edge.id).sort(), ["ab", "ac", "bd", "cd"]);
+    assert.deepEqual(connected.nodes.map((node) => node.id).sort(), ["a", "b", "d", "z"]);
+    assert.deepEqual(connected.edges.map((edge) => edge.id).sort(), ["ab", "bd"]);
     assert.equal(connected.truncated, false);
+  } finally {
+    graphDb.close();
+  }
+});
+
+test("类节点关系聚合成员调用并保留成员明细", async () => {
+  const graphDb = await createGraphDatabase();
+  try {
+    const result = graphDb.queryRelevantGraph(["e", "f"]);
+    assert.deepEqual(result.nodes.map((node) => node.id).sort(), ["e", "f"]);
+    assert.equal(result.edges.length, 1);
+    assert.equal(result.edges[0].kind, "CALLS");
+    assert.equal(result.edges[0].memberRelationCount, 1);
+    assert.deepEqual(result.edges[0].memberRelations, [{
+      relationId: "em-fm",
+      sourceId: "em",
+      sourceName: "E::Run",
+      targetId: "fm",
+      targetName: "F::Handle",
+    }]);
+
+    const expansion = graphDb.queryMemberRelations(
+      result.edges[0].memberRelations.map((relation) => relation.relationId),
+    );
+    assert.deepEqual(expansion.nodes.map((node) => node.id).sort(), ["em", "fm"]);
+    assert.equal(expansion.edges.length, 1);
+    assert.equal(expansion.edges[0].id, "em-fm");
+    assert.equal(expansion.edges[0].source, "em");
+    assert.equal(expansion.edges[0].target, "fm");
+    assert.equal(expansion.edges[0].evidence[0].path, "Source/E.cpp");
+    assert.equal(expansion.edges[0].evidence[0].line, 42);
   } finally {
     graphDb.close();
   }

@@ -52,6 +52,21 @@ export interface GraphEdge {
   confidence: number;
   properties: Record<string, unknown>;
   evidence: Evidence[];
+  memberRelationCount: number;
+  memberRelations: MemberRelation[];
+}
+
+export interface MemberRelation {
+  relationId: string;
+  sourceId: string;
+  sourceName: string;
+  targetId: string;
+  targetName: string;
+}
+
+export interface MemberExpansion {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
 }
 
 export interface GraphResult {
@@ -94,6 +109,7 @@ interface RawEdgeRow {
   resolution_status: string;
   confidence: number;
   properties_json: string;
+  evidence_relation_ids?: string[];
 }
 
 interface RelationArc {
@@ -105,6 +121,15 @@ interface RelationIndex {
   edgeById: Map<string, RawEdgeRow>;
   adjacency: Map<string, RelationArc[]>;
 }
+
+const SEMANTIC_RELATION_KINDS = [
+  "CALLS",
+  "INHERITS",
+  "USES_TYPE",
+  "INCLUDES",
+  "BINDS_CALLBACK",
+  "TAKES_ADDRESS",
+] as const;
 
 const REQUIRED_TABLES = [
   "metadata",
@@ -176,7 +201,7 @@ function escapeLike(value: string): string {
 }
 
 export class GraphDatabase {
-  private relationIndexCache: RelationIndex | null = null;
+  private semanticIndexCache = new Map<string, RelationIndex>();
 
   private constructor(private readonly db: Database) {}
 
@@ -266,54 +291,43 @@ export class GraphDatabase {
   queryGraph(centerId: string, depth: number, maxNodes: number): GraphResult {
     const safeDepth = Math.min(4, Math.max(1, Math.trunc(depth)));
     const safeMaxNodes = Math.min(300, Math.max(10, Math.trunc(maxNodes)));
-    const centerExists = this.rows<{ node_id: string }>(
-      "SELECT node_id FROM nodes WHERE node_id = ? LIMIT 1",
+    const center = this.rows<{ node_id: string; kind: string }>(
+      "SELECT node_id, kind FROM nodes WHERE node_id = ? LIMIT 1",
       [centerId],
     )[0];
-    if (!centerExists) throw new Error("中心节点不存在或数据库已经更换。");
+    if (!center) throw new Error("中心节点不存在或数据库已经更换。");
+
+    const index = this.semanticIndex(
+      center.kind === "class" || center.kind === "struct",
+    );
 
     const visited = new Set<string>([centerId]);
     const distances = new Map<string, number>([[centerId, 0]]);
-    const edgeRows = new Map<string, RawEdgeRow>();
     let frontier = [centerId];
     let truncated = false;
 
     for (let distance = 1; distance <= safeDepth && frontier.length > 0; distance += 1) {
-      const marks = placeholders(frontier.length);
-      const rows = this.rows<RawEdgeRow>(
-        `SELECT relation_id, source_id, target_id, kind, certainty,
-                resolution_status, confidence, properties_json
-         FROM relations
-         WHERE source_id IN (${marks}) OR target_id IN (${marks})
-         ORDER BY
-           CASE certainty WHEN 'observed' THEN 0 WHEN 'resolved' THEN 1 ELSE 2 END,
-           confidence DESC,
-           kind,
-           relation_id
-         LIMIT ?`,
-        [...frontier, ...frontier, safeMaxNodes * 12],
-      );
       const next = new Set<string>();
-
-      for (const row of rows) {
-        const source = String(row.source_id);
-        const target = String(row.target_id);
-        const neighbor = frontier.includes(source) ? target : source;
-        if (!visited.has(neighbor)) {
+      for (const id of frontier) {
+        for (const arc of index.adjacency.get(id) ?? []) {
+          if (visited.has(arc.targetId)) continue;
           if (visited.size >= safeMaxNodes) {
             truncated = true;
             continue;
           }
-          visited.add(neighbor);
-          distances.set(neighbor, distance);
-          next.add(neighbor);
-        }
-        if (visited.has(source) && visited.has(target)) {
-          edgeRows.set(String(row.relation_id), row);
+          visited.add(arc.targetId);
+          distances.set(arc.targetId, distance);
+          next.add(arc.targetId);
         }
       }
-      if (rows.length >= safeMaxNodes * 12) truncated = true;
       frontier = [...next].sort();
+    }
+
+    const edgeRows = new Map<string, RawEdgeRow>();
+    for (const [edgeId, row] of index.edgeById) {
+      if (visited.has(String(row.source_id)) && visited.has(String(row.target_id))) {
+        edgeRows.set(edgeId, row);
+      }
     }
 
     return this.buildGraphResult({
@@ -331,13 +345,13 @@ export class GraphDatabase {
   queryRelevantGraph(focusIds: string[]): GraphResult {
     const uniqueFocusIds = [...new Set(focusIds.map((id) => id.trim()).filter(Boolean))];
     if (uniqueFocusIds.length === 0) throw new Error("请至少选择一个关注节点。");
-    const existing = new Set<string>();
+    const existing = new Map<string, string>();
     for (const group of chunks(uniqueFocusIds)) {
-      const rows = this.rows<{ node_id: string }>(
-        `SELECT node_id FROM nodes WHERE node_id IN (${placeholders(group.length)})`,
+      const rows = this.rows<{ node_id: string; kind: string }>(
+        `SELECT node_id, kind FROM nodes WHERE node_id IN (${placeholders(group.length)})`,
         group,
       );
-      for (const row of rows) existing.add(String(row.node_id));
+      for (const row of rows) existing.set(String(row.node_id), String(row.kind));
     }
     if (existing.size !== uniqueFocusIds.length) {
       throw new Error("部分关注节点不存在或数据库已经更换。");
@@ -355,142 +369,54 @@ export class GraphDatabase {
       });
     }
 
-    const { edgeById, adjacency } = this.relationIndex();
-
-    let rootId = "__ue_itps_focus_root__";
-    while (existing.has(rootId) || adjacency.has(rootId)) rootId += "_";
-    const syntheticEdges = new Set<string>();
-    const syntheticAdjacency = new Map<string, RelationArc[]>();
-    const addSyntheticArc = (sourceId: string, targetId: string, edgeId: string) => {
-      const arcs = syntheticAdjacency.get(sourceId) ?? [];
-      arcs.push({ edgeId, targetId });
-      syntheticAdjacency.set(sourceId, arcs);
-    };
-    uniqueFocusIds.forEach((focusId, index) => {
-      let edgeId = `__ue_itps_focus_edge_${index}__`;
-      while (edgeById.has(edgeId) || syntheticEdges.has(edgeId)) edgeId += "_";
-      syntheticEdges.add(edgeId);
-      addSyntheticArc(rootId, focusId, edgeId);
-      addSyntheticArc(focusId, rootId, edgeId);
+    const projectMembers = uniqueFocusIds.every((id) => {
+      const kind = existing.get(id);
+      return kind === "class" || kind === "struct";
     });
-    const arcsFor = (nodeId: string): RelationArc[] => {
-      const baseArcs = adjacency.get(nodeId) ?? [];
-      const extraArcs = syntheticAdjacency.get(nodeId) ?? [];
-      return extraArcs.length === 0 ? baseArcs : [...baseArcs, ...extraArcs];
-    };
-
-    const discovery = new Map<string, number>();
-    const low = new Map<string, number>();
-    const edgeStack: string[] = [];
+    const { edgeById, adjacency } = this.semanticIndex(projectMembers);
     const relevantEdgeIds = new Set<string>();
-    let discoveryIndex = 0;
-
-    const collectComponent = (boundaryEdgeId: string) => {
-      const componentEdgeIds: string[] = [];
-      let syntheticCount = 0;
-      while (edgeStack.length > 0) {
-        const edgeId = edgeStack.pop()!;
-        componentEdgeIds.push(edgeId);
-        if (syntheticEdges.has(edgeId)) syntheticCount += 1;
-        if (edgeId === boundaryEdgeId) break;
-      }
-      if (syntheticCount < 2) return;
-      for (const edgeId of componentEdgeIds) {
-        if (!syntheticEdges.has(edgeId)) relevantEdgeIds.add(edgeId);
-      }
-    };
-
-    type DfsFrame = {
-      nodeId: string;
-      parentId: string | null;
-      parentEdgeId: string | null;
-      nextArcIndex: number;
-    };
-    const roots = [rootId, ...adjacency.keys()];
-    for (const startId of roots) {
-      if (discovery.has(startId)) continue;
-      discoveryIndex += 1;
-      discovery.set(startId, discoveryIndex);
-      low.set(startId, discoveryIndex);
-      const frames: DfsFrame[] = [{
-        nodeId: startId,
-        parentId: null,
-        parentEdgeId: null,
-        nextArcIndex: 0,
-      }];
-
-      while (frames.length > 0) {
-        const frame = frames[frames.length - 1];
-        const arcs = arcsFor(frame.nodeId);
-        if (frame.nextArcIndex < arcs.length) {
-          const arc = arcs[frame.nextArcIndex];
-          frame.nextArcIndex += 1;
-          if (arc.edgeId === frame.parentEdgeId) continue;
-          if (!discovery.has(arc.targetId)) {
-            edgeStack.push(arc.edgeId);
-            discoveryIndex += 1;
-            discovery.set(arc.targetId, discoveryIndex);
-            low.set(arc.targetId, discoveryIndex);
-            frames.push({
-              nodeId: arc.targetId,
-              parentId: frame.nodeId,
-              parentEdgeId: arc.edgeId,
-              nextArcIndex: 0,
-            });
-          } else if ((discovery.get(arc.targetId) ?? 0) < (discovery.get(frame.nodeId) ?? 0)) {
-            edgeStack.push(arc.edgeId);
-            low.set(
-              frame.nodeId,
-              Math.min(low.get(frame.nodeId) ?? 0, discovery.get(arc.targetId) ?? 0),
-            );
+    const visibleIds = new Set(uniqueFocusIds);
+    const requestedConnectionCount = uniqueFocusIds.length * (uniqueFocusIds.length - 1) / 2;
+    let connectionCount = 0;
+    for (let left = 0; left < uniqueFocusIds.length; left += 1) {
+      for (let right = left + 1; right < uniqueFocusIds.length; right += 1) {
+        const startId = uniqueFocusIds[left];
+        const targetId = uniqueFocusIds[right];
+        const queue = [startId];
+        const predecessor = new Map<string, string>();
+        const seen = new Set<string>([startId]);
+        for (let index = 0; index < queue.length && !seen.has(targetId); index += 1) {
+          for (const arc of adjacency.get(queue[index]) ?? []) {
+            if (seen.has(arc.targetId)) continue;
+            seen.add(arc.targetId);
+            predecessor.set(arc.targetId, queue[index]);
+            queue.push(arc.targetId);
           }
-          continue;
         }
-
-        frames.pop();
-        if (frame.parentId === null || frame.parentEdgeId === null) continue;
-        low.set(
-          frame.parentId,
-          Math.min(low.get(frame.parentId) ?? 0, low.get(frame.nodeId) ?? 0),
-        );
-        if ((low.get(frame.nodeId) ?? 0) >= (discovery.get(frame.parentId) ?? 0)) {
-          collectComponent(frame.parentEdgeId);
+        if (!seen.has(targetId)) continue;
+        connectionCount += 1;
+        const path = [targetId];
+        while (path[path.length - 1] !== startId) {
+          path.push(predecessor.get(path[path.length - 1])!);
+        }
+        path.reverse();
+        for (let index = 0; index + 1 < path.length; index += 1) {
+          const sourceId = path[index];
+          const targetPathId = path[index + 1];
+          visibleIds.add(sourceId);
+          visibleIds.add(targetPathId);
+          for (const arc of adjacency.get(sourceId) ?? []) {
+            if (arc.targetId === targetPathId) relevantEdgeIds.add(arc.edgeId);
+          }
         }
       }
     }
 
     const edgeRows = new Map<string, RawEdgeRow>();
-    const visibleIds = new Set(uniqueFocusIds);
     for (const edgeId of relevantEdgeIds) {
       const row = edgeById.get(edgeId);
-      if (!row) continue;
-      edgeRows.set(edgeId, row);
-      visibleIds.add(String(row.source_id));
-      visibleIds.add(String(row.target_id));
+      if (row) edgeRows.set(edgeId, row);
     }
-
-    const requestedConnectionCount = uniqueFocusIds.length * (uniqueFocusIds.length - 1) / 2;
-    let connectionCount = 0;
-    const remainingFocusIds = new Set(uniqueFocusIds);
-    while (remainingFocusIds.size > 0) {
-      const startId = remainingFocusIds.values().next().value as string;
-      const componentFocusIds = new Set<string>();
-      const componentVisited = new Set<string>([startId]);
-      const componentFrontier = [startId];
-      for (let index = 0; index < componentFrontier.length; index += 1) {
-        const id = componentFrontier[index];
-        if (remainingFocusIds.has(id)) componentFocusIds.add(id);
-        for (const arc of adjacency.get(id) ?? []) {
-          const neighbor = arc.targetId;
-          if (componentVisited.has(neighbor)) continue;
-          componentVisited.add(neighbor);
-          componentFrontier.push(neighbor);
-        }
-      }
-      for (const id of componentFocusIds) remainingFocusIds.delete(id);
-      connectionCount += componentFocusIds.size * (componentFocusIds.size - 1) / 2;
-    }
-
     const distances = new Map(uniqueFocusIds.map((id) => [id, 0]));
     let distanceFrontier = [...uniqueFocusIds];
     while (distanceFrontier.length > 0) {
@@ -520,18 +446,103 @@ export class GraphDatabase {
     });
   }
 
-  private relationIndex(): RelationIndex {
-    if (this.relationIndexCache) return this.relationIndexCache;
+  queryMemberRelations(relationIds: string[]): MemberExpansion {
+    const uniqueRelationIds = [...new Set(relationIds.map((id) => id.trim()).filter(Boolean))];
+    if (uniqueRelationIds.length === 0) return { nodes: [], edges: [] };
+    const rawEdges: RawEdgeRow[] = [];
+    for (const group of chunks(uniqueRelationIds)) {
+      rawEdges.push(
+        ...this.rows<RawEdgeRow>(
+          `SELECT relation_id, source_id, target_id, kind, certainty,
+                  resolution_status, confidence, properties_json
+           FROM relations
+           WHERE relation_id IN (${placeholders(group.length)})
+             AND resolution_status = 'resolved'
+             AND kind IN (${placeholders(SEMANTIC_RELATION_KINDS.length)})`,
+          [...group, ...SEMANTIC_RELATION_KINDS],
+        ),
+      );
+    }
+    const edgeRows = new Map(rawEdges.map((row) => [String(row.relation_id), row]));
+    const nodeIds = [...new Set(rawEdges.flatMap((row) => [
+      String(row.source_id),
+      String(row.target_id),
+    ]))];
+    if (nodeIds.length === 0) return { nodes: [], edges: [] };
+    const result = this.buildGraphResult({
+      centerId: nodeIds[0],
+      focusIds: [],
+      nodeIds,
+      distances: new Map(nodeIds.map((id) => [id, 1])),
+      edgeRows,
+      connectionCount: 0,
+      requestedConnectionCount: 0,
+      truncated: false,
+    });
+    return { nodes: result.nodes, edges: result.edges };
+  }
+
+  private semanticIndex(projectMembers: boolean): RelationIndex {
+    const cacheKey = projectMembers ? "types" : "symbols";
+    const cached = this.semanticIndexCache.get(cacheKey);
+    if (cached) return cached;
+    const nodeRows = this.rows<RawNodeRow>(
+      `SELECT node_id, kind, name, qualified_name, namespace, owner,
+              signature, linkage, properties_json FROM nodes`,
+    );
+    const nodesById = new Map(nodeRows.map((row) => [String(row.node_id), row]));
+    const ownerIds = new Map(
+      nodeRows
+        .filter((row) => row.kind === "class" || row.kind === "struct")
+        .map((row) => [String(row.qualified_name ?? row.name), String(row.node_id)]),
+    );
+    const projectNode = (nodeId: string): string => {
+      if (!projectMembers) return nodeId;
+      const row = nodesById.get(nodeId);
+      if (!row || (row.kind !== "member_function" && row.kind !== "member_variable")) {
+        return nodeId;
+      }
+      const qualifiedName = String(row.qualified_name ?? "");
+      const qualifiedOwner = qualifiedName.includes("::")
+        ? qualifiedName.slice(0, qualifiedName.lastIndexOf("::"))
+        : "";
+      return ownerIds.get(qualifiedOwner) ?? ownerIds.get(String(row.owner ?? "")) ?? nodeId;
+    };
     const rows = this.rows<RawEdgeRow>(
       `SELECT relation_id, source_id, target_id, kind, certainty,
               resolution_status, confidence, properties_json
        FROM relations
+       WHERE resolution_status = 'resolved'
+         AND kind IN (${placeholders(SEMANTIC_RELATION_KINDS.length)})
        ORDER BY
          CASE certainty WHEN 'observed' THEN 0 WHEN 'resolved' THEN 1 ELSE 2 END,
          confidence DESC,
          kind,
          relation_id`,
+      [...SEMANTIC_RELATION_KINDS],
     );
+    const groups = new Map<string, {
+      sourceId: string;
+      targetId: string;
+      kind: string;
+      rows: RawEdgeRow[];
+    }>();
+    for (const row of rows) {
+      const sourceId = projectNode(String(row.source_id));
+      const targetId = projectNode(String(row.target_id));
+      if (sourceId === targetId) continue;
+      const key = `${sourceId}\u0000${String(row.kind)}\u0000${targetId}`;
+      const group = groups.get(key) ?? { sourceId, targetId, kind: String(row.kind), rows: [] };
+      group.rows.push(row);
+      groups.set(key, group);
+    }
+    if (projectMembers) {
+      for (const [key, group] of groups) {
+        if (group.kind !== "USES_TYPE") continue;
+        const callKey = `${group.sourceId}\u0000CALLS\u0000${group.targetId}`;
+        if (groups.has(callKey)) groups.delete(key);
+      }
+    }
     const edgeById = new Map<string, RawEdgeRow>();
     const adjacency = new Map<string, RelationArc[]>();
     const addArc = (sourceId: string, targetId: string, edgeId: string) => {
@@ -539,17 +550,48 @@ export class GraphDatabase {
       arcs.push({ edgeId, targetId });
       adjacency.set(sourceId, arcs);
     };
-    for (const row of rows) {
-      const edgeId = String(row.relation_id);
-      const sourceId = String(row.source_id);
-      const targetId = String(row.target_id);
-      edgeById.set(edgeId, row);
-      if (sourceId === targetId) continue;
-      addArc(sourceId, targetId, edgeId);
-      addArc(targetId, sourceId, edgeId);
+    let aggregateIndex = 0;
+    for (const key of [...groups.keys()].sort()) {
+      const group = groups.get(key)!;
+      const representative = group.rows[0];
+      const unchanged = group.rows.length === 1
+        && String(representative.source_id) === group.sourceId
+        && String(representative.target_id) === group.targetId;
+      const edgeId = unchanged
+        ? String(representative.relation_id)
+        : `semantic:${aggregateIndex++}`;
+      const memberRelations: MemberRelation[] = group.rows.map((row) => ({
+        relationId: String(row.relation_id),
+        sourceId: String(row.source_id),
+        sourceName: String(nodesById.get(String(row.source_id))?.qualified_name ?? row.source_id),
+        targetId: String(row.target_id),
+        targetName: String(nodesById.get(String(row.target_id))?.qualified_name ?? row.target_id),
+      }));
+      const prepared: RawEdgeRow = {
+        ...representative,
+        relation_id: edgeId,
+        source_id: group.sourceId,
+        target_id: group.targetId,
+        confidence: Math.max(...group.rows.map((row) => Number(row.confidence))),
+        properties_json: JSON.stringify({
+          ...parseJson(representative.properties_json),
+          memberRelationCount: memberRelations.length,
+          memberRelations,
+        }),
+        evidence_relation_ids: group.rows.map((row) => String(row.relation_id)),
+      };
+      edgeById.set(edgeId, prepared);
+      addArc(group.sourceId, group.targetId, edgeId);
+      addArc(group.targetId, group.sourceId, edgeId);
     }
-    this.relationIndexCache = { edgeById, adjacency };
-    return this.relationIndexCache;
+    for (const arcs of adjacency.values()) {
+      arcs.sort((left, right) =>
+        left.targetId.localeCompare(right.targetId) || left.edgeId.localeCompare(right.edgeId),
+      );
+    }
+    const result = { edgeById, adjacency };
+    this.semanticIndexCache.set(cacheKey, result);
+    return result;
   }
 
   private buildGraphResult({
@@ -614,7 +656,11 @@ export class GraphDatabase {
       }
     }
 
-    const edgeIds = [...edgeRows.keys()];
+    const edgeIds = [...new Set(
+      [...edgeRows.values()].flatMap((row) =>
+        row.evidence_relation_ids ?? [String(row.relation_id)],
+      ),
+    )];
     const evidence = new Map<string, Evidence[]>();
     for (const group of chunks(edgeIds)) {
       if (group.length === 0) continue;
@@ -667,17 +713,26 @@ export class GraphDatabase {
       );
 
     const edges = [...edgeRows.values()]
-      .map<GraphEdge>((row) => ({
-        id: String(row.relation_id),
-        source: String(row.source_id),
-        target: String(row.target_id),
-        kind: String(row.kind),
-        certainty: String(row.certainty) as Certainty,
-        resolutionStatus: String(row.resolution_status),
-        confidence: Number(row.confidence),
-        properties: parseJson(row.properties_json),
-        evidence: evidence.get(String(row.relation_id)) ?? [],
-      }))
+      .map<GraphEdge>((row) => {
+        const properties = parseJson(row.properties_json);
+        const memberRelations = Array.isArray(properties.memberRelations)
+          ? properties.memberRelations as MemberRelation[]
+          : [];
+        const evidenceIds = row.evidence_relation_ids ?? [String(row.relation_id)];
+        return {
+          id: String(row.relation_id),
+          source: String(row.source_id),
+          target: String(row.target_id),
+          kind: String(row.kind),
+          certainty: String(row.certainty) as Certainty,
+          resolutionStatus: String(row.resolution_status),
+          confidence: Number(row.confidence),
+          properties,
+          evidence: evidenceIds.flatMap((id) => evidence.get(id) ?? []),
+          memberRelationCount: Number(properties.memberRelationCount ?? memberRelations.length),
+          memberRelations,
+        };
+      })
       .sort((left, right) =>
         left.kind.localeCompare(right.kind) || left.id.localeCompare(right.id),
       );
