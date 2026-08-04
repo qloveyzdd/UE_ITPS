@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:schema:information-pool-build",
+  "title": "UE ITPS information-pool build result",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "project",
+    "pool_directory",
+    "snapshot",
+    "cache_directory",
+    "generation_id",
+    "source_commit",
+    "scan_id",
+    "source_unit_count",
+    "node_count",
+    "relation_count",
+    "warning_count",
+    "cache_hits",
+    "cache_misses",
+    "worker_count",
+    "problems",
+    "active_manifest"
+  ],
+  "properties": {
+    "schema_version": {"const": "ue-itps.information-pool.build"},
+    "status": {"const": "activated"},
+    "project": {
+      "type": "object",
+      "required": ["name", "descriptor", "git_root"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "descriptor": {"type": "string", "minLength": 1},
+        "git_root": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "pool_directory": {"type": "string", "minLength": 1},
+    "snapshot": {"type": "string", "minLength": 1},
+    "cache_directory": {"type": "string", "minLength": 1},
+    "generation_id": {"type": "string", "pattern": "^generation:"},
+    "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+    "scan_id": {"type": "string", "pattern": "^scan:"},
+    "source_unit_count": {"type": "integer", "minimum": 0},
+    "node_count": {"type": "integer", "minimum": 1},
+    "relation_count": {"type": "integer", "minimum": 0},
+    "warning_count": {"type": "integer", "minimum": 0},
+    "cache_hits": {"type": "integer", "minimum": 0},
+    "cache_misses": {"type": "integer", "minimum": 0},
+    "worker_count": {"type": "integer", "minimum": 1},
+    "problems": {"type": "array", "items": {"type": "object"}},
+    "active_manifest": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "active_generation_id",
+        "active_source_commit",
+        "active_snapshot",
+        "project"
+      ],
+      "properties": {
+        "schema_version": {"const": "ue-itps.information-pool.manifest"},
+        "active_generation_id": {"type": "string", "pattern": "^generation:"},
+        "active_source_commit": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+        "active_snapshot": {"type": "string", "minLength": 1},
+        "project": {
+          "type": "object",
+          "required": ["name", "descriptor"],
+          "properties": {
+            "name": {"type": "string", "minLength": 1},
+            "descriptor": {"type": "string", "minLength": 1}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

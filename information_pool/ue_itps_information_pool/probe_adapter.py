@@ -371,7 +371,7 @@ def _inventory_files(
                         problems.append(
                             {
                                 "severity": "warning",
-                                "code": "v4-unsupported-source-suffix",
+                                "code": "information-pool-unsupported-source-suffix",
                                 "path": normalized,
                                 "message": (
                                     "The immutable C++ probes do not accept this "

@@ -11,9 +11,10 @@ UE ITPS 是一组确定性、只读的 Unreal Engine 项目检查工具。它从
 
 UE ITPS 提供静态文件与源码证据，不替代 UnrealBuildTool、UnrealHeaderTool、Editor、编译器或运行时验证。
 
-项目级符号关系数据库位于独立的 [`v4/`](v4/) 目录。v4 复用现有探针；
-公共 CLI 和 Schema 保持兼容，探针实现的代码事实缺陷修复会同步作用于 v4。使用方式和当前边界见
-[`v4/README.md`](v4/README.md)。
+绑定 Git 提交的工程信息池位于独立的 [`information_pool/`](information_pool/)
+目录。信息池复用现有探针，以不可变 SQLite 快照保存项目结构、C++ 符号、关系和
+原始证据；候选快照通过验证后才会原子激活。使用方式和当前边界见
+[`information_pool/README.md`](information_pool/README.md)。
 
 ## 环境要求
 

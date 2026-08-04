@@ -1,0 +1,1 @@
+"""Information-pool integration tests."""

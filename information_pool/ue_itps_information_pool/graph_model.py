@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
 import json
 from pathlib import Path
 import re
@@ -18,12 +17,8 @@ from .identity import (
     stable_id,
     symbol_id,
 )
-from .probe_adapter import ProjectProbe, SourceOwner, scan_project
-from .storage import (
-    connect,
-    json_value,
-    replace_graph,
-)
+from .probe_adapter import ProjectProbe, SourceOwner, SourceUnitProbe
+from .storage import json_value
 
 def _source_unit_key(document: dict[str, Any]) -> str:
     paths = [
@@ -717,7 +712,7 @@ def _add_owner_relations(graph: Graph) -> None:
             certainty="resolved",
             resolution_status="resolved",
             confidence=1.0,
-            probe_schema="ue-itps.v4.resolver.v1",
+            probe_schema="ue-itps.information-pool.resolver.v1",
         )
 
 
@@ -883,13 +878,13 @@ def _add_reference_relations(graph: Graph, unit: SourceUnitProbe) -> None:
                         certainty="inferred",
                         resolution_status="resolved",
                         confidence=0.85,
-                        probe_schema="ue-itps.v4.relation-semantics.v1",
+                        probe_schema="ue-itps.information-pool.relation-semantics.v1",
                         location=location,
                         properties=properties,
                     )
 
 
-def _build_graph_model(probe: ProjectProbe) -> Graph:
+def build_graph_model(probe: ProjectProbe) -> Graph:
     project = probe.inventory["project"]
     key = project_key(str(project["name"]), str(project["descriptor"]))
     graph = Graph(key, project_id(key))
@@ -904,90 +899,3 @@ def _build_graph_model(probe: ProjectProbe) -> Graph:
         _add_include_relations(graph, unit)
         _add_reference_relations(graph, unit)
     return graph
-
-
-def build_graph(
-    project_file: Path,
-    database: Path,
-    *,
-    engine_override: Path | None = None,
-    cache_dir: Path | None = None,
-    workers: int | None = None,
-    progress: Any | None = None,
-) -> dict[str, Any]:
-    connection = connect(database)
-    try:
-        selected_cache_dir = (
-            cache_dir.resolve()
-            if cache_dir is not None
-            else Path(f"{database.resolve()}.cache")
-        )
-        probe = scan_project(
-            project_file,
-            engine_override=engine_override,
-            cache_dir=selected_cache_dir,
-            workers=workers,
-            progress=progress,
-        )
-        graph = _build_graph_model(probe)
-        fingerprint = stable_id(
-            "scan",
-            graph.key,
-            sorted(unit.input_hash for unit in probe.units),
-            1,
-        )
-        warning_count = sum(
-            1
-            for problem in probe.problems
-            if problem.get("severity") == "warning"
-        )
-        scan = {
-            "scan_id": fingerprint,
-            "project_id": graph.project_node_id,
-            "project_key": graph.key,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "node_count": len(graph.nodes),
-            "relation_count": len(graph.relations),
-            "warning_count": warning_count,
-        }
-        replace_graph(
-            connection,
-            scan=scan,
-            nodes=sorted(
-                graph.nodes.values(),
-                key=lambda item: str(item["node_id"]),
-            ),
-            occurrences=sorted(
-                graph.occurrences.values(),
-                key=lambda item: str(item["occurrence_id"]),
-            ),
-            relations=sorted(
-                graph.relations.values(),
-                key=lambda item: str(item["relation_id"]),
-            ),
-            evidence=sorted(
-                graph.evidence.values(),
-                key=lambda item: str(item["evidence_id"]),
-            ),
-            probe_results=probe.probe_results,
-        )
-        return {
-            "schema_version": "ue-itps.symbol-graph-build.v4",
-            "project": {
-                "name": probe.inventory["project"]["name"],
-                "descriptor": str(project_file.resolve()),
-            },
-            "database": str(database.resolve()),
-            "cache_directory": str(selected_cache_dir),
-            "scan_id": fingerprint,
-            "source_unit_count": len(probe.units),
-            "node_count": len(graph.nodes),
-            "relation_count": len(graph.relations),
-            "warning_count": warning_count,
-            "cache_hits": probe.cache_hits,
-            "cache_misses": probe.cache_misses,
-            "worker_count": probe.worker_count,
-            "problems": probe.problems,
-        }
-    finally:
-        connection.close()

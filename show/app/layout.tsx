@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "UE ITPS 关系浏览器",
-  description: "在本地只读浏览 UE ITPS v4 SQLite 知识图谱。",
+  description: "在本地只读浏览 UE ITPS 工程信息池 SQLite 快照。",
   icons: { icon: "/favicon.svg" },
 };
 

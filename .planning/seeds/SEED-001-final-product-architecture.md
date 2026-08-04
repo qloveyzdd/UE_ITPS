@@ -14,6 +14,10 @@ decision_status: 概念架构已确认，尚未进入实施计划
 
 本文记录 2026-08-04 对 UE-ITPS 最终产品形态的完整架构讨论。
 
+> 2026-08-04 进展：V4 原型已由正式 `information_pool/` 取代，完成 Git
+> 提交绑定、不可变候选快照、验证后原子激活和任务型查询。本 Seed 中更大的控制
+> 核心、隔离写入与多任务编排仍未启动。
+
 这不是当前 V4 原型的立即重构计划，也不改变当前工程主线。当前实现仍然是：
 
 - 项目工具池：21 个单一职责、只读、稳定 JSON 契约的 UE 工程探针，包含统一注册表、AST 与静态关系分析。
@@ -413,10 +417,10 @@ Codex 原生 Agent 线程和追踪可能保留比产品目标更多的执行信�
 
 - `.planning/PROJECT.md`：当前里程碑仍以 UE 5.6.1/Lyra 工程事实和可复现证据为主。
 - `docs/PROGRAM-DESIGN.md`：项目工具池当前正式工具边界与只读契约。
-- `v4/README.md`：当前 V4 项目级符号图谱、SQLite、并行扫描和可恢复缓存。
-- `v4/ue_itps_v4/graph_builder.py`：当前工程事实到图模型的构建入口。
-- `v4/ue_itps_v4/storage.py`：当前图谱持久化边界。
-- `v4/ue_itps_v4/query.py`：当前图谱查询边界。
+- `information_pool/README.md`：工程信息池的提交绑定、不可变快照和查询接口。
+- `information_pool/ue_itps_information_pool/graph_model.py`：工程事实到图模型的构建边界。
+- `information_pool/ue_itps_information_pool/storage.py`：快照持久化与完整性验证边界。
+- `information_pool/ue_itps_information_pool/query.py`：全文检索和任务型图查询边界。
 - `.planning/codebase/ARCHITECTURE.md`：已验证的 Lyra 工程架构事实。
 - `.planning/codebase/PIPELINES.md`：Experience、Pawn 初始化和运行管线证据。
 
@@ -430,4 +434,4 @@ Codex 原生 Agent 线程和追踪可能保留比产品目标更多的执行信�
 
 ---
 
-本 Seed 在触发条件满足前保持休眠。当前工作继续沿现有 V4 图谱和 UE 工程事实验证主线推进。
+本 Seed 的信息池部分已经落地；独立控制核心、隔离写入与多任务编排部分继续休眠。

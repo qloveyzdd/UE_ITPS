@@ -7,15 +7,16 @@ from pathlib import Path
 import sys
 import time
 
-from ue_itps_v4 import build_graph
+from ue_itps_information_pool import build_information_pool
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="构建 UE ITPS v4 项目级符号关系数据库。"
+        description="构建并原子激活 UE ITPS 工程信息池快照。",
     )
     parser.add_argument("--project", required=True, metavar="FILE")
-    parser.add_argument("--database", required=True, metavar="FILE")
+    parser.add_argument("--pool", required=True, metavar="DIRECTORY")
+    parser.add_argument("--source-commit", metavar="REVISION")
     parser.add_argument("--engine-root", metavar="PATH")
     parser.add_argument("--cache-dir", metavar="PATH")
     parser.add_argument("--workers", type=int)
@@ -25,15 +26,12 @@ def main() -> int:
     def report_progress(value: dict[str, object]) -> None:
         nonlocal last_progress
         now = time.monotonic()
-        if (
-            value.get("completed") != value.get("total")
-            and now - last_progress < 2.0
-        ):
+        if value.get("completed") != value.get("total") and now - last_progress < 2.0:
             return
         last_progress = now
         print(
             json.dumps(
-                {"event": "v4-progress", **value},
+                {"event": "information-pool-progress", **value},
                 ensure_ascii=False,
                 separators=(",", ":"),
             ),
@@ -42,21 +40,18 @@ def main() -> int:
         )
 
     try:
-        result = build_graph(
+        result = build_information_pool(
             Path(args.project),
-            Path(args.database),
-            engine_override=(
-                Path(args.engine_root) if args.engine_root else None
-            ),
-            cache_dir=(
-                Path(args.cache_dir) if args.cache_dir else None
-            ),
+            Path(args.pool),
+            source_commit=args.source_commit,
+            engine_override=Path(args.engine_root) if args.engine_root else None,
+            cache_dir=Path(args.cache_dir) if args.cache_dir else None,
             workers=args.workers,
             progress=report_progress,
         )
-    except (OSError, ValueError) as exc:
+    except (OSError, RuntimeError, ValueError) as exc:
         result = {
-            "schema_version": "ue-itps.symbol-graph-build.v4",
+            "schema_version": "ue-itps.information-pool.build",
             "status": "error",
             "message": str(exc),
         }

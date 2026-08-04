@@ -1,3 +1,5 @@
+"""Deterministic identities shared by every information-pool snapshot."""
+
 from __future__ import annotations
 
 import hashlib

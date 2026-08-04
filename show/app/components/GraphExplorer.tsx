@@ -672,7 +672,7 @@ export default function GraphExplorer() {
               <small>扫描于 {readableDate(summary.createdAt)}</small>
             </div>
           ) : (
-            <div className="database-summary empty"><strong>尚未加载数据库</strong><span>请选择 show 外部或任意位置的 v4 SQLite 数据库。</span></div>
+            <div className="database-summary empty"><strong>尚未加载数据库</strong><span>请选择信息池 snapshots 目录中的 SQLite 快照。</span></div>
           )}
 
           {graph && (

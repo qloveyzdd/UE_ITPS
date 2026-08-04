@@ -23,6 +23,14 @@ async function createGraphDatabase() {
   const SQL = await initSqlJs();
   const db = new SQL.Database();
   db.run(`
+    CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    CREATE TABLE snapshot (
+      project_key TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      node_count INTEGER NOT NULL,
+      relation_count INTEGER NOT NULL,
+      warning_count INTEGER NOT NULL
+    );
     CREATE TABLE nodes (
       node_id TEXT PRIMARY KEY,
       kind TEXT NOT NULL,
@@ -62,6 +70,8 @@ async function createGraphDatabase() {
       probe_schema TEXT NOT NULL,
       detail_json TEXT NOT NULL
     );
+    INSERT INTO metadata VALUES ('schema_version', '1');
+    INSERT INTO snapshot VALUES ('SampleGame|SampleGame.uproject', '2026-08-04T00:00:00Z', 358, 357, 0);
     INSERT INTO nodes VALUES
       ('a', 'class', 'A', 'A', NULL, NULL, NULL, NULL, '{}'),
       ('b', 'class', 'B', 'B', NULL, NULL, NULL, NULL, '{}'),
@@ -96,6 +106,22 @@ async function createGraphDatabase() {
   const GraphDatabase = moduleShim.exports.GraphDatabase;
   return new GraphDatabase(db);
 }
+
+test("数据库摘要读取信息池快照元数据", async () => {
+  const graphDb = await createGraphDatabase();
+  try {
+    assert.deepEqual(graphDb.summary(), {
+      schemaVersion: "1",
+      projectKey: "SampleGame|SampleGame.uproject",
+      createdAt: "2026-08-04T00:00:00Z",
+      nodeCount: 358,
+      relationCount: 357,
+      warningCount: 0,
+    });
+  } finally {
+    graphDb.close();
+  }
+});
 
 test("多节点查询保留所有有效联通关系，并排除无关支路", async () => {
   const graphDb = await createGraphDatabase();

@@ -18,7 +18,7 @@ from ue_project_tools import source_type_facts  # noqa: E402
 from ue_project_tools.source_context import load_source_context  # noqa: E402
 
 
-ANALYZER_VERSION = "ue-itps.v4.batch-analyzer.v3"
+ANALYZER_VERSION = "ue-itps.information-pool.batch-analyzer.v1"
 
 
 @dataclass

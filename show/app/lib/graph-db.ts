@@ -108,7 +108,7 @@ interface RelationIndex {
 
 const REQUIRED_TABLES = [
   "metadata",
-  "scan_runs",
+  "snapshot",
   "nodes",
   "occurrences",
   "relations",
@@ -199,7 +199,7 @@ export class GraphDatabase {
     const missing = REQUIRED_TABLES.filter((name) => !names.has(name));
     if (missing.length > 0) {
       this.close();
-      throw new Error(`不是有效的 UE ITPS v4 数据库，缺少表：${missing.join("、")}`);
+      throw new Error(`不是有效的 UE ITPS 信息池快照，缺少表：${missing.join("、")}`);
     }
   }
 
@@ -215,7 +215,7 @@ export class GraphDatabase {
       warning_count: number;
     }>(
       `SELECT project_key, created_at, node_count, relation_count, warning_count
-       FROM scan_runs ORDER BY created_at DESC LIMIT 1`,
+       FROM snapshot LIMIT 1`,
     )[0];
 
     if (!scan) throw new Error("数据库中没有可用的扫描记录。");
