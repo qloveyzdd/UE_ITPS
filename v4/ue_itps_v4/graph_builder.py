@@ -308,8 +308,27 @@ class Graph:
     ) -> Resolution:
         clean = _clean_symbol_spelling(spelling)
         short = _short_name(clean)
+        symbol_nodes = self._symbol_nodes()
+        if kind == "type":
+            exact_candidates = sorted(
+                {
+                    str(node["node_id"])
+                    for node in symbol_nodes
+                    if node["kind"] in {"class", "struct", "enum"}
+                    and str(node["qualified_name"] or "") == clean
+                }
+            )
+            if len(exact_candidates) == 1:
+                return Resolution(
+                    exact_candidates[0],
+                    "resolved",
+                    exact_candidates,
+                )
+            if exact_candidates:
+                external = self.ensure_external(kind, spelling)
+                return Resolution(external, "ambiguous", exact_candidates)
         candidates: list[str] = []
-        for node in self._symbol_nodes():
+        for node in symbol_nodes:
             qualified = str(node["qualified_name"] or "")
             node_name = str(node["name"])
             node_kind = str(node["kind"])
@@ -317,9 +336,9 @@ class Graph:
             if kind == "type":
                 matches = (
                     node_kind in {"class", "struct", "enum"}
+                    and "::" not in clean
                     and (
-                        qualified == clean
-                        or node_name == short
+                        node_name == short
                         or _short_name(qualified) == short
                     )
                 )

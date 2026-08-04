@@ -22,6 +22,8 @@ sys.path.insert(0, str(REPOSITORY_ROOT))
 from tests.support import create_fixture
 from ue_itps_v4 import build_graph, query_graph
 from ue_itps_v4.batch_analyzer import analyze_source_unit
+from ue_itps_v4.graph_builder import Graph
+from ue_itps_v4.identity import symbol_id
 from ue_project_tools.source_unit import (
     inspect_source_function,
     list_source_functions,
@@ -78,6 +80,34 @@ class GraphWorkflowTests(unittest.TestCase):
         self.assertEqual(result["status"], "ambiguous")
         self.assertGreaterEqual(len(result["candidates"]), 2)
         self.assertEqual(result["nodes"], [])
+
+    def test_qualified_type_resolution_does_not_fall_back_to_short_name(self) -> None:
+        graph = Graph("SampleGame|SampleGame.uproject", "project:test")
+        expected_id = ""
+        for qualified_name in ("EWindowMode::Type", "ETravelFailure::Type"):
+            node_id, canonical_key = symbol_id(
+                graph.key,
+                kind="enum",
+                qualified_name=qualified_name,
+            )
+            graph.add_node(
+                node_id=node_id,
+                kind="enum",
+                name="Type",
+                qualified_name=qualified_name,
+                canonical_key=canonical_key,
+            )
+            if qualified_name == "EWindowMode::Type":
+                expected_id = node_id
+
+        exact = graph.resolve("type", "EWindowMode::Type")
+        self.assertEqual(exact.status, "resolved")
+        self.assertEqual(exact.node_id, expected_id)
+        self.assertEqual(exact.candidates, [expected_id])
+
+        missing = graph.resolve("type", "EWorldType::Type")
+        self.assertEqual(missing.status, "unresolved")
+        self.assertEqual(missing.candidates, [])
 
     def test_unchanged_function_probes_are_loaded_from_cache(self) -> None:
         first = build_graph(

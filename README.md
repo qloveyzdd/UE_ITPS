@@ -6,13 +6,13 @@ UE ITPS 是一组确定性、只读的 Unreal Engine 项目检查工具。它从
 
 - 16 个聚焦的 Python CLI。
 - 16 份 CLI JSON Schema 和 1 份公共 Schema。
-- 57 项自动化测试。
+- 58 项自动化测试。
 - 3 个与 Lyra 本地验证相关的辅助脚本；它们不属于 16 个正式只读 CLI。
 
 UE ITPS 提供静态文件与源码证据，不替代 UnrealBuildTool、UnrealHeaderTool、Editor、编译器或运行时验证。
 
-项目级符号关系数据库位于独立的 [`v4/`](v4/) 目录。v4 调用现有探针，
-但不修改 v1–v3 的 CLI、实现或 Schema；使用方式和当前边界见
+项目级符号关系数据库位于独立的 [`v4/`](v4/) 目录。v4 复用现有探针；
+公共 CLI 和 Schema 保持兼容，探针实现的代码事实缺陷修复会同步作用于 v4。使用方式和当前边界见
 [`v4/README.md`](v4/README.md)。
 
 ## 环境要求
@@ -78,7 +78,7 @@ python tools/ue_inspect_module_entry.py --help
 | 构建 | `ue_inspect_cs_function.py` | `--source --function` | `ue-itps.cs-function.v1` | 检查同名 C# 成员及其外部引用 |
 | Module | `ue_inspect_module_entry.py` | `--rules` | `ue-itps.module-entry-state.v12` | 检查注册、回调绑定、清理和生命周期状态 |
 | C++ | `ue_list_cxx_includes.py` | `--source` | `ue-itps.cxx-includes.v1` | 列出直接 include、条件和物理来源 |
-| C++ | `ue_list_cxx_types.py` | `--source` | `ue-itps.cxx-types.v1` | 索引类型、成员、全局变量和自由函数锚点 |
+| C++ | `ue_list_cxx_types.py` | `--source` | `ue-itps.cxx-types.v1` | 索引独立类型声明/定义、成员、全局变量和自由函数锚点 |
 | C++ | `ue_inspect_cxx_function.py` | `--source --function` | `ue-itps.cxx-function.v1` | 检查同名定义及其外部符号 |
 
 `ue_resolve_plugins.py` 还支持：
@@ -158,16 +158,16 @@ limits
 python -m unittest discover -s tests -v
 ```
 
-当前测试共 57 项：
+当前测试共 58 项：
 
 | 测试模块 | 数量 | 覆盖重点 |
 |---|---:|---|
 | `test_cli_contracts.py` | 15 | CLI/Schema 清单、双语帮助、错误信封、退出码、严格 JSON 和公共结果契约 |
 | `test_project_navigation.py` | 14 | 项目发现、描述符、Engine、Module、Target、Plugin、源码清单和路径 |
 | `test_build_and_module.py` | 12 | `.uplugin`、ModuleRules、TargetRules、C# 函数和 Module 生命周期 |
-| `test_cxx_analysis.py` | 13 | 源码单元、include、类型、接口候选、函数身份和外部符号 |
+| `test_cxx_analysis.py` | 14 | 源码单元、include、独立类型声明、接口候选、函数身份和外部符号 |
 | `test_end_to_end_workflow.py` | 3 | 16 个 CLI 的完整导航、只读性和字节级确定性 |
-| **合计** | **57** | 当前公共行为、成功与失败边界、Schema、只读性和确定性 |
+| **合计** | **58** | 当前公共行为、成功与失败边界、Schema、只读性和确定性 |
 
 测试在临时目录中构造最小 Engine、项目、Plugin、规则文件和 C++ 源码：
 
@@ -198,7 +198,7 @@ python -m unittest discover -s tests -v
 │  ├─ ue_project_tools/       # 领域服务、解析器与公共输出组件
 │  └─ *lyra*                  # Lyra 本地证据辅助脚本
 ├─ schemas/                   # 16 个 CLI Schema + 1 个公共 Schema
-├─ tests/                     # 57 项临时夹具自动化测试
+├─ tests/                     # 58 项临时夹具自动化测试
 ├─ docs/PROGRAM-DESIGN.md     # 架构、契约和扩展规则
 ├─ LyraStarterGame/           # 可选本地参考项目
 ├─ ExternalProjects/          # 可选外部参考项目

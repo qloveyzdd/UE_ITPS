@@ -124,6 +124,52 @@ class CxxAnalysisTests(CliTestCase):
             "Gameplay::Utility",
         )
 
+    def test_type_facts_only_report_standalone_forward_declarations(self) -> None:
+        header = write_text(
+            self.fixture.project_root
+            / "Source"
+            / "SampleGame"
+            / "Public"
+            / "ForwardDeclarations.h",
+            """
+            #pragma once
+
+            class UExisting;
+            class SAMPLEGAME_API UExported;
+            enum class EMode : uint8;
+
+            class FOwner
+            {
+                class FNested;
+                friend class UExisting;
+                TSubclassOf<class UExisting> Type;
+                class UExisting* Raw;
+                const class UExisting* Current;
+                virtual class UExisting* Resolve() const override;
+            };
+            """,
+        )
+
+        result = self.cli(
+            "ue_list_cxx_types.py",
+            "--source",
+            str(header),
+        )
+
+        self.assertEqual(
+            {item["qualified_name"] for item in result["classes"]},
+            {
+                "UExisting",
+                "UExported",
+                "FOwner",
+                "FOwner::FNested",
+            },
+        )
+        self.assertEqual(
+            {item["qualified_name"] for item in result["enums"]},
+            {"EMode"},
+        )
+
     def test_type_facts_identify_local_interface_candidates(self) -> None:
         header = write_text(
             self.fixture.project_root

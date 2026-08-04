@@ -450,6 +450,8 @@ def parse_type_forward_declarations(
             continue
         if _inside_template_parameters(tokens, index):
             continue
+        if index > 0 and tokens[index - 1].value == "friend":
+            continue
 
         cursor = index + 1
         scoped = False
@@ -481,6 +483,8 @@ def parse_type_forward_declarations(
             ),
             None,
         )
+        if token.value in {"class", "struct"} and colon is not None:
+            continue
         name_end = colon if colon is not None else terminator
         candidates = [
             candidate
@@ -491,6 +495,15 @@ def parse_type_forward_declarations(
         if not candidates:
             continue
         name_index = candidates[-1]
+        declaration_prefix = tokens[cursor:name_index]
+        if any(
+            prefix.kind != "identifier"
+            or not prefix.value.endswith("_API")
+            for prefix in declaration_prefix
+        ):
+            continue
+        if name_index + 1 != name_end:
+            continue
         if any(
             int(item["_token_range"][0]) == index
             for item in classes
