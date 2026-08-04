@@ -7,7 +7,7 @@ from ue_project_tools.common import cli_parser, json_text, read_json
 from ue_project_tools.structure import classify_project_paths
 
 
-SCHEMA_VERSION = "ue-itps.project-paths.v1"
+SCHEMA_VERSION = "ue_classify_project_paths"
 RESPONSIBILITY = (
     "Classify project-root path names, locations, and filesystem states."
 )

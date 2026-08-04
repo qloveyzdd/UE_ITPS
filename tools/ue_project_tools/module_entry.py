@@ -299,7 +299,7 @@ def inspect_module_entry(rules_path: Path) -> dict[str, Any]:
     )
 
     return result_document(
-        "ue-itps.module-entry-state.v12",
+        "ue_inspect_module_entry",
         {
             "module": {
                 "name": module_name,

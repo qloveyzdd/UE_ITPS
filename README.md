@@ -4,10 +4,10 @@ UE ITPS 是一组确定性、只读的 Unreal Engine 项目检查工具。它从
 
 当前正式接口包括：
 
-- 16 个聚焦的 Python CLI。
-- 16 份 CLI JSON Schema 和 1 份公共 Schema。
-- 58 项自动化测试。
-- 3 个与 Lyra 本地验证相关的辅助脚本；它们不属于 16 个正式只读 CLI。
+- 21 个聚焦的 Python CLI，统一组成项目工具池。
+- 21 份 CLI JSON Schema 和 1 份公共 Schema。
+- 64 项自动化测试。
+- 3 个与 Lyra 本地验证相关的辅助脚本；它们不属于 21 个正式只读 CLI。
 
 UE ITPS 提供静态文件与源码证据，不替代 UnrealBuildTool、UnrealHeaderTool、Editor、编译器或运行时验证。
 
@@ -18,17 +18,29 @@ UE ITPS 提供静态文件与源码证据，不替代 UnrealBuildTool、UnrealHe
 ## 环境要求
 
 - Python 3.10 或更高版本。
-- 正式 CLI 只依赖 Python 标准库。
+- 正式 CLI 使用固定版本的 Tree-sitter、C++ 与 C# grammar，见 `requirements.txt`。
 - 运行测试需要 `requirements-dev.txt` 中的 `jsonschema`。
 - 只有解析已安装 Engine 或执行 Lyra 辅助流程时，才需要相应 Engine 或项目目录。
 
-安装测试依赖：
+安装运行依赖：
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
+安装测试依赖（会同时安装运行依赖）：
 
 ```powershell
 python -m pip install -r requirements-dev.txt
 ```
 
 ## 快速开始
+
+先查看项目工具池：
+
+```powershell
+python tools/ue_list_tools.py
+```
 
 先发现项目：
 
@@ -62,24 +74,33 @@ python tools/ue_inspect_module_entry.py --help
 
 ## 正式 CLI
 
-| 范围 | CLI | 明确入口 | Schema 版本 | 职责 |
+| 范围 | CLI | 明确入口 | 工具标识 | 职责 |
 |---|---|---|---|---|
-| 项目 | `ue_find_projects.py` | `--search-root` | `ue-itps.project-discovery.v1` | 查找 `.uproject`，如实报告零个、一个或多个候选 |
-| 项目 | `ue_read_project_descriptor.py` | `--project` | `ue-itps.project-descriptor.v1` | 投影 `.uproject` 的显式声明 |
-| 项目 | `ue_resolve_engine.py` | `--project` | `ue-itps.engine-resolution.v1` | 定位 Engine 根目录并读取 `Build.version` |
-| 项目 | `ue_inspect_modules.py` | `--project` | `ue-itps.project-modules.v1` | 对账 Module 声明、Build.cs 和注册入口 |
-| 项目 | `ue_inspect_targets.py` | `--project` | `ue-itps.project-targets.v1` | 发现 Target.cs 并报告原生 Target 证据 |
-| 项目 | `ue_list_project_cxx_sources.py` | `--project` | `ue-itps.project-cxx-sources.v1` | 按 Module、Plugin 和可见性列出项目 C++ 源码 |
-| 项目 | `ue_resolve_plugins.py` | `--project` | `ue-itps.project-plugin-references.v1` | 在显式 Profile 下定位直接 Plugin 引用 |
-| 项目 | `ue_classify_project_paths.py` | `--project` | `ue-itps.project-paths.v1` | 分类项目根路径及文件系统状态 |
-| 构建 | `ue_read_plugin_descriptor.py` | `--plugin` | `ue-itps.plugin-descriptor.v2` | 读取一个 `.uplugin` 并对账其 Module |
-| 构建 | `ue_inspect_module_rules.py` | `--rules` | `ue-itps.module-rule-relations.v1` | 投影 ModuleRules 设置变更与条件 |
-| 构建 | `ue_inspect_target_rules.py` | `--target` | `ue-itps.target-rule-relations.v1` | 索引 TargetRules 类、变量和函数 |
-| 构建 | `ue_inspect_cs_function.py` | `--source --function` | `ue-itps.cs-function.v1` | 检查同名 C# 成员及其外部引用 |
-| Module | `ue_inspect_module_entry.py` | `--rules` | `ue-itps.module-entry-state.v12` | 检查注册、回调绑定、清理和生命周期状态 |
-| C++ | `ue_list_cxx_includes.py` | `--source` | `ue-itps.cxx-includes.v1` | 列出直接 include、条件和物理来源 |
-| C++ | `ue_list_cxx_types.py` | `--source` | `ue-itps.cxx-types.v1` | 索引独立类型声明/定义、成员、全局变量和自由函数锚点 |
-| C++ | `ue_inspect_cxx_function.py` | `--source --function` | `ue-itps.cxx-function.v1` | 检查同名定义及其外部符号 |
+| 项目 | `ue_find_projects.py` | `--search-root` | `ue_find_projects` | 查找 `.uproject`，如实报告零个、一个或多个候选 |
+| 项目 | `ue_read_project_descriptor.py` | `--project` | `ue_read_project_descriptor` | 投影 `.uproject` 的显式声明 |
+| 项目 | `ue_resolve_engine.py` | `--project` | `ue_resolve_engine` | 定位 Engine 根目录并读取 `Build.version` |
+| 项目 | `ue_inspect_modules.py` | `--project` | `ue_inspect_modules` | 对账 Module 声明、Build.cs 和注册入口 |
+| 项目 | `ue_inspect_targets.py` | `--project` | `ue_inspect_targets` | 发现 Target.cs 并报告原生 Target 证据 |
+| 项目 | `ue_list_project_cxx_sources.py` | `--project` | `ue_list_project_cxx_sources` | 按 Module、Plugin 和可见性列出项目 C++ 源码 |
+| 项目 | `ue_resolve_plugins.py` | `--project` | `ue_resolve_plugins` | 在显式 Profile 下定位 Plugin 并静态跟踪依赖 |
+| 项目 | `ue_classify_project_paths.py` | `--project` | `ue_classify_project_paths` | 分类项目根路径及文件系统状态 |
+| 构建 | `ue_read_plugin_descriptor.py` | `--plugin` | `ue_read_plugin_descriptor` | 读取一个 `.uplugin` 并对账其 Module |
+| 构建 | `ue_inspect_module_rules.py` | `--rules` | `ue_inspect_module_rules` | 投影 ModuleRules 设置变更与条件 |
+| 构建 | `ue_inspect_target_rules.py` | `--target` | `ue_inspect_target_rules` | 索引 TargetRules 类、变量和函数 |
+| 构建 | `ue_inspect_cs_function.py` | `--source --function` | `ue_inspect_cs_function` | 检查同名 C# 成员及其外部引用 |
+| Module | `ue_inspect_module_entry.py` | `--rules` | `ue_inspect_module_entry` | 检查注册、回调绑定、清理和生命周期状态 |
+| C++ | `ue_list_cxx_includes.py` | `--source` | `ue_list_cxx_includes` | 列出直接 include、条件和物理来源 |
+| C++ | `ue_list_cxx_types.py` | `--source` | `ue_list_cxx_types` | 索引独立类型声明/定义、成员、全局变量和自由函数锚点 |
+| C++ | `ue_inspect_cxx_function.py` | `--source --function` | `ue_inspect_cxx_function` | 检查同名定义及其外部符号 |
+| 工具池 | `ue_list_tools.py` | 无 | `ue_list_tools` | 列出全部只读探针、入口与能力 |
+| 图谱 | `ue_analyze_cxx_dependencies.py` | `--project` | `ue_analyze_cxx_dependencies` | 构建项目本地 C++ 类型依赖并检测循环 |
+| 图谱 | `ue_query_cxx_hierarchy.py` | `--project --class` | `ue_query_cxx_hierarchy` | 查询类型的继承链与派生类型 |
+| 图谱 | `ue_analyze_cxx_impact.py` | `--project --symbol` | `ue_analyze_cxx_impact` | 反向追踪类型的静态影响范围 |
+| 图谱 | `ue_trace_cxx_function_flow.py` | `--source --function` | `ue_trace_cxx_function_flow` | 提取函数局部控制流与直接调用 |
+
+`schema_version` 字段现在只保存工具名，不再携带任何版本后缀；Schema 文件名与工具名一一对应。
+
+语法分析前端借鉴 ast-outline：Tree-sitter 负责 C++/C# 语法树，项目原有逻辑继续负责 UE 路径、证据、声明/定义关系和保守语义分类。依赖图、循环检测和反向影响算法采用 gdep 思路并改写为确定性 JSON。来源和许可证见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
 
 `ue_resolve_plugins.py` 还支持：
 
@@ -158,7 +179,7 @@ limits
 python -m unittest discover -s tests -v
 ```
 
-当前测试共 58 项：
+当前测试共 64 项：
 
 | 测试模块 | 数量 | 覆盖重点 |
 |---|---:|---|
@@ -166,8 +187,9 @@ python -m unittest discover -s tests -v
 | `test_project_navigation.py` | 14 | 项目发现、描述符、Engine、Module、Target、Plugin、源码清单和路径 |
 | `test_build_and_module.py` | 12 | `.uplugin`、ModuleRules、TargetRules、C# 函数和 Module 生命周期 |
 | `test_cxx_analysis.py` | 14 | 源码单元、include、独立类型声明、接口候选、函数身份和外部符号 |
-| `test_end_to_end_workflow.py` | 3 | 16 个 CLI 的完整导航、只读性和字节级确定性 |
-| **合计** | **58** | 当前公共行为、成功与失败边界、Schema、只读性和确定性 |
+| `test_end_to_end_workflow.py` | 3 | 21 个 CLI 的完整导航、只读性和字节级确定性 |
+| `test_tool_pool_enrichment.py` | 6 | UE 宏 AST、C# 泛型/lambda、依赖循环、影响追踪、工具池和无版本 Schema 标识 |
+| **合计** | **64** | 当前公共行为、成功与失败边界、Schema、只读性和确定性 |
 
 测试在临时目录中构造最小 Engine、项目、Plugin、规则文件和 C++ 源码：
 
@@ -179,7 +201,7 @@ python -m unittest discover -s tests -v
 
 ## Lyra 辅助脚本
 
-以下脚本服务于仓库内的 Lyra 本地证据流程，不属于 16 个正式 CLI，也没有复用正式 CLI 的只读输入/输出契约：
+以下脚本服务于仓库内的 Lyra 本地证据流程，不属于 21 个正式 CLI，也没有复用正式 CLI 的只读输入/输出契约：
 
 | 脚本 | 用途 |
 |---|---|
@@ -194,24 +216,26 @@ python -m unittest discover -s tests -v
 ```text
 .
 ├─ tools/
-│  ├─ ue_*.py                 # 16 个正式 CLI
+│  ├─ ue_*.py                 # 21 个正式 CLI（项目工具池）
 │  ├─ ue_project_tools/       # 领域服务、解析器与公共输出组件
 │  └─ *lyra*                  # Lyra 本地证据辅助脚本
-├─ schemas/                   # 16 个 CLI Schema + 1 个公共 Schema
-├─ tests/                     # 58 项临时夹具自动化测试
+├─ schemas/                   # 21 个 CLI Schema + 1 个公共 Schema
+├─ tests/                     # 64 项临时夹具自动化测试
 ├─ docs/PROGRAM-DESIGN.md     # 架构、契约和扩展规则
 ├─ LyraStarterGame/           # 可选本地参考项目
 ├─ ExternalProjects/          # 可选外部参考项目
-└─ requirements-dev.txt       # 测试依赖
+├─ requirements.txt           # 固定版本的运行依赖
+├─ requirements-dev.txt       # 测试依赖
+└─ THIRD_PARTY_NOTICES.md     # ast-outline / gdep 来源与许可证
 ```
 
 ## 能力边界
 
 - 所有正式 CLI 结论都是静态证据，不是有效 UBT/UHT 配置。
-- Plugin 解析只覆盖 `.uproject` 的直接声明，不计算完整传递闭包。
+- Plugin 解析从 `.uproject` 的直接声明出发，静态跟踪可读 `.uplugin` 依赖；这不是有效构建 Profile 的完整闭包。
 - Build.cs 和 Target.cs 只解析受支持的 C# 子集，不执行规则代码。
 - include 的唯一物理候选不等于编译器实际选中。
-- 类型、成员与函数结果是词法投影，不是完整 C++ 符号表或调用图。
+- 类型、成员与函数结果由 Tree-sitter AST 和项目原有词法/UE 语义层共同投影，不是编译器符号表或完整调用图。
 - Module 生命周期结果是保守静态模型，不证明实际加载顺序、线程或运行状态。
 - 路径分类不提供删除安全结论。
 - 编译、启动、资产、配置合并、网络和目标平台行为仍需 Unreal 权威工具验证。

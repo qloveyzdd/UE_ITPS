@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:ue-itps:schema:project-paths:v1",
+  "$id": "urn:ue-itps:schema:ue_classify_project_paths",
   "title": "ue_classify_project_paths.py result",
   "oneOf": [
     {
@@ -9,12 +9,12 @@
     {
       "allOf": [
         {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/errorDocument"
+          "$ref": "urn:ue-itps:schema:common#/$defs/errorDocument"
         },
         {
           "properties": {
             "schema_version": {
-              "const": "ue-itps.project-paths.v1"
+              "const": "ue_classify_project_paths"
             }
           }
         }
@@ -37,7 +37,7 @@
       ],
       "properties": {
         "schema_version": {
-          "const": "ue-itps.project-paths.v1"
+          "const": "ue_classify_project_paths"
         },
         "project_root": {
           "type": "string"
@@ -58,10 +58,10 @@
           "type": "array"
         },
         "validation": {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/validation"
+          "$ref": "urn:ue-itps:schema:common#/$defs/validation"
         },
         "limits": {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/limits"
+          "$ref": "urn:ue-itps:schema:common#/$defs/limits"
         }
       },
       "additionalProperties": false

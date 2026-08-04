@@ -26,6 +26,40 @@ OPERATION_CHOICES = (
     "cook_package",
 )
 
+_AST_TOOLS = {
+    "ue_inspect_cs_function",
+    "ue_inspect_cxx_function",
+    "ue_inspect_module_entry",
+    "ue_inspect_module_rules",
+    "ue_inspect_target_rules",
+    "ue_inspect_targets",
+    "ue_list_cxx_includes",
+    "ue_list_cxx_types",
+    "ue_query_cxx_hierarchy",
+    "ue_analyze_cxx_dependencies",
+    "ue_analyze_cxx_impact",
+    "ue_trace_cxx_function_flow",
+}
+_GRAPH_TOOLS = {
+    "ue_inspect_modules",
+    "ue_read_plugin_descriptor",
+    "ue_read_project_descriptor",
+    "ue_resolve_plugins",
+    "ue_query_cxx_hierarchy",
+    "ue_analyze_cxx_dependencies",
+    "ue_analyze_cxx_impact",
+    "ue_trace_cxx_function_flow",
+}
+
+
+def analysis_engines(tool_name: str) -> list[str]:
+    engines = ["ue-itps"]
+    if tool_name in _AST_TOOLS:
+        engines.append("ast-outline-adapted")
+    if tool_name in _GRAPH_TOOLS:
+        engines.append("gdep-adapted")
+    return engines
+
 
 CLI_EPILOG = """\
 输出契约 / Output contract:
@@ -144,6 +178,7 @@ def result_document(
         "limits": {
             "responsibility": responsibility,
             "boundaries": boundaries,
+            "analysis_engines": analysis_engines(schema_version),
         },
     }
 

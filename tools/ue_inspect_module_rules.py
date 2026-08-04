@@ -7,7 +7,7 @@ from ue_project_tools.common import cli_parser, json_text
 from ue_project_tools.rule_source import inspect_module_rules
 
 
-SCHEMA_VERSION = "ue-itps.module-rule-relations.v1"
+SCHEMA_VERSION = "ue_inspect_module_rules"
 RESPONSIBILITY = (
     "Report declared ModuleRules mutations and referenced values from one Build.cs "
     "file."

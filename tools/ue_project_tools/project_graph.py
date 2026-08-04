@@ -1,0 +1,317 @@
+from __future__ import annotations
+
+from pathlib import Path
+import re
+from typing import Any
+
+from .common import iter_files, normalized, result_document
+from .dependency_graph import DependencyGraph, type_names
+from .syntax_tree import parse_cpp_syntax
+
+
+_SUFFIXES = (".h", ".hpp", ".cpp", ".cc")
+
+
+def project_cpp_files(project_root: Path) -> list[Path]:
+    roots = [
+        project_root / "Source",
+        project_root / "Plugins",
+        project_root / "Platforms",
+        project_root / "Mods",
+    ]
+    return sorted(
+        {
+            path.resolve()
+            for root in roots
+            for suffix in _SUFFIXES
+            for path in iter_files(root, suffix)
+        },
+        key=lambda path: normalized(path).casefold(),
+    )
+
+
+def _resolved_type_names(
+    expression: str,
+    source_name: str,
+    known: set[str],
+    short_index: dict[str, list[str]],
+) -> list[str]:
+    resolved: list[str] = []
+    for candidate in type_names(expression):
+        explicit = [
+            name
+            for name in short_index.get(candidate, [])
+            if "::" in name
+            and re.search(rf"(?<!\w){re.escape(name)}(?!\w)", expression)
+        ]
+        target = explicit[0] if len(explicit) == 1 else None
+        scope = source_name.rsplit("::", 1)[0] if "::" in source_name else ""
+        while target is None and scope:
+            scoped = f"{scope}::{candidate}"
+            if scoped in known:
+                target = scoped
+                break
+            scope = scope.rsplit("::", 1)[0] if "::" in scope else ""
+        matches = short_index.get(candidate, [])
+        if target is None and len(matches) == 1:
+            target = matches[0]
+        if target is not None and target not in resolved:
+            resolved.append(target)
+    return resolved
+
+
+def _selected_node_name(
+    graph: DependencyGraph, selection: str
+) -> tuple[str | None, bool]:
+    if selection in graph.nodes:
+        return selection, False
+    matches = sorted(
+        name for name in graph.nodes if name.rsplit("::", 1)[-1] == selection
+    )
+    if len(matches) == 1:
+        return matches[0], False
+    return None, len(matches) > 1
+
+
+def build_project_graph(
+    project_root: Path,
+) -> tuple[DependencyGraph, list[dict[str, Any]], list[dict[str, Any]]]:
+    graph = DependencyGraph()
+    parsed_files: list[dict[str, Any]] = []
+    problems: list[dict[str, Any]] = []
+    for path in project_cpp_files(project_root):
+        text = path.read_text(encoding="utf-8-sig", errors="replace")
+        syntax = parse_cpp_syntax(text)
+        relative = path.relative_to(project_root).as_posix()
+        parsed_files.append({"path": relative, "syntax": syntax})
+        if syntax["parse_error_count"]:
+            problems.append(
+                {
+                    "severity": "warning",
+                    "code": "project-cxx-syntax-tree-errors",
+                    "path": relative,
+                    "count": syntax["parse_error_count"],
+                    "message": "Tree-sitter reported incomplete C++ syntax regions",
+                }
+            )
+    all_types = [
+        (parsed["path"], item)
+        for parsed in parsed_files
+        for item in parsed["syntax"]["types"]
+    ]
+    known = {item["qualified_name"] for _, item in all_types}
+    short_index: dict[str, list[str]] = {}
+    for name in sorted(known):
+        short_index.setdefault(name.rsplit("::", 1)[-1], []).append(name)
+
+    for path, item in all_types:
+        source = item["qualified_name"]
+        base_types: list[str] = []
+        for base in item["base_types"]:
+            resolved = _resolved_type_names(base, source, known, short_index)
+            base_types.extend(resolved or type_names(base))
+        graph.add_node(
+            source,
+            kind=item["kind"],
+            file=path,
+            base_types=base_types,
+        )
+
+    for parsed in parsed_files:
+        path = parsed["path"]
+        for item in parsed["syntax"]["types"]:
+            source = item["qualified_name"]
+            for base in item["base_types"]:
+                for target in _resolved_type_names(base, source, known, short_index):
+                    graph.add_edge(
+                        source,
+                        target,
+                        kind="inheritance",
+                        file=path,
+                        line=item["location"]["line"],
+                    )
+            for reference in item["type_references"]:
+                for target in _resolved_type_names(
+                    reference["type_expression"], source, known, short_index
+                ):
+                    graph.add_edge(
+                        source,
+                        target,
+                        kind=reference["kind"],
+                        member=reference["name"],
+                        file=path,
+                        line=reference["location"]["line"],
+                    )
+    return graph, parsed_files, problems
+
+
+def dependency_result(project_root: Path) -> dict[str, Any]:
+    graph, parsed_files, problems = build_project_graph(project_root)
+    return result_document(
+        "ue_analyze_cxx_dependencies",
+        {
+            "project_root": normalized(project_root),
+            "source_file_count": len(parsed_files),
+            "graph": graph.document(),
+        },
+        problems,
+        responsibility="Build a project-local C++ type dependency graph and detect cycles.",
+        boundaries=[
+            "Only project-local C++ text under Source, Plugins, Platforms, and Mods is scanned.",
+            "Edges cover inheritance and directly declared field types; compiler-resolved aliases and generated code are not inferred.",
+            "Cycle and coupling results describe the observed static graph, not runtime object ownership.",
+        ],
+    )
+
+
+def hierarchy_result(project_root: Path, class_name: str) -> dict[str, Any]:
+    graph, parsed_files, problems = build_project_graph(project_root)
+    selected_name, ambiguous = _selected_node_name(graph, class_name)
+    node = graph.nodes.get(selected_name) if selected_name else None
+    if node is None:
+        problems.append(
+            {
+                "severity": "error",
+                "code": "class-ambiguous" if ambiguous else "class-not-found",
+                "selection": class_name,
+                "message": (
+                    "Multiple project-local C++ types have this short name; use the qualified name"
+                    if ambiguous
+                    else "No matching project-local C++ type was found"
+                ),
+            }
+        )
+    return result_document(
+        "ue_query_cxx_hierarchy",
+        {
+            "project_root": normalized(project_root),
+            "selection": {"class": class_name},
+            "source_file_count": len(parsed_files),
+            "match": (
+                {
+                    "name": node.name,
+                    "kind": node.kind,
+                    "files": sorted(node.files),
+                    "base_types": sorted(node.base_types),
+                    "ancestor_chain": graph.ancestor_chain(selected_name),
+                    "descendants": graph.descendants(selected_name),
+                }
+                if node
+                else None
+            ),
+        },
+        problems,
+        responsibility="Report the observed project-local inheritance neighborhood of one C++ type.",
+        boundaries=[
+            "External Engine ancestors remain named leaves unless declared in project source.",
+            "Multiple inheritance is preserved in base_types; ancestor_chain follows the first deterministic base.",
+        ],
+    )
+
+
+def impact_result(project_root: Path, symbol: str, max_depth: int) -> dict[str, Any]:
+    graph, parsed_files, problems = build_project_graph(project_root)
+    selected_name, ambiguous = _selected_node_name(graph, symbol)
+    if selected_name is None:
+        problems.append(
+            {
+                "severity": "error",
+                "code": "symbol-ambiguous" if ambiguous else "symbol-not-found",
+                "selection": symbol,
+                "message": (
+                    "Multiple project-local C++ types have this short name; use the qualified name"
+                    if ambiguous
+                    else "No matching project-local C++ type was found"
+                ),
+            }
+        )
+    return result_document(
+        "ue_analyze_cxx_impact",
+        {
+            "project_root": normalized(project_root),
+            "selection": {"symbol": symbol, "max_depth": max_depth},
+            "source_file_count": len(parsed_files),
+            "impacted": (
+                graph.impact(selected_name, max_depth) if selected_name else []
+            ),
+        },
+        problems,
+        responsibility="Trace reverse project-local C++ type dependencies for one selected symbol.",
+        boundaries=[
+            "Impact means a reverse static type edge, not proof that behavior or ABI changes.",
+            "Generated code, Blueprint assets, Engine source, and runtime references are excluded.",
+        ],
+    )
+
+
+def function_flow_result(source: Path, function_name: str) -> dict[str, Any]:
+    text = source.read_text(encoding="utf-8-sig", errors="replace")
+    syntax = parse_cpp_syntax(text)
+    matches = [
+        item
+        for item in syntax["functions"]
+        if item["name"] == function_name
+        or item["name"].split("::")[-1] == function_name
+    ]
+    problems: list[dict[str, Any]] = []
+    if syntax["parse_error_count"]:
+        problems.append(
+            {
+                "severity": "warning",
+                "code": "cxx-syntax-tree-errors",
+                "count": syntax["parse_error_count"],
+                "message": "Tree-sitter reported incomplete C++ syntax regions after UE macro normalization",
+            }
+        )
+    if not matches:
+        problems.append(
+            {
+                "severity": "error",
+                "code": "function-not-found",
+                "selection": function_name,
+                "message": "No matching C++ function was found",
+            }
+        )
+    control_kinds = {
+        "if_statement": "branch",
+        "switch_statement": "branch",
+        "for_statement": "loop",
+        "for_range_loop": "loop",
+        "while_statement": "loop",
+        "do_statement": "loop",
+        "try_statement": "exception",
+        "throw_expression": "throw",
+        "return_statement": "return",
+    }
+    return result_document(
+        "ue_trace_cxx_function_flow",
+        {
+            "source": normalized(source),
+            "selection": {"function": function_name},
+            "match_count": len(matches),
+            "matches": [
+                {
+                    "name": item["name"],
+                    "signature": item["signature"],
+                    "has_body": item["has_body"],
+                    "evidence": item["location"],
+                    "calls": item["calls"],
+                    "flow": [
+                        {
+                            "kind": control_kinds[control["kind"]],
+                            "syntax": control["kind"],
+                            "evidence": control["location"],
+                        }
+                        for control in item["controls"]
+                    ],
+                }
+                for item in matches
+            ],
+        },
+        problems,
+        responsibility="Report local control-flow constructs and direct calls for selected C++ function definitions.",
+        boundaries=[
+            "Calls are syntax-level spellings and are not overload-resolved.",
+            "The flow is local to the selected file and does not recursively follow callees.",
+        ],
+    )

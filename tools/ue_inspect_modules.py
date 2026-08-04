@@ -8,7 +8,7 @@ from ue_project_tools.common import cli_parser, json_text, read_json
 from ue_project_tools.descriptor import resolve_internal_directories
 
 
-SCHEMA_VERSION = "ue-itps.project-modules.v1"
+SCHEMA_VERSION = "ue_inspect_modules"
 RESPONSIBILITY = (
     "Reconcile declared project Modules with Build.cs and entrypoint evidence."
 )

@@ -10,6 +10,7 @@ from tests.support import CliTestCase, PUBLIC_CLIS, run_cli, validator_for
 class EndToEndWorkflowTests(CliTestCase):
     def success_calls(self) -> dict[str, tuple[str, ...]]:
         return {
+            "ue_list_tools.py": (),
             "ue_find_projects.py": (
                 "--search-root",
                 str(self.fixture.project_root),
@@ -73,6 +74,28 @@ class EndToEndWorkflowTests(CliTestCase):
                 str(self.fixture.source_cpp),
             ),
             "ue_inspect_cxx_function.py": (
+                "--source",
+                str(self.fixture.source_cpp),
+                "--function",
+                "BeginPlay",
+            ),
+            "ue_analyze_cxx_dependencies.py": (
+                "--project",
+                str(self.fixture.project),
+            ),
+            "ue_query_cxx_hierarchy.py": (
+                "--project",
+                str(self.fixture.project),
+                "--class",
+                "ASampleActor",
+            ),
+            "ue_analyze_cxx_impact.py": (
+                "--project",
+                str(self.fixture.project),
+                "--symbol",
+                "ASampleActor",
+            ),
+            "ue_trace_cxx_function_flow.py": (
                 "--source",
                 str(self.fixture.source_cpp),
                 "--function",

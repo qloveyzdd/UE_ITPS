@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:ue-itps:schema:common:v1",
+  "$id": "urn:ue-itps:schema:common",
   "title": "UE ITPS shared result definitions",
   "$defs": {
     "problem": {
@@ -51,6 +51,15 @@
         },
         "boundaries": {
           "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "analysis_engines": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
           "items": {
             "type": "string",
             "minLength": 1

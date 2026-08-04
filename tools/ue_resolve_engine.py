@@ -7,7 +7,7 @@ from ue_project_tools.common import cli_parser, json_text, read_json
 from ue_project_tools.engine import resolve_engine
 
 
-SCHEMA_VERSION = "ue-itps.engine-resolution.v1"
+SCHEMA_VERSION = "ue_resolve_engine"
 RESPONSIBILITY = "Resolve EngineAssociation to one Engine root and read Build.version."
 
 

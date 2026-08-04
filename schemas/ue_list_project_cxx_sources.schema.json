@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:ue-itps:schema:project-cxx-sources:v1",
+  "$id": "urn:ue-itps:schema:ue_list_project_cxx_sources",
   "title": "ue_list_project_cxx_sources.py result",
   "oneOf": [
     {
@@ -9,12 +9,12 @@
     {
       "allOf": [
         {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/errorDocument"
+          "$ref": "urn:ue-itps:schema:common#/$defs/errorDocument"
         },
         {
           "properties": {
             "schema_version": {
-              "const": "ue-itps.project-cxx-sources.v1"
+              "const": "ue_list_project_cxx_sources"
             }
           }
         }
@@ -92,7 +92,7 @@
       ],
       "properties": {
         "schema_version": {
-          "const": "ue-itps.project-cxx-sources.v1"
+          "const": "ue_list_project_cxx_sources"
         },
         "project": {
           "type": "object",
@@ -128,10 +128,10 @@
           }
         },
         "validation": {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/validation"
+          "$ref": "urn:ue-itps:schema:common#/$defs/validation"
         },
         "limits": {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/limits"
+          "$ref": "urn:ue-itps:schema:common#/$defs/limits"
         }
       },
       "additionalProperties": false

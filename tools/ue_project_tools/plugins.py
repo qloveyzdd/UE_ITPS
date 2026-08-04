@@ -10,13 +10,15 @@ from .common import (
     result_document,
 )
 from .descriptor import classify_plugin_declarations
+from .dependency_graph import DependencyGraph
+from .ue_json import read_ue_json
 
 
 def descriptor_index(
     roots: list[tuple[str, Path]],
-    declared_names: set[str],
+    declared_names: set[str] | None,
 ) -> dict[str, list[dict[str, str]]]:
-    if not declared_names:
+    if declared_names == set():
         return {}
     index: dict[str, list[dict[str, str]]] = {}
     for origin, root in roots:
@@ -132,8 +134,12 @@ def resolve_project_plugins(
                 ("engine-platform", engine_root / "Engine" / "Platforms"),
             ]
         )
-    index = descriptor_index(roots, declared_names)
+    # One full deterministic walk supports both direct resolution and the
+    # transitive descriptor graph. Re-walking Engine/Plugins for every edge
+    # would make closure cost grow with dependency count.
+    index = descriptor_index(roots, None if declared_names else set())
     results: list[dict[str, Any]] = []
+    selected_paths: dict[str, Path] = {}
     origin_rank = {
         "project": 0,
         "project-platform": 1,
@@ -164,6 +170,8 @@ def resolve_project_plugins(
             ),
         )
         selected = matches[0] if matches else None
+        if selected:
+            selected_paths[name.casefold()] = Path(str(selected["path"])).resolve()
         declared_enabled = raw["Enabled"]
         optional = raw.get("Optional") is True
         applies = applicable(raw, platform, target)
@@ -230,6 +238,73 @@ def resolve_project_plugins(
             }
         )
 
+    dependency_graph = DependencyGraph()
+    queue: list[tuple[str, Path]] = sorted(
+        (
+            (str(item["name"]), selected_paths[str(item["name"]).casefold()])
+            for item in results
+            if str(item["name"]).casefold() in selected_paths
+        ),
+        key=lambda item: item[0].casefold(),
+    )
+    visited_descriptors: set[str] = set()
+    while queue:
+        plugin_name, descriptor_path = queue.pop(0)
+        plugin_key = plugin_name.casefold()
+        if plugin_key in visited_descriptors:
+            continue
+        visited_descriptors.add(plugin_key)
+        dependency_graph.add_node(
+            plugin_name,
+            kind="plugin",
+            file=relative_descriptor_path(
+                normalized(descriptor_path),
+                next(
+                    (
+                        origin
+                        for origin, root in roots
+                        if descriptor_path.is_relative_to(root.resolve())
+                    ),
+                    "project",
+                ),
+                project_root,
+                engine_root,
+            ) or normalized(descriptor_path),
+        )
+        try:
+            raw_descriptor, _ = read_ue_json(descriptor_path)
+        except (OSError, ValueError) as exc:
+            problems.append(
+                {
+                    "severity": "warning",
+                    "code": "plugin-dependency-descriptor-read-failure",
+                    "plugin_name": plugin_name,
+                    "message": str(exc),
+                }
+            )
+            continue
+        dependencies = raw_descriptor.get("Plugins")
+        if not isinstance(dependencies, list):
+            continue
+        for declaration in dependencies:
+            if not isinstance(declaration, dict) or not isinstance(declaration.get("Name"), str):
+                continue
+            dependency_name = declaration["Name"]
+            dependency_graph.add_node(dependency_name, kind="plugin", file="")
+            dependency_graph.add_edge(
+                plugin_name,
+                dependency_name,
+                kind="plugin_reference",
+                file=normalized(descriptor_path),
+            )
+            matches = sorted(
+                index.get(dependency_name.casefold(), []),
+                key=lambda item: (rank(str(item["origin"])), str(item["path"]).casefold()),
+            )
+            if matches:
+                queue.append((dependency_name, Path(matches[0]["path"]).resolve()))
+        queue.sort(key=lambda item: item[0].casefold())
+
     def is_project_origin(origin: str | None) -> bool:
         return bool(
             origin
@@ -239,7 +314,7 @@ def resolve_project_plugins(
         )
 
     return result_document(
-        "ue-itps.project-plugin-references.v1",
+        "ue_resolve_plugins",
         {
             "path_roots": {
                 "project": normalized(project_root),
@@ -280,16 +355,17 @@ def resolve_project_plugins(
                 1 for item in results if item["origin"] in {"engine", "engine-platform"}
             ),
             "items": results,
+            "dependency_graph": dependency_graph.document(),
         },
         problems,
         responsibility=(
             "Resolve direct .uproject Plugin references for one explicit profile."
         ),
         boundaries=[
-            "Only direct .uproject plugin references are resolved.",
-            "Effective defaults and transitive .uplugin dependency closure are not computed.",
+            "Direct .uproject plugin references are resolved first; readable .uplugin references are then followed into a static dependency graph.",
+            "Transitive graph presence does not imply that every plugin is enabled or applicable for the selected build profile.",
             "Applicability evaluates platform and target filters; configuration and deeper UBT policy remain out of scope.",
-            "Plugin descriptor contents and hashes are not read.",
+            "Resolved descriptors are read only to project declared plugin dependencies; hashes and effective UBT policy are not computed.",
             "Every Plugin item retains all modeled fields.",
             "Descriptor paths are relative to path_roots according to origin.",
         ],

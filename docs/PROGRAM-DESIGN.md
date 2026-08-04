@@ -8,19 +8,19 @@ UE ITPS 的目标是：从调用方明确选择的 Unreal Engine 项目或源码
 
 设计原则：
 
-1. **只读**：16 个正式 CLI 不修改项目、Engine、资产、配置或注册表。
+1. **只读**：21 个正式 CLI 不修改项目、Engine、资产、配置或注册表。
 2. **明确选择**：多个候选意味着歧义，不能由工具猜测目标。
 3. **单一职责**：每个 CLI 只回答一个聚焦问题。
 4. **证据优先**：事实尽量携带路径、行号、描述符指针或来源。
 5. **保守失败**：不能证明的内容保持 warning、error、unresolved 或边界说明。
-6. **独立版本**：每个 CLI 拥有自己的 `schema_version` 和正式 Schema。
+6. **稳定工具标识**：每个 CLI 的 `schema_version` 只保存工具名，不携带独立版本号，并拥有同名正式 Schema。
 7. **确定性**：目录遍历、候选选择、事实数组和 JSON 序列化保持稳定顺序。
 
 非目标：
 
 - 不执行 Build.cs、Target.cs 或 C++。
 - 不替代 UBT、UHT、Editor、编译器或运行时。
-- 不构建完整 Plugin 依赖闭包、include 图、继承图或调用图。
+- 不构建编译器级符号表、有效 UBT Profile、完整 include 图或跨文件调用图。
 - 不从物理文件存在推导构建、运行或删除安全结论。
 
 ## 2. 系统组成
@@ -29,8 +29,8 @@ UE ITPS 的目标是：从调用方明确选择的 Unreal Engine 项目或源码
 
 | 类别 | 数量 | 契约 |
 |---|---:|---|
-| 正式只读 CLI | 16 | 稳定 JSON、统一错误信封、独立 `schema_version`、正式 Schema |
-| JSON Schema | 17 | 16 个 CLI Schema，加 1 个公共 Schema |
+| 正式只读 CLI | 21 | 稳定 JSON、统一错误信封、纯工具名 `schema_version`、正式 Schema |
+| JSON Schema | 22 | 21 个 CLI Schema，加 1 个公共 Schema |
 | Lyra 辅助脚本 | 3 | 本地证据采集流程，不属于正式 CLI 契约，可能写入 `.planning/evidence/` |
 
 `LyraStarterGame/` 和 `ExternalProjects/` 是可选参考输入，不是正式工具运行或自动化测试的依赖。
@@ -73,12 +73,15 @@ schemas/
 |---|---|
 | `discovery.py`、`descriptor.py`、`engine.py` | 项目发现、描述符投影、Engine 解析 |
 | `code_inventory.py`、`project_cxx_sources.py` | Module、Target 和项目 C++ 源码清单 |
-| `plugins.py`、`plugin_descriptor.py` | 直接 Plugin 定位与单个 `.uplugin` 对账 |
+| `plugins.py`、`plugin_descriptor.py` | Plugin 定位、静态依赖图与单个 `.uplugin` 对账 |
 | `rule_source.py`、`cs_source.py` | ModuleRules、TargetRules 和 C# 成员投影 |
 | `module_entry*.py` | Module 注册、回调、清理和生命周期状态 |
 | `source_context.py`、`source_includes.py` | C++ 源码单元和 include 来源 |
 | `source_type_facts.py` | 类型、成员、接口候选、全局变量和自由函数 |
 | `source_function_*.py` | 函数身份、声明关系和外部符号 |
+| `syntax_tree.py` | 基于 Tree-sitter 的 UE C++ / C# 语法前端与宏归一化 |
+| `dependency_graph.py`、`project_graph.py` | 类型依赖、循环、继承、反向影响和局部函数流程 |
+| `tool_pool.py` | 项目工具池注册表与能力发现 |
 
 领域服务只处理当前工具声明的证据边界，不递归扩展新的依赖、include 或调用关系。
 
@@ -88,7 +91,8 @@ schemas/
 
 - 严格 JSON 和 Unreal 描述符 JSON 读取。
 - 路径规范化及生成目录过滤。
-- C#、C++ 的词法 Token、声明、条件和操作投影。
+- C#、C++ 的 Tree-sitter AST，以及词法 Token、声明、条件和操作投影。
+- gdep 思路改写的确定性依赖图、循环检测和反向影响遍历。
 - 源码单元伴随文件推导。
 - 统一 Validation、Limits 和请求失败信封。
 - 稳定 JSON 序列化。
@@ -100,9 +104,9 @@ schemas/
 `schemas/` 使用 JSON Schema Draft 2020-12：
 
 - `common.schema.json` 定义共享 `validation`、`limits`、`request` 和错误文档。
-- 16 个 CLI 各有一份同名 Schema。
+- 21 个 CLI 各有一份同名 Schema。
 - 每个 CLI Schema 使用 `oneOf` 区分领域结果和请求失败结果。
-- `schema_version` 属于 CLI 输出契约，不由 Schema 文件名代替。
+- `schema_version` 的值固定为不含版本后缀的工具名，并与 Schema 文件名对应。
 
 ## 4. 显式导航模型
 
@@ -129,8 +133,8 @@ selected .h/.hpp/.cpp/.cc
 导航规则：
 
 1. 项目发现遇到多个 `.uproject` 时返回歧义错误。
-2. `.uproject` Plugin 声明只导航到直接描述符，不展开传递依赖。
-3. `.uplugin` 可以提供 Build.cs 候选，但不自动分析规则或 C++。
+2. `.uproject` Plugin 声明先解析直接描述符，再将可读 `.uplugin` 声明投影为静态传递依赖图。
+3. `.uplugin` 提供 Build.cs 候选和一跳依赖图；规则与 C++ 仍由聚焦探针分析。
 4. TargetRules 索引先列出函数，再由调用方选择一个函数名。
 5. C++ 类型工具先提供成员函数锚点，再由调用方选择函数名。
 6. 后续工具结果保持独立，不嵌入前一层 Schema。
@@ -308,7 +312,7 @@ python -m unittest discover -s tests -v
 - `new_lyra_baseline_fingerprint.ps1` 为选定 Lyra 文件生成 SHA-256 清单与摘要。
 - `archive_lyra_run.ps1` 将运行日志和上下文归档为不可覆盖的证据目录。
 
-它们可能写入 `.planning/evidence/`，其验证、版本和副作用必须单独管理。不得将它们的运行时或资产结论合并进 16 个静态 CLI 的 Schema。
+它们可能写入 `.planning/evidence/`，其验证、版本和副作用必须单独管理。不得将它们的运行时或资产结论合并进 21 个静态 CLI 的 Schema。
 
 ## 10. 扩展规则
 
@@ -316,7 +320,7 @@ python -m unittest discover -s tests -v
 
 1. 优先新增小型领域服务和薄 CLI，不扩大现有 CLI 的职责。
 2. 新结果必须使用公共结果组装器。
-3. 消费者解释方式变化时，只升级受影响 CLI 的 Schema 版本。
+3. 消费者解释方式变化时，只更新受影响工具的同名 Schema；工具标识保持不变。
 4. 不递归扩展依赖、include 或调用关系，除非新增独立工具和边界。
 5. 未知语法或不透明效果输出诊断，不执行源码，也不猜测最终值。
 6. 每项事实保留可定位证据；无法定位的结论不能升级为确认事实。

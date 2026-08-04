@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:ue-itps:schema:project-descriptor:v1",
+  "$id": "urn:ue-itps:schema:ue_read_project_descriptor",
   "title": "ue_read_project_descriptor.py result",
   "oneOf": [
     {
@@ -9,12 +9,12 @@
     {
       "allOf": [
         {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/errorDocument"
+          "$ref": "urn:ue-itps:schema:common#/$defs/errorDocument"
         },
         {
           "properties": {
             "schema_version": {
-              "const": "ue-itps.project-descriptor.v1"
+              "const": "ue_read_project_descriptor"
             }
           }
         }
@@ -34,12 +34,13 @@
         "descriptor_options",
         "descriptor_top_level_fields",
         "unmodeled_top_level_fields",
+        "declaration_graph",
         "validation",
         "limits"
       ],
       "properties": {
         "schema_version": {
-          "const": "ue-itps.project-descriptor.v1"
+          "const": "ue_read_project_descriptor"
         },
         "project": {
           "type": "object"
@@ -72,11 +73,14 @@
         "unmodeled_top_level_fields": {
           "type": "object"
         },
+        "declaration_graph": {
+          "type": "object"
+        },
         "validation": {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/validation"
+          "$ref": "urn:ue-itps:schema:common#/$defs/validation"
         },
         "limits": {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/limits"
+          "$ref": "urn:ue-itps:schema:common#/$defs/limits"
         }
       },
       "additionalProperties": false

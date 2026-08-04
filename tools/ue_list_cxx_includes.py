@@ -7,7 +7,7 @@ from ue_project_tools.common import cli_error_document, cli_parser, json_text
 from ue_project_tools.source_unit import list_source_includes
 
 
-SCHEMA_VERSION = "ue-itps.cxx-includes.v1"
+SCHEMA_VERSION = "ue_list_cxx_includes"
 RESPONSIBILITY = (
     "Report non-companion direct include spellings and deterministic filesystem provenance."
 )

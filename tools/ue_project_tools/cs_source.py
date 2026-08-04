@@ -10,7 +10,7 @@ from .source_parser import parse_csharp_file
 from .source_tokens import _raw, _split_arguments, lex_source, token_pairs
 
 
-SCHEMA_VERSION = "ue-itps.cs-function.v1"
+SCHEMA_VERSION = "ue_inspect_cs_function"
 RESPONSIBILITY = (
     "Report type and method references for all C# class methods "
     "matching one selected name."
@@ -253,6 +253,15 @@ def _match(
     owner = str(class_item["name"])
     signature = _compact(str(method["signature"]))
     parameters = _parameter_variables(str(method["parameters"]))
+    syntax_match = next(
+        (
+            item
+            for item in parsed.get("syntax_tree", {}).get("functions", [])
+            if item["name"] == method["name"]
+            and item["location"]["line"] == method["location"]["line"]
+        ),
+        None,
+    )
     return {
         "function_id": f"{owner}::{signature}",
         "function": {
@@ -279,6 +288,10 @@ def _match(
             method,
             parameters,
         ),
+        "syntax_flow": {
+            "calls": list(syntax_match["calls"]) if syntax_match else [],
+            "controls": list(syntax_match["controls"]) if syntax_match else [],
+        },
     }
 
 
@@ -311,6 +324,13 @@ def inspect_cs_function(path: Path, function_name: str) -> dict[str, Any]:
         SCHEMA_VERSION,
         {
             "source": parsed["path"],
+            "analysis": {
+                "syntax_tree": {
+                    "engine": parsed["syntax_tree"]["engine"],
+                    "language": parsed["syntax_tree"]["language"],
+                    "parse_error_count": parsed["syntax_tree"]["parse_error_count"],
+                }
+            },
             "selection": {"name": function_name},
             "match_count": len(matches),
             "matches": matches,

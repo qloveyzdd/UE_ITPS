@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from .common import normalized, read_json, result_document
+from .dependency_graph import DependencyGraph
 
 
 KNOWN_TOP_LEVEL_FIELDS = {
@@ -325,8 +326,41 @@ def descriptor_result(project_file: Path) -> tuple[dict[str, Any], dict[str, Any
             warn_external=True,
         )
     )
+    declaration_graph = DependencyGraph()
+    declaration_graph.add_node(
+        project_file.stem,
+        kind="project",
+        file=normalized(project_file),
+    )
+    for raw_module in module_declarations if isinstance(module_declarations, list) else []:
+        if not isinstance(raw_module, dict) or not isinstance(raw_module.get("Name"), str):
+            continue
+        module_name = raw_module["Name"]
+        declaration_graph.add_node(module_name, kind="module", file=normalized(project_file))
+        declaration_graph.add_edge(
+            project_file.stem, module_name, kind="declares_module", file=normalized(project_file)
+        )
+        for dependency in raw_module.get("AdditionalDependencies", []):
+            if isinstance(dependency, str) and dependency:
+                declaration_graph.add_node(dependency, kind="module", file="")
+                declaration_graph.add_edge(
+                    module_name, dependency, kind="additional_dependency", file=normalized(project_file)
+                )
+    raw_plugins = descriptor.get("Plugins", [])
+    for raw_plugin in raw_plugins if isinstance(raw_plugins, list) else []:
+        if not isinstance(raw_plugin, dict) or not isinstance(raw_plugin.get("Name"), str):
+            continue
+        plugin_name = raw_plugin["Name"]
+        declaration_graph.add_node(plugin_name, kind="plugin", file=normalized(project_file))
+        declaration_graph.add_edge(
+            project_file.stem,
+            plugin_name,
+            kind="enables_plugin" if raw_plugin.get("Enabled") is True else "declares_plugin",
+            file=normalized(project_file),
+        )
+
     result = result_document(
-        "ue-itps.project-descriptor.v1",
+        "ue_read_project_descriptor",
         {
             "project": {
                 "name": project_file.stem,
@@ -360,12 +394,13 @@ def descriptor_result(project_file: Path) -> tuple[dict[str, Any], dict[str, Any
                 for key, value in descriptor.items()
                 if key not in KNOWN_TOP_LEVEL_FIELDS
             },
+            "declaration_graph": declaration_graph.document(),
         },
         problems,
         responsibility="Read explicit facts declared by one .uproject file.",
         boundaries=[
             "The result does not locate Engine, Module, Target, or Plugin files.",
-            "Extended Plugin declarations are indexed, not fully interpreted.",
+            "Module and Plugin declarations are projected into a static one-file graph; effective dependencies require the focused probes.",
             "Unmodeled top-level fields are preserved without being judged invalid.",
         ],
     )

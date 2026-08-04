@@ -7,7 +7,7 @@ from ue_project_tools.common import cli_parser, json_text
 from ue_project_tools.module_entry import inspect_module_entry
 
 
-SCHEMA_VERSION = "ue-itps.module-entry-state.v12"
+SCHEMA_VERSION = "ue_inspect_module_entry"
 RESPONSIBILITY = (
     "Report callback binding facts and non-callback state transitions caused by one "
     "module's lifecycle."

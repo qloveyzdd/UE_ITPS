@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:ue-itps:schema:module-entry-state:v12",
+  "$id": "urn:ue-itps:schema:ue_inspect_module_entry",
   "title": "ue_inspect_module_entry.py result",
   "oneOf": [
     {
@@ -9,12 +9,12 @@
     {
       "allOf": [
         {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/errorDocument"
+          "$ref": "urn:ue-itps:schema:common#/$defs/errorDocument"
         },
         {
           "properties": {
             "schema_version": {
-              "const": "ue-itps.module-entry-state.v12"
+              "const": "ue_inspect_module_entry"
             }
           }
         }
@@ -38,7 +38,7 @@
       ],
       "properties": {
         "schema_version": {
-          "const": "ue-itps.module-entry-state.v12"
+          "const": "ue_inspect_module_entry"
         },
         "module": {
           "type": "object"
@@ -62,10 +62,10 @@
           "type": "array"
         },
         "validation": {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/validation"
+          "$ref": "urn:ue-itps:schema:common#/$defs/validation"
         },
         "limits": {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/limits"
+          "$ref": "urn:ue-itps:schema:common#/$defs/limits"
         }
       },
       "additionalProperties": false

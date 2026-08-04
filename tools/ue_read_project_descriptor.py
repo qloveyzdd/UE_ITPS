@@ -7,7 +7,7 @@ from ue_project_tools.common import cli_parser, json_text
 from ue_project_tools.descriptor import descriptor_result
 
 
-SCHEMA_VERSION = "ue-itps.project-descriptor.v1"
+SCHEMA_VERSION = "ue_read_project_descriptor"
 RESPONSIBILITY = "Read explicit facts declared by one .uproject file."
 
 

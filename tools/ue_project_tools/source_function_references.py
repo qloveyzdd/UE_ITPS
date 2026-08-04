@@ -87,7 +87,7 @@ def inspect_source_function(
     ]
     if not candidates:
         return source_result(
-            "ue-itps.cxx-function.v1",
+            "ue_inspect_cxx_function",
             loaded,
             {
                 "selection": {"name": function_name},
@@ -203,10 +203,11 @@ def inspect_source_function(
                     relations[candidate["_identity"]]
                 ),
                 "external_symbols": external_symbols,
+                "syntax_flow": _syntax_flow(candidate, loaded),
             }
         )
     return source_result(
-        "ue-itps.cxx-function.v1",
+        "ue_inspect_cxx_function",
         loaded,
         {
             "selection": {"name": function_name},
@@ -216,3 +217,24 @@ def inspect_source_function(
         responsibility=_RESPONSIBILITY,
         boundaries=_BOUNDARIES,
     )
+
+
+def _syntax_flow(candidate: dict[str, Any], loaded: dict[str, Any]) -> dict[str, Any]:
+    parsed = loaded["parsed_by_path"].get(candidate["_path"])
+    if not parsed:
+        return {"calls": [], "controls": []}
+    syntax_functions = parsed.get("syntax_tree", {}).get("functions", [])
+    line = int(candidate["evidence"]["line"])
+    match = next(
+        (
+            item
+            for item in syntax_functions
+            if item["has_body"]
+            and item["name"].split("::")[-1] == candidate["name"]
+            and item["location"]["line"] == line
+        ),
+        None,
+    )
+    if match is None:
+        return {"calls": [], "controls": []}
+    return {"calls": list(match["calls"]), "controls": list(match["controls"])}

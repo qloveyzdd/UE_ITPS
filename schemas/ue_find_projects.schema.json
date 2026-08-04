@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:ue-itps:schema:project-discovery:v1",
+  "$id": "urn:ue-itps:schema:ue_find_projects",
   "title": "ue_find_projects.py result",
   "oneOf": [
     {
@@ -9,12 +9,12 @@
     {
       "allOf": [
         {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/errorDocument"
+          "$ref": "urn:ue-itps:schema:common#/$defs/errorDocument"
         },
         {
           "properties": {
             "schema_version": {
-              "const": "ue-itps.project-discovery.v1"
+              "const": "ue_find_projects"
             }
           }
         }
@@ -35,7 +35,7 @@
       ],
       "properties": {
         "schema_version": {
-          "const": "ue-itps.project-discovery.v1"
+          "const": "ue_find_projects"
         },
         "search_root": {
           "type": "string"
@@ -54,10 +54,10 @@
           }
         },
         "validation": {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/validation"
+          "$ref": "urn:ue-itps:schema:common#/$defs/validation"
         },
         "limits": {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/limits"
+          "$ref": "urn:ue-itps:schema:common#/$defs/limits"
         }
       },
       "additionalProperties": false

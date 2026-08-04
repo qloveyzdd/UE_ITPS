@@ -82,7 +82,7 @@ try {
     }
 
     $manifest = [ordered]@{
-        schema_version = "ue-itps.runtime-evidence.v1"
+        schema_version = "archive_lyra_run"
         capture_state = "captured_unassessed"
         run_id = $RunId
         captured_at_utc = [DateTime]::UtcNow.ToString("o")

@@ -484,7 +484,7 @@ def list_source_functions(
         if macro["name"] == "UFUNCTION"
     ]
     return source_result(
-        "ue-itps.cxx-functions.v1",
+        "ue_list_cxx_functions",
         loaded,
         {
             "functions": functions,

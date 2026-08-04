@@ -656,7 +656,7 @@ def list_source_types(
     )
     unresolved_facts = _unresolved_facts(loaded, unresolved)
     return source_result(
-        "ue-itps.cxx-types.v1",
+        "ue_list_cxx_types",
         loaded,
         {
             **type_anchors,

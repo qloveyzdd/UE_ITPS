@@ -7,7 +7,7 @@ from ue_project_tools.code_inventory import inspect_targets
 from ue_project_tools.common import cli_parser, json_text
 
 
-SCHEMA_VERSION = "ue-itps.project-targets.v1"
+SCHEMA_VERSION = "ue_inspect_targets"
 RESPONSIBILITY = (
     "Discover project Target.cs files, validate their placement, and classify native "
     "Target evidence."

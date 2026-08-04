@@ -7,7 +7,7 @@ from ue_project_tools.common import cli_error_document, cli_parser, json_text
 from ue_project_tools.source_unit import list_source_types
 
 
-SCHEMA_VERSION = "ue-itps.cxx-types.v1"
+SCHEMA_VERSION = "ue_list_cxx_types"
 RESPONSIBILITY = (
     "Index class, struct, enum, interface-candidate, global-variable, "
     "free-function, and class/struct member anchors."

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:ue-itps:schema:cxx-types:v1",
+  "$id": "urn:ue-itps:schema:ue_list_cxx_types",
   "title": "ue_list_cxx_types.py result",
   "oneOf": [
     {
@@ -9,12 +9,12 @@
     {
       "allOf": [
         {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/errorDocument"
+          "$ref": "urn:ue-itps:schema:common#/$defs/errorDocument"
         },
         {
           "properties": {
             "schema_version": {
-              "const": "ue-itps.cxx-types.v1"
+              "const": "ue_list_cxx_types"
             }
           }
         }
@@ -29,6 +29,7 @@
         "path_roots",
         "context",
         "source_unit",
+        "analysis",
         "classes",
         "structs",
         "enums",
@@ -41,7 +42,7 @@
       ],
       "properties": {
         "schema_version": {
-          "const": "ue-itps.cxx-types.v1"
+          "const": "ue_list_cxx_types"
         },
         "path_roots": {
           "type": "object"
@@ -50,6 +51,9 @@
           "type": "object"
         },
         "source_unit": {
+          "type": "object"
+        },
+        "analysis": {
           "type": "object"
         },
         "classes": {
@@ -92,10 +96,10 @@
           "type": "array"
         },
         "validation": {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/validation"
+          "$ref": "urn:ue-itps:schema:common#/$defs/validation"
         },
         "limits": {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/limits"
+          "$ref": "urn:ue-itps:schema:common#/$defs/limits"
         }
       },
       "additionalProperties": false

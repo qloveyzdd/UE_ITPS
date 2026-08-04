@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:ue-itps:schema:cs-function:v1",
+  "$id": "urn:ue-itps:schema:ue_inspect_cs_function",
   "title": "ue_inspect_cs_function.py result",
   "oneOf": [
     {
@@ -9,12 +9,12 @@
     {
       "allOf": [
         {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/errorDocument"
+          "$ref": "urn:ue-itps:schema:common#/$defs/errorDocument"
         },
         {
           "properties": {
             "schema_version": {
-              "const": "ue-itps.cs-function.v1"
+              "const": "ue_inspect_cs_function"
             }
           }
         }
@@ -27,6 +27,7 @@
       "required": [
         "schema_version",
         "source",
+        "analysis",
         "selection",
         "match_count",
         "matches",
@@ -35,10 +36,13 @@
       ],
       "properties": {
         "schema_version": {
-          "const": "ue-itps.cs-function.v1"
+          "const": "ue_inspect_cs_function"
         },
         "source": {
           "type": "string"
+        },
+        "analysis": {
+          "type": "object"
         },
         "selection": {
           "type": "object",
@@ -52,10 +56,10 @@
           "type": "array"
         },
         "validation": {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/validation"
+          "$ref": "urn:ue-itps:schema:common#/$defs/validation"
         },
         "limits": {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/limits"
+          "$ref": "urn:ue-itps:schema:common#/$defs/limits"
         }
       },
       "additionalProperties": false

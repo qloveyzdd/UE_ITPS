@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:ue-itps:schema:engine-resolution:v1",
+  "$id": "urn:ue-itps:schema:ue_resolve_engine",
   "title": "ue_resolve_engine.py result",
   "oneOf": [
     {
@@ -9,12 +9,12 @@
     {
       "allOf": [
         {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/errorDocument"
+          "$ref": "urn:ue-itps:schema:common#/$defs/errorDocument"
         },
         {
           "properties": {
             "schema_version": {
-              "const": "ue-itps.engine-resolution.v1"
+              "const": "ue_resolve_engine"
             }
           }
         }
@@ -39,7 +39,7 @@
       ],
       "properties": {
         "schema_version": {
-          "const": "ue-itps.engine-resolution.v1"
+          "const": "ue_resolve_engine"
         },
         "association_raw": {
           "type": ["string", "null"]
@@ -66,10 +66,10 @@
           "type": ["object", "null"]
         },
         "validation": {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/validation"
+          "$ref": "urn:ue-itps:schema:common#/$defs/validation"
         },
         "limits": {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/limits"
+          "$ref": "urn:ue-itps:schema:common#/$defs/limits"
         }
       },
       "additionalProperties": false

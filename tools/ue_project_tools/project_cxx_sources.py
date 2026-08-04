@@ -268,7 +268,7 @@ def list_project_cxx_sources(
         for paths in module[kind].values()
     )
     return result_document(
-        "ue-itps.project-cxx-sources.v1",
+        "ue_list_project_cxx_sources",
         {
             "project": {
                 "name": project_file.stem,

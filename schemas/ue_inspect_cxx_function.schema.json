@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:ue-itps:schema:cxx-function:v1",
+  "$id": "urn:ue-itps:schema:ue_inspect_cxx_function",
   "title": "ue_inspect_cxx_function.py result",
   "oneOf": [
     {
@@ -9,12 +9,12 @@
     {
       "allOf": [
         {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/errorDocument"
+          "$ref": "urn:ue-itps:schema:common#/$defs/errorDocument"
         },
         {
           "properties": {
             "schema_version": {
-              "const": "ue-itps.cxx-function.v1"
+              "const": "ue_inspect_cxx_function"
             }
           }
         }
@@ -29,6 +29,7 @@
         "path_roots",
         "context",
         "source_unit",
+        "analysis",
         "selection",
         "match_count",
         "matches",
@@ -37,7 +38,7 @@
       ],
       "properties": {
         "schema_version": {
-          "const": "ue-itps.cxx-function.v1"
+          "const": "ue_inspect_cxx_function"
         },
         "path_roots": {
           "type": "object"
@@ -46,6 +47,9 @@
           "type": "object"
         },
         "source_unit": {
+          "type": "object"
+        },
+        "analysis": {
           "type": "object"
         },
         "selection": {
@@ -63,10 +67,10 @@
           }
         },
         "validation": {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/validation"
+          "$ref": "urn:ue-itps:schema:common#/$defs/validation"
         },
         "limits": {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/limits"
+          "$ref": "urn:ue-itps:schema:common#/$defs/limits"
         }
       },
       "additionalProperties": false
@@ -95,6 +99,9 @@
           "items": {
             "$ref": "#/$defs/externalSymbol"
           }
+        },
+        "syntax_flow": {
+          "type": "object"
         }
       },
       "additionalProperties": false

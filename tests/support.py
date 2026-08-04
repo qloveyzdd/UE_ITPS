@@ -25,22 +25,27 @@ if str(TOOLS_ROOT) not in sys.path:
 
 
 PUBLIC_CLIS = {
-    "ue_find_projects.py": "ue-itps.project-discovery.v1",
-    "ue_read_project_descriptor.py": "ue-itps.project-descriptor.v1",
-    "ue_resolve_engine.py": "ue-itps.engine-resolution.v1",
-    "ue_inspect_modules.py": "ue-itps.project-modules.v1",
-    "ue_inspect_targets.py": "ue-itps.project-targets.v1",
-    "ue_list_project_cxx_sources.py": "ue-itps.project-cxx-sources.v1",
-    "ue_resolve_plugins.py": "ue-itps.project-plugin-references.v1",
-    "ue_classify_project_paths.py": "ue-itps.project-paths.v1",
-    "ue_read_plugin_descriptor.py": "ue-itps.plugin-descriptor.v2",
-    "ue_inspect_module_rules.py": "ue-itps.module-rule-relations.v1",
-    "ue_inspect_target_rules.py": "ue-itps.target-rule-relations.v1",
-    "ue_inspect_cs_function.py": "ue-itps.cs-function.v1",
-    "ue_inspect_module_entry.py": "ue-itps.module-entry-state.v12",
-    "ue_list_cxx_includes.py": "ue-itps.cxx-includes.v1",
-    "ue_list_cxx_types.py": "ue-itps.cxx-types.v1",
-    "ue_inspect_cxx_function.py": "ue-itps.cxx-function.v1",
+    "ue_list_tools.py": "ue_list_tools",
+    "ue_find_projects.py": "ue_find_projects",
+    "ue_read_project_descriptor.py": "ue_read_project_descriptor",
+    "ue_resolve_engine.py": "ue_resolve_engine",
+    "ue_inspect_modules.py": "ue_inspect_modules",
+    "ue_inspect_targets.py": "ue_inspect_targets",
+    "ue_list_project_cxx_sources.py": "ue_list_project_cxx_sources",
+    "ue_resolve_plugins.py": "ue_resolve_plugins",
+    "ue_classify_project_paths.py": "ue_classify_project_paths",
+    "ue_read_plugin_descriptor.py": "ue_read_plugin_descriptor",
+    "ue_inspect_module_rules.py": "ue_inspect_module_rules",
+    "ue_inspect_target_rules.py": "ue_inspect_target_rules",
+    "ue_inspect_cs_function.py": "ue_inspect_cs_function",
+    "ue_inspect_module_entry.py": "ue_inspect_module_entry",
+    "ue_list_cxx_includes.py": "ue_list_cxx_includes",
+    "ue_list_cxx_types.py": "ue_list_cxx_types",
+    "ue_inspect_cxx_function.py": "ue_inspect_cxx_function",
+    "ue_analyze_cxx_dependencies.py": "ue_analyze_cxx_dependencies",
+    "ue_query_cxx_hierarchy.py": "ue_query_cxx_hierarchy",
+    "ue_analyze_cxx_impact.py": "ue_analyze_cxx_impact",
+    "ue_trace_cxx_function_flow.py": "ue_trace_cxx_function_flow",
 }
 
 REQUIRED_PATH_ARGUMENTS = {
@@ -59,6 +64,10 @@ REQUIRED_PATH_ARGUMENTS = {
     "ue_list_cxx_includes.py": "--source",
     "ue_list_cxx_types.py": "--source",
     "ue_inspect_cxx_function.py": "--source",
+    "ue_analyze_cxx_dependencies.py": "--project",
+    "ue_query_cxx_hierarchy.py": "--project",
+    "ue_analyze_cxx_impact.py": "--project",
+    "ue_trace_cxx_function_flow.py": "--source",
 }
 
 

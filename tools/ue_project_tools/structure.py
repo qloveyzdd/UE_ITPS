@@ -205,7 +205,7 @@ def classify_project_paths(
             )
 
     return result_document(
-        "ue-itps.project-paths.v1",
+        "ue_classify_project_paths",
         {
             "project_root": normalized(project_root),
             "project_descriptor": descriptor_item,

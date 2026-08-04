@@ -56,8 +56,9 @@ def _rules_class_problems(
     facts: dict[str, Any], base_type: str
 ) -> list[dict[str, Any]]:
     if facts["rules_classes"]:
-        return []
+        return list(facts.get("problems", []))
     return [
+        *facts.get("problems", []),
         {
             "severity": "error",
             "code": "rules-class-not-found",
@@ -72,6 +73,8 @@ def _target_rules_problems(facts: dict[str, Any]) -> list[dict[str, Any]]:
     if not facts["rules_classes"]:
         return _rules_class_problems(facts, "TargetRules")
     return [
+        *facts.get("problems", []),
+        *[
         {
             "severity": "warning",
             "code": "target-rules-base-unresolved",
@@ -86,6 +89,7 @@ def _target_rules_problems(facts: dict[str, Any]) -> list[dict[str, Any]]:
         }
         for rules_class in facts["rules_classes"]
         if rules_class.get("base_resolution") == "unresolved"
+        ],
     ]
 
 
@@ -300,7 +304,7 @@ def inspect_target_rules(path: Path) -> dict[str, Any]:
         ],
     }
     return result_document(
-        "ue-itps.target-rule-relations.v1",
+        "ue_inspect_target_rules",
         content,
         _target_rules_problems(facts),
         responsibility=(
@@ -388,7 +392,7 @@ def inspect_module_rules(path: Path) -> dict[str, Any]:
         ],
     }
     return result_document(
-        "ue-itps.module-rule-relations.v1",
+        "ue_inspect_module_rules",
         content,
         _rules_class_problems(facts, "ModuleRules"),
         responsibility=(

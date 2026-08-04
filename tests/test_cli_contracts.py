@@ -70,12 +70,14 @@ class CliContractTests(CliTestCase):
     def test_missing_input_paths_use_input_failure(self) -> None:
         missing = self.fixture.root / "Missing.input"
         for script, argument in REQUIRED_PATH_ARGUMENTS.items():
-            extra = (
-                ("--function", "MissingFunction")
-                if script
-                in {"ue_inspect_cs_function.py", "ue_inspect_cxx_function.py"}
-                else ()
-            )
+            extras = {
+                "ue_inspect_cs_function.py": ("--function", "MissingFunction"),
+                "ue_inspect_cxx_function.py": ("--function", "MissingFunction"),
+                "ue_query_cxx_hierarchy.py": ("--class", "MissingClass"),
+                "ue_analyze_cxx_impact.py": ("--symbol", "MissingClass"),
+                "ue_trace_cxx_function_flow.py": ("--function", "MissingFunction"),
+            }
+            extra = extras.get(script, ())
             with self.subTest(script=script):
                 result = self.cli(
                     script,
@@ -127,7 +129,7 @@ class CliContractTests(CliTestCase):
 
     def test_result_document_preserves_public_field_order(self) -> None:
         document = result_document(
-            "ue-itps.example.v1",
+            "example_tool",
             {"facts": [1, 2]},
             [],
             responsibility="Test result assembly.",
@@ -143,7 +145,7 @@ class CliContractTests(CliTestCase):
             with self.subTest(field=field):
                 with self.assertRaises(ValueError):
                     result_document(
-                        "ue-itps.example.v1",
+                        "example_tool",
                         {field: "collision"},
                         [],
                         responsibility="Test reserved fields.",

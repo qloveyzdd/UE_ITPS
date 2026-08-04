@@ -33,6 +33,7 @@ from .source_tokens import (
     lex_source,
     token_pairs,
 )
+from .syntax_tree import parse_cpp_syntax, parse_csharp_syntax
 
 
 _MODULE_RULE_KINDS = {
@@ -87,6 +88,7 @@ def parse_csharp_file(
     if resolved.suffix.casefold() != ".cs":
         raise ValueError(f"Expected a .cs file: {resolved}")
     text = resolved.read_text(encoding="utf-8-sig", errors="replace")
+    syntax_tree = parse_csharp_syntax(text)
     tokens = lex_source(text)
     classes, forward, reverse = parse_classes(text, tokens)
 
@@ -174,10 +176,21 @@ def parse_csharp_file(
                 "methods": methods,
             }
         )
+    problems = delimiter_problems(tokens)
+    if syntax_tree["parse_error_count"]:
+        problems.append(
+            {
+                "severity": "warning",
+                "code": "csharp-syntax-tree-errors",
+                "count": syntax_tree["parse_error_count"],
+                "message": "Tree-sitter reported incomplete C# syntax regions",
+            }
+        )
     return {
         "path": normalized(resolved),
         "classes": parsed_classes,
-        "problems": delimiter_problems(tokens),
+        "syntax_tree": syntax_tree,
+        "problems": problems,
     }
 
 
@@ -264,7 +277,12 @@ def parse_rule_file(path: Path, required_base_type: str) -> dict[str, Any]:
                 ),
             }
         )
-    return {"path": normalized(resolved), "rules_classes": rules_classes}
+    return {
+        "path": normalized(resolved),
+        "rules_classes": rules_classes,
+        "syntax_tree": parsed["syntax_tree"],
+        "problems": list(parsed["problems"]),
+    }
 
 
 def registration_macros(text: str, tokens: list[Token]) -> list[dict[str, Any]]:
@@ -304,6 +322,7 @@ def registration_macros(text: str, tokens: list[Token]) -> list[dict[str, Any]]:
 def parse_cpp_file(path: Path) -> dict[str, Any]:
     resolved = path.resolve()
     text = resolved.read_text(encoding="utf-8-sig", errors="replace")
+    syntax_tree = parse_cpp_syntax(text)
     tokens = lex_source(text)
     classes, forward, reverse = parse_classes(text, tokens)
     external = parse_external_definitions(text, tokens, forward)
@@ -312,6 +331,16 @@ def parse_cpp_file(path: Path) -> dict[str, Any]:
         tokens,
         classes,
     )
+    problems = delimiter_problems(tokens)
+    if syntax_tree["parse_error_count"]:
+        problems.append(
+            {
+                "severity": "warning",
+                "code": "cxx-syntax-tree-errors",
+                "count": syntax_tree["parse_error_count"],
+                "message": "Tree-sitter reported incomplete C++ syntax regions after UE macro normalization",
+            }
+        )
     return {
         "path": normalized(resolved),
         "text": text,
@@ -324,7 +353,8 @@ def parse_cpp_file(path: Path) -> dict[str, Any]:
         "free_functions": free_functions,
         "forward_declarations": forward_declarations,
         "registration_macros": registration_macros(text, tokens),
-        "problems": delimiter_problems(tokens),
+        "syntax_tree": syntax_tree,
+        "problems": problems,
     }
 
 

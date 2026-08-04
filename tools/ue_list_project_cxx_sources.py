@@ -7,7 +7,7 @@ from ue_project_tools.common import cli_parser, json_text, read_json
 from ue_project_tools.project_cxx_sources import list_project_cxx_sources
 
 
-SCHEMA_VERSION = "ue-itps.project-cxx-sources.v1"
+SCHEMA_VERSION = "ue_list_project_cxx_sources"
 RESPONSIBILITY = (
     "List project-local, manually maintained C++ source candidates grouped "
     "by Module, Plugin, file kind, and visibility."

@@ -16,7 +16,7 @@ def list_source_includes(
         load_cpp_analysis=False,
     )
     return source_result(
-        "ue-itps.cxx-includes.v1",
+        "ue_list_cxx_includes",
         loaded,
         {"includes": loaded["includes"]},
         responsibility="Report non-companion direct include spellings and deterministic filesystem provenance.",

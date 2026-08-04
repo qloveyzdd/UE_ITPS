@@ -7,7 +7,7 @@ from ue_project_tools.common import cli_parser, json_text
 from ue_project_tools.discovery import discovery_result
 
 
-SCHEMA_VERSION = "ue-itps.project-discovery.v1"
+SCHEMA_VERSION = "ue_find_projects"
 RESPONSIBILITY = "Discover .uproject files under one search root."
 
 

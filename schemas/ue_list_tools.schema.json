@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:schema:ue_list_tools",
+  "title": "ue_list_tools result",
+  "oneOf": [
+    {"$ref": "#/$defs/success"},
+    {"allOf": [
+      {"$ref": "urn:ue-itps:schema:common#/$defs/errorDocument"},
+      {"properties": {"schema_version": {"const": "ue_list_tools"}}}
+    ]}
+  ],
+  "$defs": {"success": {
+    "type": "object",
+    "required": ["schema_version", "tool_count", "items", "validation", "limits"],
+    "properties": {
+      "schema_version": {"const": "ue_list_tools"},
+      "tool_count": {"type": "integer", "minimum": 1},
+      "items": {"type": "array", "items": {"type": "object", "required": ["name", "category", "entrypoint", "inputs", "capabilities"], "additionalProperties": false, "properties": {
+        "name": {"type": "string", "minLength": 1}, "category": {"type": "string", "minLength": 1}, "entrypoint": {"type": "string", "minLength": 1},
+        "inputs": {"type": "array", "items": {"type": "string"}}, "capabilities": {"type": "array", "items": {"type": "string"}}
+      }}},
+      "validation": {"$ref": "urn:ue-itps:schema:common#/$defs/validation"},
+      "limits": {"$ref": "urn:ue-itps:schema:common#/$defs/limits"}
+    }, "additionalProperties": false
+  }}
+}

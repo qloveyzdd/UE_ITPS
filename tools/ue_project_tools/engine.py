@@ -159,7 +159,7 @@ def resolve_engine(
             }
         )
     return result_document(
-        "ue-itps.engine-resolution.v1",
+        "ue_resolve_engine",
         {
             "association_raw": association or None,
             "status": status,

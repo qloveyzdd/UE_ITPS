@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:schema:ue_analyze_cxx_dependencies",
+  "title": "ue_analyze_cxx_dependencies result",
+  "oneOf": [
+    {"$ref": "#/$defs/success"},
+    {"allOf": [{"$ref": "urn:ue-itps:schema:common#/$defs/errorDocument"}, {"properties": {"schema_version": {"const": "ue_analyze_cxx_dependencies"}}}]}
+  ],
+  "$defs": {"success": {
+    "type": "object", "required": ["schema_version", "project_root", "source_file_count", "graph", "validation", "limits"],
+    "properties": {
+      "schema_version": {"const": "ue_analyze_cxx_dependencies"}, "project_root": {"type": "string"}, "source_file_count": {"type": "integer", "minimum": 0},
+      "graph": {"type": "object", "required": ["nodes", "edges", "cycles"], "properties": {"nodes": {"type": "array"}, "edges": {"type": "array"}, "cycles": {"type": "array"}}, "additionalProperties": false},
+      "validation": {"$ref": "urn:ue-itps:schema:common#/$defs/validation"}, "limits": {"$ref": "urn:ue-itps:schema:common#/$defs/limits"}
+    }, "additionalProperties": false
+  }}
+}

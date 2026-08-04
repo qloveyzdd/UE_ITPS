@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:ue-itps:schema:project-plugin-references:v1",
+  "$id": "urn:ue-itps:schema:ue_resolve_plugins",
   "title": "ue_resolve_plugins.py result",
   "oneOf": [
     {
@@ -9,12 +9,12 @@
     {
       "allOf": [
         {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/errorDocument"
+          "$ref": "urn:ue-itps:schema:common#/$defs/errorDocument"
         },
         {
           "properties": {
             "schema_version": {
-              "const": "ue-itps.project-plugin-references.v1"
+              "const": "ue_resolve_plugins"
             }
           }
         }
@@ -38,12 +38,13 @@
         "project_descriptor_count",
         "engine_descriptor_count",
         "items",
+        "dependency_graph",
         "validation",
         "limits"
       ],
       "properties": {
         "schema_version": {
-          "const": "ue-itps.project-plugin-references.v1"
+          "const": "ue_resolve_plugins"
         },
         "path_roots": {
           "type": "object"
@@ -89,11 +90,14 @@
         "items": {
           "type": "array"
         },
+        "dependency_graph": {
+          "type": "object"
+        },
         "validation": {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/validation"
+          "$ref": "urn:ue-itps:schema:common#/$defs/validation"
         },
         "limits": {
-          "$ref": "urn:ue-itps:schema:common:v1#/$defs/limits"
+          "$ref": "urn:ue-itps:schema:common#/$defs/limits"
         }
       },
       "additionalProperties": false

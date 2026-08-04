@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-import re
 from typing import Any, Iterable
 
 from .common import iter_files, normalized, result_document
+from .dependency_graph import DependencyGraph
+from .source_parser import parse_cpp_file, parse_rule_file
 
 
 def discover_module_build_rules(
@@ -30,26 +31,23 @@ def discover_module_build_rules(
 
 def module_entrypoints(module_dir: Path) -> list[dict[str, str]]:
     results: list[dict[str, str]] = []
-    pattern = re.compile(
-        r"\b(?P<macro>IMPLEMENT_(?:(?:PRIMARY_)?GAME_)?MODULE)\s*"
-        r"\(\s*(?P<module_class>[A-Za-z_]\w*)\s*,\s*"
-        r"(?P<module_name>[A-Za-z_]\w*)\b"
-    )
     if not module_dir.is_dir():
         return results
     for path in iter_files(module_dir, ".cpp"):
         try:
-            text = path.read_text(encoding="utf-8-sig", errors="replace")
-        except OSError:
+            parsed = parse_cpp_file(path)
+        except (OSError, ValueError):
             continue
         path_text = normalized(path)
-        for match in pattern.finditer(text):
+        for macro in parsed["registration_macros"]:
+            if not macro.get("module_class") or not macro.get("module_name"):
+                continue
             results.append(
                 {
                     "path": path_text,
-                    "macro": match.group("macro"),
-                    "module_class": match.group("module_class"),
-                    "module_name": match.group("module_name"),
+                    "macro": str(macro["macro"]),
+                    "module_class": str(macro["module_class"]),
+                    "module_name": str(macro["module_name"]),
                 }
             )
     return sorted(
@@ -69,6 +67,7 @@ def inspect_modules(
     additional_roots: list[Path],
 ) -> dict[str, Any]:
     modules: list[dict[str, Any]] = []
+    dependency_graph = DependencyGraph()
     source_root = project_root / "Source"
     search_roots = [source_root, project_root / "Platforms", *additional_roots]
     problems: list[dict[str, Any]] = []
@@ -189,6 +188,56 @@ def inspect_modules(
             }
         )
 
+    for module in modules:
+        dependency_graph.add_node(
+            str(module["name"]),
+            kind="module",
+            file=str(module["build_rules"]["candidates"][0]["path"]),
+        )
+        rules_path = Path(str(module["build_rules"]["candidates"][0]["path"]))
+        try:
+            parsed_rules = parse_rule_file(rules_path, "ModuleRules")
+        except (OSError, ValueError) as exc:
+            problems.append(
+                {
+                    "severity": "warning",
+                    "code": "project-module-rules-parse-failure",
+                    "module_name": module["name"],
+                    "message": str(exc),
+                }
+            )
+            module["declared_dependencies"] = []
+            continue
+        dependencies: list[dict[str, Any]] = []
+        for rules_class in parsed_rules["rules_classes"]:
+            for method in rules_class["methods"]:
+                for operation in method["operations"]:
+                    rule = operation.get("rule", {})
+                    if not str(rule.get("kind", "")).endswith("dependency"):
+                        continue
+                    values = operation.get("evaluation", {}).get("literal_values", [])
+                    for target in values:
+                        if not isinstance(target, str) or not target:
+                            continue
+                        dependency = {
+                            "name": target,
+                            "kind": rule["kind"],
+                            "applicability": operation.get("applicability", "direct"),
+                            "evidence": {"line": int(operation["location"]["line"])},
+                        }
+                        if dependency not in dependencies:
+                            dependencies.append(dependency)
+                        dependency_graph.add_node(target, kind="module", file="")
+                        dependency_graph.add_edge(
+                            str(module["name"]), target,
+                            kind=str(rule["kind"]), file=normalized(rules_path),
+                            line=int(operation["location"]["line"]),
+                        )
+        module["declared_dependencies"] = sorted(
+            dependencies,
+            key=lambda item: (item["name"].casefold(), item["kind"], item["evidence"]["line"]),
+        )
+
     for module_key in sorted(
         set(rules_by_module) - set(declaration_indices_by_module),
         key=lambda key: discovered_module_names[key].casefold(),
@@ -211,10 +260,11 @@ def inspect_modules(
         )
 
     return result_document(
-        "ue-itps.project-modules.v1",
+        "ue_inspect_modules",
         {
             "reconciled_module_count": len(modules),
             "items": modules,
+            "dependency_graph": dependency_graph.document(),
         },
         problems,
         responsibility=(
@@ -222,7 +272,7 @@ def inspect_modules(
         ),
         boundaries=[
             "Build.cs location is discovered by basename; Source/<Name>/<Name>.Build.cs is only conventional.",
-            "AdditionalDependencies does not replace Build.cs dependency analysis.",
+            "AdditionalDependencies and statically declared Build.cs dependencies are reported separately.",
             "The result does not evaluate UBT rules, compile Modules, or prove runtime loading.",
         ],
     )
@@ -234,13 +284,22 @@ def inspect_targets(project_root: Path) -> dict[str, Any]:
     source_root = (project_root / "Source").resolve()
     for path in iter_files(source_root, ".Target.cs"):
         name = path.name[: -len(".Target.cs")]
+        parsed_rules = parse_rule_file(path, "TargetRules")
         targets.append(
             {
                 "name": name,
                 "path": normalized(path),
                 "is_root_target": path.parent == source_root,
+                "rules_classes": [
+                    item["name"] for item in parsed_rules["rules_classes"]
+                ],
+                "syntax": {
+                    "engine": parsed_rules["syntax_tree"]["engine"],
+                    "parse_error_count": parsed_rules["syntax_tree"]["parse_error_count"],
+                },
             }
         )
+        problems.extend(parsed_rules.get("problems", []))
     targets.sort(key=lambda item: str(item["name"]).casefold())
     classification = (
         "native-project"
@@ -287,7 +346,7 @@ def inspect_targets(project_root: Path) -> dict[str, Any]:
             }
         )
     return result_document(
-        "ue-itps.project-targets.v1",
+        "ue_inspect_targets",
         {
             "items": targets,
             "classification": classification,
@@ -308,7 +367,7 @@ def inspect_targets(project_root: Path) -> dict[str, Any]:
                 "invalid by itself; nested-only placement is a warning."
             ),
             "Root and nested Targets together produce a distinct placement warning.",
-            "Target files are discovered but TargetRules are not evaluated.",
+            "Target files are syntax-parsed and matching TargetRules classes are reported, but rules are not evaluated.",
             "Temporary or hybrid Target reasons require UBT-level analysis.",
         ],
     )

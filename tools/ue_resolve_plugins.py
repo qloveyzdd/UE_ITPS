@@ -12,7 +12,7 @@ from ue_project_tools.engine import resolve_engine
 from ue_project_tools.plugins import resolve_project_plugins
 
 
-SCHEMA_VERSION = "ue-itps.project-plugin-references.v1"
+SCHEMA_VERSION = "ue_resolve_plugins"
 RESPONSIBILITY = (
     "Resolve direct .uproject Plugin references for one explicit profile."
 )

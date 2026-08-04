@@ -5,6 +5,7 @@ from typing import Any
 
 from .code_inventory import discover_module_build_rules
 from .common import normalized, result_document
+from .dependency_graph import DependencyGraph
 from .ue_json import read_ue_json
 
 
@@ -890,8 +891,24 @@ def read_plugin_descriptor(path: Path) -> dict[str, Any]:
         for key, value in facts.items()
         if key != "unlisted_build_rules"
     }
+    graph = DependencyGraph()
+    descriptor_name = path.stem
+    graph.add_node(descriptor_name, kind="plugin", file=normalized(path))
+    for module in public_facts.get("modules", []):
+        name = module.get("name") if isinstance(module, dict) else None
+        if not isinstance(name, str):
+            continue
+        graph.add_node(name, kind="module", file=normalized(path))
+        graph.add_edge(descriptor_name, name, kind="contains_module", file=normalized(path))
+    for dependency in public_facts.get("plugin_dependencies", []):
+        name = dependency.get("name") if isinstance(dependency, dict) else None
+        if not isinstance(name, str):
+            continue
+        graph.add_node(name, kind="plugin", file="")
+        graph.add_edge(descriptor_name, name, kind="plugin_reference", file=normalized(path))
+    public_facts["dependency_graph"] = graph.document()
     return result_document(
-        "ue-itps.plugin-descriptor.v2",
+        "ue_read_plugin_descriptor",
         public_facts,
         problems,
         responsibility=(
@@ -901,7 +918,7 @@ def read_plugin_descriptor(path: Path) -> dict[str, Any]:
         boundaries=[
             "Only the selected descriptor and its Source and Platforms directories are read.",
             "Build.cs files are discovered recursively by basename; the conventional Source/<Name>/<Name>.Build.cs path is evidence, not a requirement.",
-            "Plugin dependencies are declarations; their descriptors are not resolved or traversed.",
+            "Plugin and contained Module declarations are projected into a one-descriptor dependency graph; dependency descriptors are not traversed.",
             "Build.cs and C++ bodies are not expanded by this tool.",
             "Enum validation follows the UE 5.6.1 UnrealBuildTool source model.",
             "Unmodeled fields are preserved as an inventory and are not declared invalid.",

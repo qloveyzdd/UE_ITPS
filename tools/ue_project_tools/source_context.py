@@ -22,6 +22,7 @@ from .source_namespaces import (
     resolve_observed_namespace,
 )
 from .source_tokens import delimiter_problems, lex_source
+from .syntax_tree import parse_cpp_syntax
 
 
 _CPP_SUFFIXES = {".cpp", ".cc"}
@@ -92,11 +93,23 @@ def _automatic_companions(
 def _lightweight_source(path: Path) -> dict[str, Any]:
     text = path.read_text(encoding="utf-8-sig", errors="replace")
     tokens = lex_source(text)
+    syntax_tree = parse_cpp_syntax(text)
+    problems = delimiter_problems(tokens)
+    if syntax_tree["parse_error_count"]:
+        problems.append(
+            {
+                "severity": "warning",
+                "code": "cxx-syntax-tree-errors",
+                "count": syntax_tree["parse_error_count"],
+                "message": "Tree-sitter reported incomplete C++ syntax regions after UE macro normalization",
+            }
+        )
     return {
         "path": normalized(path),
         "text": text,
         "tokens": tokens,
-        "problems": delimiter_problems(tokens),
+        "syntax_tree": syntax_tree,
+        "problems": problems,
     }
 
 
@@ -436,12 +449,23 @@ def source_result(
     boundaries: list[str],
     additional_problems: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    syntax_trees = [
+        {
+            "source": rooted_path(path, loaded["project_root"], loaded["engine_root"]),
+            "engine": parsed["syntax_tree"]["engine"],
+            "language": parsed["syntax_tree"]["language"],
+            "parse_error_count": parsed["syntax_tree"]["parse_error_count"],
+        }
+        for path, parsed in loaded["parsed_files"]
+        if "syntax_tree" in parsed
+    ]
     return result_document(
         schema_version,
         {
             "path_roots": loaded["path_roots"],
             "context": loaded["context"],
             "source_unit": loaded["source_unit"],
+            "analysis": {"syntax_trees": syntax_trees},
             **content,
         },
         [*loaded["problems"], *(additional_problems or [])],

@@ -7,7 +7,7 @@ from ue_project_tools.common import cli_parser, json_text
 from ue_project_tools.rule_source import inspect_target_rules
 
 
-SCHEMA_VERSION = "ue-itps.target-rule-relations.v1"
+SCHEMA_VERSION = "ue_inspect_target_rules"
 RESPONSIBILITY = (
     "Index TargetRules classes and their member variables and functions from one "
     "Target.cs file."
