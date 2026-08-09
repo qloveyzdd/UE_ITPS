@@ -2,10 +2,12 @@
 defined_at: 2026-07-15
 baseline: UE-5.6.1 / Lyra frozen fingerprint
 scope: L0/L1 raw runtime evidence capture
-status: capture-protocol-and-tool-ready; no-new-run-captured
+status: historical-ue-5.6.1-capture-protocol-and-tool-ready; ue-5.8.2-run-not-archived
 ---
 
 # Lyra 运行证据捕获规范
+
+> **版本说明：** 本文的捕获方法仍可复用，但现有基线字段指向 UE 5.6.1 历史证据。当前活动基座为 UE 5.8.2，新的运行归档必须使用独立目录和新 manifest，不能覆盖或冒充旧证据。
 
 ## 目标
 

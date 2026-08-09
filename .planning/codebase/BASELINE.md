@@ -1,12 +1,30 @@
 ---
-mapped_at: 2026-07-15
+mapped_at: 2026-08-09
 scope: LyraStarterGame
-status: ue-5.6.1-project-fingerprint-verified-l0-observed-raw-log-missing
+status: ue-5.8.2-active-editor-and-pie-observed-revalidation-pending
 ---
 
-# Lyra 5.6.1 可复现基线
+# Lyra 当前基线
 
-## 结论
+## 当前结论（UE 5.8.2）
+
+当前活动基座为 `E:/UE_ITPS/LyraStarterGame/LyraStarterGame.uproject` + `D:/UnrealEngine_5.8`。确定性探针从 Engine 的 `Build.version` 解析出 **UE 5.8.2**，Editor 运行日志也记录为 `5.8.2-0+UE5`。
+
+| 项目 | 当前证据 |
+|---|---|
+| Engine | `D:/UnrealEngine_5.8`，`Build.version = 5.8.2` |
+| Target | `LyraEditor / Win64 / Development`，`BuildSettingsVersion V7` |
+| Editor/PIE | Editor 已启动；日志记录默认、前端、Elimination 与 ControlPoints Experience 对应地图进入 PIE |
+| MCP 工具基座 | `.uproject` 显式启用 `AIAssistant`、`ToolsetRegistry`、`AllToolsets` |
+| 待补证据 | 5.8.2 权威文件指纹、不可覆盖的 L0/L1 日志归档、版本敏感静态结论的重新扫描 |
+
+本次状态只证明上述已观察事实。它不自动证明全部 Target、网络模式、打包平台或旧 5.6.1 结论在 5.8.2 下仍成立。
+
+## 历史文档边界
+
+以下章节记录的是 **UE 5.6.1 历史基线**。它们保留用于迁移对照，但其中的版本、文件计数、插件清单、源码位置和运行结论在完成 5.8.2 重扫前都不能视为当前基座事实。
+
+## 历史结论（UE 5.6.1）
 
 当前基线可以准确表述为：
 

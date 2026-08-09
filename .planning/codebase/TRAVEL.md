@@ -2,10 +2,12 @@
 mapped_at: 2026-07-15
 baseline: UE-5.6.1 / Lyra frozen fingerprint
 scope: Frontend, session, map travel, world replacement, return-to-frontend
-status: static-source-and-asset-evidence; runtime-travel-not-yet-captured
+status: historical-ue-5.6.1-static-source-and-asset-evidence; runtime-travel-not-yet-captured
 ---
 
 # Lyra 前端、会话与地图旅行管线
+
+> **历史报告：** 本文映射 UE 5.6.1 基线。当前活动基座已切换到 UE 5.8.2；会话、Travel 与 World 重建结论需要在新基座重新验证。
 
 ## 结论先行
 

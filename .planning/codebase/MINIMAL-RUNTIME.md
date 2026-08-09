@@ -1,10 +1,12 @@
 ---
 mapped_at: 2026-07-15
 scope: LyraStarterGame
-status: l0-historically-observed-raw-log-missing-l1-not-run
+status: historical-ue-5.6.1-l0-observed-raw-log-missing-l1-not-run
 ---
 
 # Lyra 最小运行边界
+
+> **历史报告：** 本文映射 UE 5.6.1 基线。当前活动基座已切换到 UE 5.8.2；最小运行边界不能跨版本直接继承，需在新基座重新收敛。
 
 ## 两层定义
 

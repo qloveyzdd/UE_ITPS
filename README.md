@@ -11,6 +11,14 @@ UE ITPS 是一组确定性、只读的 Unreal Engine 项目检查工具。它从
 
 UE ITPS 提供静态文件与源码证据，不替代 UnrealBuildTool、UnrealHeaderTool、Editor、编译器或运行时验证。
 
+## 当前 Lyra 基座
+
+- 本地参考工程已切换到 `LyraStarterGame` + **UE 5.8.2**；版本以解析后的 `Engine/Build/Build.version` 和 Editor 运行日志为准。
+- 当前目标为 `LyraEditor / Win64 / Development`，构建回执使用 `BuildSettingsVersion V7`。
+- Editor 已启动并进入 PIE，日志已观察到默认、前端、Elimination 和 ControlPoints Experience 对应地图。
+- 工程显式启用 `AIAssistant`、`ToolsetRegistry` 与 `AllToolsets`，UE 5.8 MCP、Asset Registry、Blueprint 和 Blueprint Graph 能力作为当前基座工具能力使用。
+- `.planning/evidence/lyra-5.6.1/` 与现有 5.6.1 分析结论保留为历史证据；版本敏感结论不会自动继承到 5.8.2。
+
 绑定 Git 提交的工程信息池位于独立的 [`information_pool/`](information_pool/)
 目录。信息池复用现有探针，以不可变 SQLite 快照保存项目结构、C++ 符号、关系和
 原始证据；候选快照通过验证后才会原子激活。使用方式和当前边界见
@@ -224,7 +232,7 @@ python -m unittest discover -s tests -v
 ├─ schemas/                   # 21 个 CLI Schema + 1 个公共 Schema
 ├─ tests/                     # 64 项临时夹具自动化测试
 ├─ docs/PROGRAM-DESIGN.md     # 架构、契约和扩展规则
-├─ LyraStarterGame/           # 可选本地参考项目
+├─ LyraStarterGame/           # 当前 UE 5.8.2 Lyra 本地参考基座
 ├─ ExternalProjects/          # 可选外部参考项目
 ├─ requirements.txt           # 固定版本的运行依赖
 ├─ requirements-dev.txt       # 测试依赖

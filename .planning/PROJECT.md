@@ -4,7 +4,7 @@
 
 UE-ITPS 的长期目标是成为面向 Unreal Engine 项目的功能级工程知识图谱、可验证复用平台与 AI 信任治理层，让程序员只审查真正新增或因上下文变化而失去验证依据的工程知识。
 
-当前项目尚未进入信任系统实现阶段。第一个里程碑以 UE 5.6.1 和 Epic 可追溯的 Lyra 样例快照为可复现基准，先建立对 Lyra 架构、启动流程和最小运行边界的事实认知；这些结论将作为后续设计 Lyra-derived 最小项目及增量信任模型的工程基础。
+当前项目尚未进入信任系统实现阶段。活动基座已从历史 UE 5.6.1 快照切换到 **UE 5.8.2 + LyraStarterGame**，并把 UE 5.8 的 MCP、Asset Registry、Blueprint 与 Blueprint Graph 工具能力纳入调查环境。后续将以新基座重新核验 Lyra 架构、启动流程和最小运行边界；5.6.1 结论只作为历史对照，不自动晋升为 5.8.2 事实。
 
 ## Core Value
 
@@ -13,6 +13,11 @@ UE-ITPS 的长期目标是成为面向 Unreal Engine 项目的功能级工程知
 ## Requirements
 
 ### Validated
+
+- [x] 当前 `.uproject` 已解析到 `D:/UnrealEngine_5.8`，`Build.version` 与 Editor 日志交叉确认实际版本为 UE 5.8.2。— 2026-08-09
+- [x] `LyraEditor / Win64 / Development` 的目标回执已生成，使用 `BuildSettingsVersion V7`；Editor 已启动并进入多个 PIE Experience。— 2026-08-09
+- [x] 工程已显式启用 `AIAssistant`、`ToolsetRegistry` 与 `AllToolsets`，当前基座具备 UE 5.8 MCP、Asset Registry、Blueprint 与 Blueprint Graph 工具入口。— 2026-08-09
+**以下条目属于 UE 5.6.1 历史基线，保留用于迁移对照：**
 
 - [x] UE 5.6.1 源码 Engine 已定位并由 `Build.version`、Target 与运行日志交叉验证。— 2026-07-14
 - [x] `LyraEditor Win64 Development` 已完成 455 个动作的项目构建，并通过重复 UBT 验证。— 2026-07-14
@@ -29,9 +34,10 @@ UE-ITPS 的长期目标是成为面向 Unreal Engine 项目的功能级工程知
 
 ### Active
 
-- [ ] 明确后续长期基线采用当前 Marketplace/Epic 历史快照，还是在隔离副本中对齐 `5.6.1-release` 的 5 处工程壳差异；当前不修改已验证样例。
+- [ ] 为 UE 5.8.2 Lyra 基座生成新的权威文件指纹；旧 `lyra-5.6.1` 指纹仅保留为历史证据。
+- [ ] 重新运行 5.8.2 静态探针并更新版本敏感的架构、管线、网络和最小运行结论。
 - [ ] 分别运行并捕获 Standalone、Listen Server、Dedicated Server、Client 与 Seamless Travel，验证静态时序、对象身份和失败恢复。
-- [ ] 使用已建立的捕获工具重跑 L0，补回可审计原始证据并定位历史 `LogAutomationTest` 异常。
+- [ ] 使用已建立的捕获工具归档当前 5.8.2 L0/PIE 日志，避免 `Saved/Logs` 轮转后失去可审计证据。
 - [ ] 运行 `ShooterGym + ControlPoints` L1 切片，验证 ShooterCore Active、Pawn GameplayReady、ASC、Input→Ability 与 Shooter HUD。
 - [ ] 运行并归档 Gauntlet BootTest，补齐自动化基线。
 - [ ] 追踪 L1 从 Experience 激活到可操作 Pawn 的实际运行主链，而不仅是源码与资产静态证据。
@@ -48,7 +54,7 @@ UE-ITPS 的长期目标是成为面向 Unreal Engine 项目的功能级工程知
 - 通过删除插件或资产试错来推断最小依赖——先建立有证据的架构模型，再设计最小化实验。
 - 自动发现任意 UE 项目的 Feature Graph 或 Pipeline Graph——当前只研究一个固定官方样例。
 - 修改 Engine、Lyra Gameplay、Blueprint 或二进制资产——本阶段以只读调查和可复现运行验证为主。
-- 支持 UE 5.6.1 之外的版本兼容、升级或迁移。
+- 同时维护多个 UE 版本的兼容矩阵；当前只维护 UE 5.8.2 活动基座与 UE 5.6.1 历史对照。
 - Perforce、私有 Engine、跨项目权威库、企业审批、权限体系、内网部署和商业化能力。
 - 完整知识图谱数据库、可视化编辑器、MCP 产品接口或通用 Agent 执行层。
 
@@ -63,7 +69,7 @@ UE-ITPS 的长期目标是成为面向 Unreal Engine 项目的功能级工程知
 本里程碑采用第一性原理顺序：
 
 ```text
-固定 UE 5.6.1 与 Epic 可追溯 Lyra 快照
+固定 UE 5.8.2 与当前 LyraStarterGame 基座
 → 证明项目可生成、编译、启动和运行
 → 追踪启动与 Pawn 初始化主链路
 → 归档模块、插件、资产与运行时职责
@@ -76,8 +82,8 @@ UE-ITPS 的长期目标是成为面向 Unreal Engine 项目的功能级工程知
 
 ## Constraints
 
-- **Engine 基线**：固定 UE 5.6.1，不使用 UE 5.7 结论替代实际 5.6.1 行为。
-- **项目基线**：使用已冻结且可追溯到 Epic 历史的 Lyra 样例快照，不先创建删减版或自定义派生版。
+- **Engine 基线**：固定 UE 5.8.2；文档中的 UE 5.6.1 结论只作为历史对照，必须重新验证后才能用于当前基座。
+- **项目基线**：使用当前 `LyraStarterGame` 作为活动参考基座，不先创建删减版或自定义派生版。
 - **调查优先**：当前先理解与归档，不实现具体玩法和信任系统。
 - **只读优先**：除构建生成物和必要的本地运行配置外，不修改 Lyra 源码、Blueprint 或资产。
 - **事实可追溯**：每个关键架构结论必须引用源码、配置、资产、构建输出或运行证据；无法验证的内容明确标为假设。
@@ -98,8 +104,8 @@ UE-ITPS 的长期目标是成为面向 Unreal Engine 项目的功能级工程知
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Engine 基线固定为 UE 5.6.1 | 降低环境漂移，匹配当前实际目标版本 | ✓ 本机验证通过 |
-| Epic 可追溯 Lyra 快照作为首个可复现基准 | 先理解官方样例的真实运行链路，再判断哪些部分可删减 | △ 本地指纹通过；L0 曾观察但原始日志待补，非标签镜像，L1 待验证 |
+| 活动 Engine 基线切换为 UE 5.8.2 | 匹配当前实际运行环境，并使用 UE 5.8 MCP 与 Blueprint 工具能力 | △ Engine、Target、Editor 与 PIE 已核验；新文件指纹和完整运行证据待归档 |
+| UE 5.6.1 Lyra 快照保留为历史基准 | 保留已有研究价值，同时避免跨版本继承未经验证的结论 | ✓ 已与当前活动基座分离标记 |
 | 架构归档先于具体玩法与信任系统实现 | 避免在错误或过窄的 Lyra 认知上设计长期抽象 | ✓ 保持当前顺序 |
 | 当前不创建 Lyra-derived 最小项目 | 最小化应建立在基线运行证据和依赖分析之上 | ✓ 等待 L1 |
 | L1 首选 ShooterGym + ControlPoints | 保留完整 Lyra 主链，同时避免 ShooterMaps 和数百至数千地图软依赖 | ✓ 已由 Asset Registry 选定 |
@@ -131,4 +137,4 @@ UE-ITPS 的长期目标是成为面向 Unreal Engine 项目的功能级工程知
 4. 使用真实运行结果、工程证据和验证指标更新 Context。
 
 ---
-*Last updated: 2026-07-15 after mapping network modes, seamless object survival, loading and failure recovery*
+*Last updated: 2026-08-09 after switching the active Lyra baseline to UE 5.8.2 and enabling UE 5.8 MCP toolsets*

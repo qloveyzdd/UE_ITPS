@@ -1,10 +1,12 @@
 ---
 mapped_at: 2026-07-15
 scope: UE-5.6.1-and-LyraStarterGame-startup-runtime
-status: static-main-chain-and-network-mode-mapped-runtime-l0-observation-not-fully-retained
+status: historical-ue-5.6.1-static-main-chain-and-network-mode-mapped-runtime-l0-observation-not-fully-retained
 ---
 
 # Lyra 启动、Experience 与玩家初始化管线
+
+> **历史报告：** 本文映射 UE 5.6.1 基线。当前活动基座已切换到 UE 5.8.2；以下版本敏感管线结论在重跑静态与运行验证前只作历史对照。
 
 ## 证据口径
 

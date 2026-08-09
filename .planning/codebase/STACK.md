@@ -1,10 +1,12 @@
 ---
 mapped_at: 2026-07-15
 scope: LyraStarterGame
-status: static-inventory-verified
+status: historical-ue-5.6.1-static-inventory-verified
 ---
 
 # Lyra 工程栈与依赖全景
+
+> **历史报告：** 本文映射 UE 5.6.1 基线。当前活动基座已切换到 UE 5.8.2；版本、Build Settings、插件/模块数量和依赖细节在重扫前只作历史对照。
 
 ## 工程栈
 

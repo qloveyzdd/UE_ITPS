@@ -4,6 +4,8 @@
 
 当前只注册一个目标 Provider：`ue5.8-editor`。连接池只读取宿主已经暴露的 MCP 工具清单，不启动、不重连、不关闭 MCP，也不运行 Unreal Editor 或任何外部命令。
 
+当前本地参考基座为 `E:/UE_ITPS/LyraStarterGame/LyraStarterGame.uproject` + **UE 5.8.2**。工程显式启用 `AIAssistant`、`ToolsetRegistry` 与 `AllToolsets`；连接池仍按 `5.8.*` 契约匹配，不把补丁版本写死为 5.8.2。
+
 ## 使用方式
 
 宿主负责把当前可见的 MCP 工具名和可信元数据转换成连接记录：

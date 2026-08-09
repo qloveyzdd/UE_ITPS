@@ -2,10 +2,12 @@
 mapped_at: 2026-07-15
 baseline: UE-5.6.1 / Lyra frozen fingerprint
 scope: Standalone, Listen Server, Dedicated Server, Client, Hard Travel, Seamless Travel, loading and failure recovery
-status: static-source-and-config-evidence; mode-specific-runtime-evidence-not-yet-captured
+status: historical-ue-5.6.1-static-source-and-config-evidence; mode-specific-runtime-evidence-not-yet-captured
 ---
 
 # Lyra 网络模式、旅行存续与失败边界
+
+> **历史报告：** 本文映射 UE 5.6.1 基线。当前活动基座已切换到 UE 5.8.2；网络模式、对象存续和失败恢复结论需要在新基座重新验证。
 
 ## 结论先行
 
