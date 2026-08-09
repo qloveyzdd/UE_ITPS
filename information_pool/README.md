@@ -8,13 +8,13 @@
 
 ## 构建与激活
 
-工程必须位于 Git 中，HEAD 对应的 UE 工程子树必须干净。信息池建议放在工程仓库
-之外；如果位于仓库内部，其目录和自定义缓存目录必须被 `.gitignore` 忽略。
+工程必须位于 Git 中，HEAD 对应的 UE 工程子树必须干净。当前项目将信息池放在仓库内的
+`data/` 目录；信息池目录和自定义缓存目录必须被 `.gitignore` 忽略。
 
 ```powershell
 python information_pool/build_information_pool.py `
   --project D:/Projects/MyGame/MyGame.uproject `
-  --pool D:/UE-ITPS-Pools/MyGame `
+  --pool data/MyGame `
   --workers 8
 ```
 
@@ -36,7 +36,7 @@ python information_pool/build_information_pool.py `
 
 ```powershell
 python information_pool/query_information_pool.py `
-  --pool D:/UE-ITPS-Pools/MyGame `
+  --pool data/MyGame `
   --operation search `
   --selector GameplayAbility
 ```

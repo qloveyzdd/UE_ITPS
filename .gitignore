@@ -2,6 +2,7 @@
 # evidence are kept in .planning/evidence instead of committing Epic content.
 /LyraStarterGame/
 /ExternalProjects/
+/data/LyraStarterGame/
 
 # Unreal Engine generated directories
 Binaries/
