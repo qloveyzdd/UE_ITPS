@@ -18,6 +18,19 @@ python information_pool/build_information_pool.py `
   --workers 8
 ```
 
+如果已经使用 `edittools/ue_build_knowledge_graph.py` 构建 Editor、配置、DataTable、Primary Asset
+和 Gameplay Message 逻辑事实，可将其作为附加证据写入同一快照：
+
+```powershell
+python information_pool/build_information_pool.py `
+  --project D:/Projects/MyGame/MyGame.uproject `
+  --pool data/MyGame `
+  --knowledge-graph D:/Evidence/knowledge-graph.json
+```
+
+`--knowledge-graph` 可重复。输入图谱必须通过自身校验，且其内容哈希会参与 `scan_id` 和
+`generation_id`，因此不同 Editor 证据不会错误复用同一不可变快照。
+
 构建流程固定为：
 
 ```text
@@ -75,6 +88,7 @@ python information_pool/query_information_pool.py `
 └─ .candidates/                  # 构建中的隔离候选文件
 ```
 
-当前正式事实来自项目工具池支持的项目结构和 C++ 探针。Engine 符号保留为外部实体，
+当前正式事实来自项目工具池支持的项目结构和 C++ 探针，并可选择合入经过校验的逻辑知识图谱。
+Engine 符号保留为外部实体，
 不递归扫描 Engine 源码。结果仍是保守静态证据，不替代 UBT、UHT、编译器、Editor
 或运行时验证。

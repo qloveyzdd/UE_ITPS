@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:edittools:ue_diff_knowledge_graph",
+  "oneOf": [
+    {"$ref": "#/$defs/success"},
+    {"allOf": [{"$ref": "urn:ue-itps:edittools:common#/$defs/errorDocument"}, {"properties": {"schema_version": {"const": "ue_diff_knowledge_graph"}}}]}
+  ],
+  "$defs": {"success": {"type": "object", "required": ["schema_version", "counts", "difference", "validation", "limits"], "properties": {
+    "schema_version": {"const": "ue_diff_knowledge_graph"}, "counts": {"type": "object"}, "difference": {"type": "object"}, "validation": {"$ref": "urn:ue-itps:edittools:common#/$defs/validation"}, "limits": {"$ref": "urn:ue-itps:edittools:common#/$defs/limits"}
+  }, "additionalProperties": false}}
+}

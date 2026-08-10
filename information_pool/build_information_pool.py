@@ -20,6 +20,13 @@ def main() -> int:
     parser.add_argument("--engine-root", metavar="PATH")
     parser.add_argument("--cache-dir", metavar="PATH")
     parser.add_argument("--workers", type=int)
+    parser.add_argument(
+        "--knowledge-graph",
+        action="append",
+        default=[],
+        metavar="JSON",
+        help="可选的 ue_build_knowledge_graph 证据文件，可重复",
+    )
     args = parser.parse_args()
     last_progress = 0.0
 
@@ -48,6 +55,7 @@ def main() -> int:
             cache_dir=Path(args.cache_dir) if args.cache_dir else None,
             workers=args.workers,
             progress=report_progress,
+            knowledge_graphs=[Path(value) for value in args.knowledge_graph],
         )
     except (OSError, RuntimeError, ValueError) as exc:
         result = {

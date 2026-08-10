@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:edittools:ue_scan_config_graph",
+  "oneOf": [
+    {"$ref": "#/$defs/success"},
+    {"allOf": [{"$ref": "urn:ue-itps:edittools:common#/$defs/errorDocument"}, {"properties": {"schema_version": {"const": "ue_scan_config_graph"}}}]}
+  ],
+  "$defs": {"success": {"type": "object", "required": ["schema_version", "project", "config_files", "declaration_count", "declarations", "observed_values", "primary_asset_types", "validation", "limits"], "properties": {
+    "schema_version": {"const": "ue_scan_config_graph"}, "project": {"type": "string"}, "config_files": {"type": "array"}, "declaration_count": {"type": "integer", "minimum": 0}, "declarations": {"type": "array"}, "observed_values": {"type": "array"}, "primary_asset_types": {"type": "array"}, "validation": {"$ref": "urn:ue-itps:edittools:common#/$defs/validation"}, "limits": {"$ref": "urn:ue-itps:edittools:common#/$defs/limits"}
+  }, "additionalProperties": false}}
+}

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
+import json
 import os
 from pathlib import Path
 import uuid
@@ -8,6 +10,7 @@ from typing import Any
 
 from .graph_model import build_graph_model
 from .identity import stable_id
+from .knowledge_adapter import merge_knowledge_graph, read_knowledge_graph
 from .manifest import activate_snapshot
 from .probe_adapter import scan_project
 from .source_revision import (
@@ -37,6 +40,7 @@ def build_information_pool(
     cache_dir: Path | None = None,
     workers: int | None = None,
     progress: Any | None = None,
+    knowledge_graphs: list[Path] | None = None,
 ) -> dict[str, Any]:
     project_file = project_file.resolve()
     pool_directory = pool_directory.resolve()
@@ -66,10 +70,25 @@ def build_information_pool(
             progress=progress,
         )
         graph = build_graph_model(probe)
+        knowledge_documents = [
+            (path.resolve(), read_knowledge_graph(path))
+            for path in (knowledge_graphs or [])
+        ]
+        knowledge_probe_results = [
+            merge_knowledge_graph(graph, document, path)
+            for path, document in knowledge_documents
+        ]
+        knowledge_hashes = [
+            hashlib.sha256(
+                json.dumps(document, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+            ).hexdigest()
+            for _, document in knowledge_documents
+        ]
         scan_id = stable_id(
             "scan",
             graph.key,
             sorted(unit.input_hash for unit in probe.units),
+            sorted(knowledge_hashes),
             POOL_SCHEMA_VERSION,
         )
         generation_id = stable_id(
@@ -116,7 +135,7 @@ def build_information_pool(
                 graph.evidence.values(),
                 key=lambda item: str(item["evidence_id"]),
             ),
-            probe_results=probe.probe_results,
+            probe_results=[*probe.probe_results, *knowledge_probe_results],
         )
         connection.close()
         connection = None
@@ -182,6 +201,7 @@ def build_information_pool(
             "cache_hits": probe.cache_hits,
             "cache_misses": probe.cache_misses,
             "worker_count": probe.worker_count,
+            "knowledge_graph_count": len(knowledge_documents),
             "problems": probe.problems,
             "active_manifest": manifest,
         }

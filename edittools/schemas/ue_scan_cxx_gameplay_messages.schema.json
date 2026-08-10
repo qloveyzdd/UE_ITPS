@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:edittools:ue_scan_cxx_gameplay_messages",
+  "oneOf": [
+    {"$ref": "#/$defs/success"},
+    {"allOf": [{"$ref": "urn:ue-itps:edittools:common#/$defs/errorDocument"}, {"properties": {"schema_version": {"const": "ue_scan_cxx_gameplay_messages"}}}]}
+  ],
+  "$defs": {"success": {"type": "object", "required": ["schema_version", "project", "source_file_count", "message_operation_count", "operations", "validation", "limits"], "properties": {
+    "schema_version": {"const": "ue_scan_cxx_gameplay_messages"}, "project": {"type": "string"}, "source_file_count": {"type": "integer", "minimum": 0}, "message_operation_count": {"type": "integer", "minimum": 0}, "operations": {"type": "array"}, "validation": {"$ref": "urn:ue-itps:edittools:common#/$defs/validation"}, "limits": {"$ref": "urn:ue-itps:edittools:common#/$defs/limits"}
+  }, "additionalProperties": false}}
+}

@@ -20,6 +20,7 @@
     "cache_hits",
     "cache_misses",
     "worker_count",
+    "knowledge_graph_count",
     "problems",
     "active_manifest"
   ],
@@ -49,6 +50,7 @@
     "cache_hits": {"type": "integer", "minimum": 0},
     "cache_misses": {"type": "integer", "minimum": 0},
     "worker_count": {"type": "integer", "minimum": 1},
+    "knowledge_graph_count": {"type": "integer", "minimum": 0},
     "problems": {"type": "array", "items": {"type": "object"}},
     "active_manifest": {
       "type": "object",
