@@ -15,10 +15,47 @@ from .project_context import ProjectContext
 
 
 RESULT_MARKER = "__UE_ITPS_EDITOR_RESULT__="
+REMOTE_RECEIVE_CHUNK_SIZE = 8192
+MAX_REMOTE_RESPONSE_BYTES = 64 * 1024 * 1024
 
 
 class EditorConnectionError(RuntimeError):
     pass
+
+
+def _receive_complete_message(
+    connection: Any, expected_type: str, message_type: type[Any]
+) -> Any:
+    data = bytearray()
+    while True:
+        part = connection._command_channel_socket.recv(REMOTE_RECEIVE_CHUNK_SIZE)
+        if not part:
+            raise RuntimeError("Remote party closed before sending a valid response")
+        data.extend(part)
+        if len(data) > MAX_REMOTE_RESPONSE_BYTES:
+            raise RuntimeError("Remote response exceeded the 64 MiB safety limit")
+        try:
+            json.loads(data.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        message = message_type(None, None)
+        if (
+            message.from_json_bytes(bytes(data))
+            and message.passes_receive_filter(connection._node_id)
+            and message.type_ == expected_type
+        ):
+            return message
+        raise RuntimeError("Remote party failed to send a valid response")
+
+
+def _patch_remote_receive(remote_module: ModuleType) -> None:
+    connection_type = remote_module._RemoteExecutionCommandConnection
+    message_type = remote_module._RemoteExecutionMessage
+
+    def receive_message(connection: Any, expected_type: str) -> Any:
+        return _receive_complete_message(connection, expected_type, message_type)
+
+    connection_type._receive_message = receive_message
 
 
 class _ProcessLock:
@@ -95,6 +132,7 @@ def _remote_execution_module(engine_root: Path) -> ModuleType:
         )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    _patch_remote_receive(module)
     return module
 
 

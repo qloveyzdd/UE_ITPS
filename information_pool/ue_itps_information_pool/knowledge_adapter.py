@@ -51,6 +51,15 @@ def _resolved_symbol(graph: Graph, node: dict[str, Any]) -> str | None:
     return None
 
 
+def _relation_semantics(value: object) -> tuple[str, str, float]:
+    certainty = str(value or "confirmed")
+    if certainty == "confirmed":
+        return "observed", "resolved", 1.0
+    if certainty == "unresolved":
+        return "inferred", "unresolved", 0.5
+    raise ValueError(f"Knowledge graph relation has unsupported certainty: {certainty}")
+
+
 def merge_knowledge_graph(
     graph: Graph, document: dict[str, Any], source_path: Path
 ) -> dict[str, Any]:
@@ -86,6 +95,8 @@ def merge_knowledge_graph(
         target_id = mapping.get(str(relation["target_id"]))
         if source_id is None or target_id is None:
             raise ValueError("Knowledge graph relation references an unknown node")
+        source_certainty = str(relation.get("certainty", "confirmed"))
+        certainty, resolution_status, confidence = _relation_semantics(source_certainty)
         evidence_items = evidence_by_relation.get(str(relation["relation_id"])) or [{}]
         for evidence in evidence_items:
             location = None
@@ -113,15 +124,14 @@ def merge_knowledge_graph(
                 source_id=source_id,
                 kind=str(relation["kind"]),
                 target_id=target_id,
-                certainty=str(relation.get("certainty", "confirmed")),
-                resolution_status="resolved",
-                confidence=1.0
-                if relation.get("certainty", "confirmed") == "confirmed"
-                else 0.5,
+                certainty=certainty,
+                resolution_status=resolution_status,
+                confidence=confidence,
                 probe_schema=schema,
                 location=location,
                 properties={
                     **dict(relation.get("properties", {})),
+                    "source_certainty": source_certainty,
                     "knowledge_graph_source": str(source_path.resolve()),
                     "evidence": {
                         key: value

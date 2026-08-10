@@ -58,6 +58,49 @@ class KnowledgeAdapterTests(unittest.TestCase):
         self.assertEqual(len(graph.relations), 1)
         self.assertEqual(len(graph.evidence), 1)
         self.assertEqual(result["probe_kind"], "knowledge_graph")
+        relation = next(iter(graph.relations.values()))
+        self.assertEqual(relation["certainty"], "observed")
+        self.assertEqual(relation["resolution_status"], "resolved")
+        self.assertEqual(relation["confidence"], 1.0)
+
+    def test_maps_unresolved_logical_relations_to_information_pool_semantics(
+        self,
+    ) -> None:
+        key = "Sample|Sample.uproject"
+        graph = Graph(key, project_id(key))
+        document = {
+            "schema_version": "ue_build_knowledge_graph",
+            "validation": {"status": "ok"},
+            "graph": {
+                "counts": {"nodes": 2, "relations": 1, "evidence": 0},
+                "nodes": [
+                    {"node_id": "a", "kind": "cxx_function", "name": "A"},
+                    {
+                        "node_id": "b",
+                        "kind": "message_channel_expression",
+                        "name": "Dynamic",
+                    },
+                ],
+                "relations": [
+                    {
+                        "relation_id": "r",
+                        "source_id": "a",
+                        "kind": "PUBLISHES_EVENT",
+                        "target_id": "b",
+                        "certainty": "unresolved",
+                    }
+                ],
+                "evidence": [],
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as temporary:
+            merge_knowledge_graph(graph, document, Path(temporary) / "graph.json")
+
+        relation = next(iter(graph.relations.values()))
+        self.assertEqual(relation["certainty"], "inferred")
+        self.assertEqual(relation["resolution_status"], "unresolved")
+        self.assertEqual(relation["confidence"], 0.5)
 
     def test_persists_data_asset_property_values_and_editor_evidence(self) -> None:
         key = "Sample|Sample.uproject"
