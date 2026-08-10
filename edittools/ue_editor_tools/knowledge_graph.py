@@ -112,6 +112,20 @@ def _target_node(graph: KnowledgeGraph, kind: str, target: str) -> str:
         return graph.add_node(
             "gameplay_tag", normalized, normalized, {"tag": normalized}
         )
+    if kind == "primary_asset":
+        return graph.add_node(
+            "primary_asset",
+            normalized,
+            normalized.split(":", 1)[-1],
+            {"id": normalized},
+        )
+    if kind == "object":
+        return graph.add_node(
+            "object",
+            normalized,
+            normalized.rsplit(":", 1)[-1],
+            {"path": normalized},
+        )
     if kind == "class":
         return graph.add_node(
             "class", normalized, normalized.rsplit(".", 1)[-1], {"path": normalized}
@@ -439,6 +453,87 @@ def _data_tables(
                     evidence={
                         "asset": table.get("object_path"),
                         "row": row.get("name"),
+                        "field": reference.get("field"),
+                    },
+                )
+
+
+def _data_assets(
+    graph: KnowledgeGraph, document: dict[str, Any], producer: str
+) -> None:
+    for item in document.get("data_assets", []):
+        package = str(item["asset"])
+        object_path = str(item.get("object_path") or package)
+        source_object_path = item.get("source_object_path")
+        asset_id = graph.add_node(
+            "asset",
+            package,
+            package.rsplit("/", 1)[-1],
+            {
+                "package": package,
+                "object_path": object_path,
+                "data_asset": True,
+                "source_kind": item.get("source_kind"),
+                "source_object_path": source_object_path,
+                "generated_class": item.get("generated_class"),
+            },
+        )
+        if item.get("asset_class"):
+            class_path = normalize_object_path(str(item["asset_class"]))
+            class_id = graph.add_node(
+                "class",
+                class_path,
+                class_path.rsplit(".", 1)[-1],
+                {"path": class_path},
+            )
+            graph.add_relation(
+                asset_id,
+                "INSTANCE_OF",
+                class_id,
+                producer=producer,
+                evidence={
+                    "asset": object_path,
+                    "source_object": source_object_path,
+                },
+            )
+        for property_item in item.get("properties", []):
+            property_path = str(property_item["path"])
+            property_key = f"{package}|{property_path}"
+            property_id = graph.add_node(
+                "data_asset_property",
+                property_key,
+                str(property_item.get("name") or property_path),
+                {
+                    "asset": package,
+                    "path": property_path,
+                    "value_kind": property_item.get("value_kind"),
+                    "value": property_item.get("value"),
+                },
+            )
+            graph.add_relation(
+                asset_id,
+                "DECLARES_PROPERTY",
+                property_id,
+                producer=producer,
+                evidence={
+                    "asset": object_path,
+                    "source_object": source_object_path,
+                    "property": property_path,
+                },
+            )
+            for reference in property_item.get("references", []):
+                target_id = _target_node(
+                    graph, str(reference["kind"]), str(reference["target"])
+                )
+                graph.add_relation(
+                    property_id,
+                    "REFERENCES",
+                    target_id,
+                    producer=producer,
+                    evidence={
+                        "asset": object_path,
+                        "source_object": source_object_path,
+                        "property": property_path,
                         "field": reference.get("field"),
                     },
                 )
@@ -825,6 +920,7 @@ ADAPTERS: dict[str, Callable[[KnowledgeGraph, dict[str, Any], str], None]] = {
     "ue_editor_export_asset_graph": _asset_graph,
     "ue_editor_scan_blueprint_structure": _blueprints,
     "ue_editor_scan_data_tables": _data_tables,
+    "ue_editor_scan_data_assets": _data_assets,
     "ue_editor_scan_primary_assets": _primary_assets,
     "ue_scan_config_graph": _config,
     "ue_scan_cxx_gameplay_messages": _cxx_messages,

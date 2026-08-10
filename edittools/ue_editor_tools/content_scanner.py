@@ -137,3 +137,49 @@ def scan_data_tables(
         "data_tables": items,
         "problems": problems,
     }
+
+
+def scan_data_assets(
+    session: EditorSession,
+    *,
+    assets: list[str],
+    property_names: list[str],
+    max_depth: int = 3,
+    max_items: int = 200,
+    batch_size: int = 10,
+) -> dict[str, Any]:
+    if not assets:
+        raise ValueError("At least one DataAsset path is required")
+    if not property_names:
+        raise ValueError("At least one DataAsset property is required")
+    if max_depth < 0 or max_depth > 8:
+        raise ValueError("max_depth must be between 0 and 8")
+    if max_items < 1 or max_items > 1000:
+        raise ValueError("max_items must be between 1 and 1000")
+    state = session.invoke("editor_state")
+    selected = sorted(set(assets), key=str.casefold)
+    items: list[dict[str, Any]] = []
+    problems: list[dict[str, Any]] = []
+    for batch in chunks(selected, batch_size):
+        result = session.invoke(
+            "scan_data_assets_batch",
+            {
+                "asset_paths": batch,
+                "property_names": property_names,
+                "max_depth": max_depth,
+                "max_items": max_items,
+            },
+        )
+        items.extend(result.get("items", []))
+        problems.extend(result.get("problems", []))
+    items.sort(key=lambda item: str(item["asset"]).casefold())
+    return {
+        "editor_state": state,
+        "requested_asset_count": len(selected),
+        "scanned_asset_count": len(items),
+        "requested_properties": sorted(set(property_names), key=str.casefold),
+        "max_depth": max_depth,
+        "max_items": max_items,
+        "data_assets": items,
+        "problems": problems,
+    }

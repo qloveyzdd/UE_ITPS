@@ -6,6 +6,7 @@ from .blueprints import inspect_blueprint, list_blueprint_assets
 from .assets import list_asset_inventory, scan_asset_dependencies_batch
 from .blueprint_structure import scan_blueprint_structure_batch
 from .data_tables import scan_data_tables_batch
+from .data_assets import scan_data_assets_batch
 from .gameplay_messages import scan_blueprint_batch
 from .gameplay_tags import (
     find_tag_referencers,
@@ -28,6 +29,7 @@ OPERATIONS: dict[str, Callable[..., Any]] = {
     "scan_asset_dependencies_batch": scan_asset_dependencies_batch,
     "scan_blueprint_structure_batch": scan_blueprint_structure_batch,
     "scan_data_tables_batch": scan_data_tables_batch,
+    "scan_data_assets_batch": scan_data_assets_batch,
     "inspect_primary_assets": inspect_primary_assets,
 }
 

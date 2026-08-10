@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:edittools:ue_editor_scan_data_assets",
+  "oneOf": [
+    {"$ref": "#/$defs/success"},
+    {"allOf": [{"$ref": "urn:ue-itps:edittools:common#/$defs/errorDocument"}, {"properties": {"schema_version": {"const": "ue_editor_scan_data_assets"}}}]}
+  ],
+  "$defs": {
+    "reference": {
+      "type": "object",
+      "required": ["kind", "target", "field"],
+      "properties": {
+        "kind": {"enum": ["asset", "class", "gameplay_tag", "object", "primary_asset"]},
+        "target": {"type": "string"},
+        "field": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "property": {
+      "type": "object",
+      "required": ["name", "path", "value_kind", "value", "references"],
+      "properties": {
+        "name": {"type": "string"},
+        "path": {"type": "string"},
+        "value_kind": {"type": "string"},
+        "value": {},
+        "references": {"type": "array", "items": {"$ref": "#/$defs/reference"}}
+      },
+      "additionalProperties": false
+    },
+    "dataAsset": {
+      "type": "object",
+      "required": ["asset", "object_path", "source_kind", "source_object_path", "asset_class", "generated_class", "property_count", "properties"],
+      "properties": {
+        "asset": {"type": "string"},
+        "object_path": {"type": "string"},
+        "source_kind": {"enum": ["data_asset", "blueprint_cdo"]},
+        "source_object_path": {"type": ["string", "null"]},
+        "asset_class": {"type": ["string", "null"]},
+        "generated_class": {"type": ["string", "null"]},
+        "property_count": {"type": "integer", "minimum": 0},
+        "properties": {"type": "array", "items": {"$ref": "#/$defs/property"}}
+      },
+      "additionalProperties": false
+    },
+    "success": {
+      "type": "object",
+      "required": ["schema_version", "editor", "editor_state", "requested_asset_count", "scanned_asset_count", "requested_properties", "max_depth", "max_items", "data_assets", "validation", "limits"],
+      "properties": {
+        "schema_version": {"const": "ue_editor_scan_data_assets"},
+        "editor": {"$ref": "urn:ue-itps:edittools:common#/$defs/editor"},
+        "editor_state": {"type": "object"},
+        "requested_asset_count": {"type": "integer", "minimum": 1},
+        "scanned_asset_count": {"type": "integer", "minimum": 0},
+        "requested_properties": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "max_depth": {"type": "integer", "minimum": 0, "maximum": 8},
+        "max_items": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "data_assets": {"type": "array", "items": {"$ref": "#/$defs/dataAsset"}},
+        "validation": {"$ref": "urn:ue-itps:edittools:common#/$defs/validation"},
+        "limits": {"$ref": "urn:ue-itps:edittools:common#/$defs/limits"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

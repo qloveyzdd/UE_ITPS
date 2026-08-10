@@ -21,6 +21,7 @@ python edittools/ue_editor_export_message_graph.py --input message-scan.json
 python edittools/ue_editor_export_asset_graph.py --project D:/Game/Game.uproject --root /Game
 python edittools/ue_editor_scan_blueprint_structure.py --project D:/Game/Game.uproject --root /Game
 python edittools/ue_editor_scan_data_tables.py --project D:/Game/Game.uproject --root /Game
+python edittools/ue_editor_scan_data_assets.py --project D:/Game/Game.uproject --asset /Game/DA_Experience --property default_pawn_data
 python edittools/ue_editor_scan_primary_assets.py --project D:/Game/Game.uproject
 python edittools/ue_scan_cxx_gameplay_messages.py --project D:/Game/Game.uproject
 python edittools/ue_scan_config_graph.py --project D:/Game/Game.uproject
@@ -29,6 +30,8 @@ python edittools/ue_scan_config_graph.py --project D:/Game/Game.uproject
 所有 Editor 工具只读取现场状态，不保存、编译或修改资产。扫描结果若包含未保存的脏包，图谱导出默认拒绝；只有显式传入 `--allow-dirty` 才会继续。
 
 `ue_editor_scan_gameplay_messages.py` 会自动查询 Blueprint 中发现的静态 Channel。对于只在 C++ 中出现的消息 Channel，可重复传入 `--tag`，把代码图谱已经识别出的 Tag 一并用于资产引用者查询。
+
+`ue_editor_scan_data_assets.py` 只读取显式传入的 DataAsset 和顶层属性，不执行项目级发现。它同时支持原生 DataAsset 实例和 Blueprint 派生 DataAsset 的生成类默认对象，并保存属性值、资产或类路径、Gameplay Tag 和 Primary Asset ID 引用。属性名应先从 C++ 类型或 Blueprint 结构工具获得；UE Python 不能可靠枚举任意 DataAsset 的全部 UPROPERTY。被引用的 UObject（包括内嵌子对象）只保存稳定路径和类身份，不递归展开其内部属性。
 
 ## 消息关系
 
@@ -42,8 +45,8 @@ python edittools/ue_scan_config_graph.py --project D:/Game/Game.uproject
 
 ## 逻辑知识图谱
 
-新增采集器覆盖 Asset Registry 直接依赖、Blueprint 类型结构、DataTable 行、Primary Asset、
-项目本地配置和 C++ Gameplay Message。Map 作为普通资产以及配置或 Primary Asset 的目标进入
+新增采集器覆盖 Asset Registry 直接依赖、Blueprint 类型结构、DataTable 行、按需 DataAsset 属性、
+Primary Asset、项目本地配置和 C++ Gameplay Message。Map 作为普通资产以及配置或 Primary Asset 的目标进入
 图谱；工具不会枚举 Map 内的 Actor、Component、Transform、World Partition Actor Descriptor
 或 External Actor，这些属于场景组装而非逻辑相关性。
 
@@ -54,6 +57,7 @@ python edittools/ue_build_knowledge_graph.py `
   --input asset-graph.json `
   --input blueprint-structure.json `
   --input data-tables.json `
+  --input data-assets.json `
   --input primary-assets.json `
   --input config-graph.json `
   --input cxx-messages.json `
@@ -63,8 +67,8 @@ python edittools/ue_validate_knowledge_graph.py --input knowledge-graph.json
 python edittools/ue_diff_knowledge_graph.py --current knowledge-graph.json --previous previous-graph.json
 ```
 
-统一图谱按项目、实体种类和明确路径生成稳定 ID，合并资产、类、Tag、Payload、DataTable Row、
-Primary Asset 和配置项，并为每条关系保留源码位置或 Editor 对象路径证据。输入含未保存脏包时，
+统一图谱按项目、实体种类和明确路径生成稳定 ID，合并资产、DataAsset 属性、类、Tag、Payload、
+DataTable Row、Primary Asset 和配置项，并为每条关系保留源码位置或 Editor 对象路径证据。输入含未保存脏包时，
 构建器默认拒绝；只有显式使用 `--allow-dirty` 才会继续。
 
 统一图谱也可以作为现有信息池的附加证据：

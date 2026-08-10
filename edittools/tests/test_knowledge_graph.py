@@ -116,6 +116,53 @@ class KnowledgeGraphTests(unittest.TestCase):
         relations = {item["kind"] for item in graph["relations"]}
         self.assertTrue({"SCANS_PATH", "MANAGES", "APPLIES_TO"}.issubset(relations))
 
+    def test_data_asset_properties_and_references_become_graph_evidence(self) -> None:
+        document = {
+            "schema_version": "ue_editor_scan_data_assets",
+            "editor": {"project": PROJECT},
+            "data_assets": [
+                {
+                    "asset": "/Game/Experiences/DA_Test",
+                    "object_path": "/Game/Experiences/DA_Test.DA_Test",
+                    "source_kind": "data_asset",
+                    "source_object_path": "/Game/Experiences/DA_Test.DA_Test",
+                    "asset_class": "/Script/Game.LyraExperienceDefinition",
+                    "generated_class": None,
+                    "property_count": 1,
+                    "properties": [
+                        {
+                            "name": "default_pawn_data",
+                            "path": "default_pawn_data",
+                            "value_kind": "object",
+                            "value": {
+                                "kind": "object",
+                                "path": "/Game/Pawns/DA_Pawn.DA_Pawn",
+                            },
+                            "references": [
+                                {
+                                    "kind": "asset",
+                                    "target": "/Game/Pawns/DA_Pawn.DA_Pawn",
+                                    "field": "path",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+        graph, problems = build_knowledge_graph([("data-assets.json", document)])
+        self.assertEqual(problems, [])
+        relations = {item["kind"] for item in graph["relations"]}
+        self.assertTrue(
+            {"INSTANCE_OF", "DECLARES_PROPERTY", "REFERENCES"}.issubset(relations)
+        )
+        properties = [
+            item for item in graph["nodes"] if item["kind"] == "data_asset_property"
+        ]
+        self.assertEqual(len(properties), 1)
+        self.assertEqual(properties[0]["properties"]["path"], "default_pawn_data")
+        self.assertEqual(validate_graph(graph), [])
+
 
 if __name__ == "__main__":
     unittest.main()

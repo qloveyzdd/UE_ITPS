@@ -8,7 +8,7 @@ UE ITPS 是面向 Unreal Engine 项目维护者与 AI Agent 的确定性、只�
 ## 当前状态
 
 - 核心静态工具池已形成 21 个正式 CLI、21 份逐工具 Schema 与 1 份公共 Schema；核心测试当前共 66 项。
-- `edittools/` 已提供 15 个只读工具，覆盖 Gameplay Tag、资产依赖、Blueprint 结构、DataTable、Primary Asset、配置、C++/Blueprint Gameplay Message，以及统一逻辑图谱的构建、校验和差异。
+- `edittools/` 已提供 16 个只读工具，覆盖 Gameplay Tag、资产依赖、Blueprint 结构、DataTable、按需 DataAsset 属性、Primary Asset、配置、C++/Blueprint Gameplay Message，以及统一逻辑图谱的构建、校验和差异。
 - `information_pool/` 已能把静态探针结果构建为绑定 Git 提交的不可变 SQLite 快照；`show/` 可在本地浏览语义关系与最短路径；`mcp_connection_pool/` 负责被动发现并选择 UE 5.8 Editor MCP 连接。
 - 当前 Unreal 参考基座为 `LyraStarterGame` + UE 5.8.2。Editor 与多个 PIE Experience 已在本机观察到，但 5.8.2 权威文件指纹、完整 L0/L1 日志以及网络和 Travel 路径仍在重新核验。
 - UE 5.6.1 的架构与运行资料只保留为历史对照，不自动视为 UE 5.8.2 的当前事实。长期信任治理系统尚未进入实现阶段，当前重点仍是建立可复现的 Lyra 架构和最小运行边界。
@@ -117,7 +117,7 @@ Editor 工具拥有独立测试套件：
 python -m unittest discover -s edittools/tests -t edittools -v
 ```
 
-Editor、配置和 Gameplay Message 事实可先由 `edittools/ue_build_knowledge_graph.py` 合并为统一
+Editor、按需 DataAsset 属性、配置和 Gameplay Message 事实可先由 `edittools/ue_build_knowledge_graph.py` 合并为统一
 逻辑图谱，再通过信息池构建命令的 `--knowledge-graph` 参数写入同一个不可变 SQLite 快照。
 Map 只作为资产和逻辑配置目标进入图谱，不采集关卡内 Actor 或 Component 实例。
 
