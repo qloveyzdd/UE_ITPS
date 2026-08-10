@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from pathlib import Path
 import json
 from types import SimpleNamespace
 import unittest
 
-from ue_editor_tools.project_context import ProjectContext
 from ue_editor_tools.remote_client import (
     EditorConnectionError,
     _ProcessLock,
+    _remote_execution_module,
     _receive_complete_message,
+    editor_identity,
     select_session,
 )
 
@@ -40,32 +40,54 @@ class _RemoteMessage:
 
 
 class RemoteSelectionTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.context = ProjectContext(
-            project_file=Path("D:/Game/Game.uproject"),
-            project_root=Path("D:/Game"),
-            project_name="Game",
-            engine_root=Path("D:/UE"),
-            engine_version="5.8.2",
-        )
-
-    def test_selects_exact_project(self) -> None:
-        node = {"project_root": "D:/Game/", "project_name": "Game", "node_id": "A"}
-        self.assertEqual(select_session([node], self.context), node)
-
-    def test_rejects_other_project(self) -> None:
-        node = {"project_root": "D:/Other/", "project_name": "Other", "node_id": "A"}
-        with self.assertRaises(EditorConnectionError):
-            select_session([node], self.context)
-
-    def test_multiple_sessions_require_node_id(self) -> None:
+    def test_selects_exact_node_across_projects(self) -> None:
         nodes = [
             {"project_root": "D:/Game/", "project_name": "Game", "node_id": "A"},
-            {"project_root": "D:/Game/", "project_name": "Game", "node_id": "B"},
+            {"project_root": "D:/Other/", "project_name": "Other", "node_id": "B"},
+        ]
+        self.assertEqual(select_session(nodes, "B"), nodes[1])
+
+    def test_rejects_missing_node(self) -> None:
+        node = {"project_root": "D:/Game/", "project_name": "Game", "node_id": "A"}
+        with self.assertRaises(EditorConnectionError):
+            select_session([node], "missing")
+
+    def test_rejects_duplicate_node_id(self) -> None:
+        nodes = [
+            {"project_root": "D:/Game/", "project_name": "Game", "node_id": "A"},
+            {"project_root": "D:/Other/", "project_name": "Other", "node_id": "A"},
         ]
         with self.assertRaises(EditorConnectionError):
-            select_session(nodes, self.context)
-        self.assertEqual(select_session(nodes, self.context, "B")["node_id"], "B")
+            select_session(nodes, "A")
+
+    def test_bundled_remote_execution_module_loads(self) -> None:
+        module = _remote_execution_module()
+        self.assertEqual(module._PROTOCOL_VERSION, 1)
+        self.assertTrue(hasattr(module, "RemoteExecution"))
+
+    def test_editor_identity_uses_discovered_node_metadata(self) -> None:
+        node = {
+            "project_root": "D:/Game/",
+            "project_name": "Game",
+            "engine_root": "D:/UE/Engine/",
+            "engine_version": "5.8.2",
+            "node_id": "A",
+            "user": "dev",
+            "machine": "workstation",
+        }
+        self.assertEqual(
+            editor_identity(node),
+            {
+                "project": "D:/Game/Game.uproject",
+                "project_root": "D:/Game",
+                "project_name": "Game",
+                "engine_root": "D:/UE",
+                "engine_version": "5.8.2",
+                "node_id": "A",
+                "user": "dev",
+                "machine": "workstation",
+            },
+        )
 
     def test_process_lock_path_is_deterministic(self) -> None:
         self.assertEqual(

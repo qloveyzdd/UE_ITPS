@@ -8,10 +8,9 @@
   "$defs": {
     "success": {
       "type": "object",
-      "required": ["schema_version", "editor", "parent_tag", "tags", "tag_infos", "validation", "limits"],
+      "required": ["schema_version", "parent_tag", "tags", "tag_infos", "validation", "limits"],
       "properties": {
         "schema_version": {"const": "ue_editor_list_gameplay_tags"},
-        "editor": {"$ref": "urn:ue-itps:edittools:common#/$defs/editor"},
         "parent_tag": {"type": "string"},
         "tags": {"type": "array", "items": {"type": "string"}},
         "tag_infos": {"type": "array", "items": {"type": "object"}},

@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from ue_editor_tools.cli import (
-    READ_ONLY_BOUNDARIES,
-    add_connection_arguments,
-    context_from_args,
-)
+from ue_editor_tools.cli import READ_ONLY_BOUNDARIES, add_connection_arguments
 from ue_editor_tools.contracts import parser, result_document, write_json
-from ue_editor_tools.remote_client import EditorSession, editor_identity
+from ue_editor_tools.remote_client import EditorSession
 
 
 SCHEMA_VERSION = "ue_editor_list_gameplay_tags"
@@ -28,21 +24,17 @@ def main() -> int:
     )
     args = cli.parse_args()
     try:
-        context = context_from_args(args)
-        with EditorSession(
-            context, node_id=args.node_id, discovery_timeout=args.timeout
-        ) as session:
+        with EditorSession(args.node_id, discovery_timeout=args.timeout) as session:
             facts = session.invoke(
                 "list_gameplay_tags",
                 {"parent_tag": args.parent_tag, "include_info": args.include_info},
             )
-            editor = editor_identity(context, session.node or {})
     except (OSError, RuntimeError, ValueError) as exc:
         cli.error(str(exc))
     write_json(
         result_document(
             SCHEMA_VERSION,
-            {"editor": editor, **facts},
+            facts,
             [],
             responsibility=RESPONSIBILITY,
             boundaries=READ_ONLY_BOUNDARIES,

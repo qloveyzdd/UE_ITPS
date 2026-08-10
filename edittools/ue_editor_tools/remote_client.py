@@ -11,12 +11,10 @@ import time
 from types import ModuleType
 from typing import Any
 
-from .project_context import ProjectContext
-
-
 RESULT_MARKER = "__UE_ITPS_EDITOR_RESULT__="
 REMOTE_RECEIVE_CHUNK_SIZE = 8192
 MAX_REMOTE_RESPONSE_BYTES = 64 * 1024 * 1024
+REMOTE_EXECUTION_LOCK_KEY = "127.0.0.1:6776"
 
 
 class EditorConnectionError(RuntimeError):
@@ -111,19 +109,10 @@ class _ProcessLock:
         self.handle = None
 
 
-def _remote_execution_module(engine_root: Path) -> ModuleType:
-    path = (
-        engine_root
-        / "Engine"
-        / "Plugins"
-        / "Experimental"
-        / "PythonScriptPlugin"
-        / "Content"
-        / "Python"
-        / "remote_execution.py"
-    )
+def _remote_execution_module() -> ModuleType:
+    path = Path(__file__).resolve().parent / "vendor" / "remote_execution.py"
     if not path.is_file():
-        raise EditorConnectionError(f"Unreal remote_execution.py was not found: {path}")
+        raise EditorConnectionError(f"Bundled remote_execution.py was not found: {path}")
     module_name = f"ue_itps_remote_execution_{abs(hash(str(path)))}"
     spec = importlib.util.spec_from_file_location(module_name, path)
     if spec is None or spec.loader is None:
@@ -136,12 +125,10 @@ def _remote_execution_module(engine_root: Path) -> ModuleType:
     return module
 
 
-def _normalized_root(value: str | Path) -> str:
-    return str(Path(value).resolve()).replace("\\", "/").rstrip("/").casefold()
-
-
-def discover_sessions(engine_root: Path, timeout: float = 3.0) -> list[dict[str, Any]]:
-    remote_module = _remote_execution_module(engine_root)
+def discover_sessions(
+    engine_root: Path, timeout: float = 3.0
+) -> list[dict[str, Any]]:
+    remote_module = _remote_execution_module()
     remote = remote_module.RemoteExecution()
     remote.start()
     try:
@@ -162,30 +149,19 @@ def discover_sessions(engine_root: Path, timeout: float = 3.0) -> list[dict[str,
 
 
 def select_session(
-    sessions: list[dict[str, Any]],
-    context: ProjectContext,
-    node_id: str | None = None,
+    sessions: list[dict[str, Any]], node_id: str
 ) -> dict[str, Any]:
-    matches = [
-        item
-        for item in sessions
-        if _normalized_root(str(item.get("project_root", "")))
-        == _normalized_root(context.project_root)
-        and str(item.get("project_name", "")).casefold()
-        == context.project_name.casefold()
-    ]
-    if node_id:
-        matches = [item for item in matches if str(item.get("node_id")) == node_id]
+    if not node_id:
+        raise EditorConnectionError("Editor node id must not be empty")
+    matches = [item for item in sessions if str(item.get("node_id")) == node_id]
     if not matches:
-        qualifier = f" and node {node_id}" if node_id else ""
         raise EditorConnectionError(
-            f"No running Unreal Editor session matches {context.project_file}{qualifier}. "
+            f"No running Unreal Editor session has node id {node_id}. "
             "Enable Python Remote Execution in Project Settings > Plugins > Python."
         )
     if len(matches) > 1:
-        ids = ", ".join(str(item.get("node_id")) for item in matches)
         raise EditorConnectionError(
-            f"Multiple matching Editor sessions were found ({ids}); pass --node-id"
+            f"Multiple Unreal Editor sessions reported the same node id: {node_id}"
         )
     return matches[0]
 
@@ -193,41 +169,34 @@ def select_session(
 class EditorSession(AbstractContextManager["EditorSession"]):
     def __init__(
         self,
-        context: ProjectContext,
+        node_id: str,
         *,
-        node_id: str | None = None,
         discovery_timeout: float = 3.0,
     ) -> None:
-        self.context = context
         self.node_id = node_id
         self.discovery_timeout = discovery_timeout
         self._remote: Any = None
         self.node: dict[str, Any] | None = None
         self._process_lock = _ProcessLock(
-            str(context.engine_root), max(5.0, discovery_timeout)
+            REMOTE_EXECUTION_LOCK_KEY, max(5.0, discovery_timeout)
         )
 
     def __enter__(self) -> "EditorSession":
         self._process_lock.acquire()
         try:
-            remote_module = _remote_execution_module(self.context.engine_root)
+            remote_module = _remote_execution_module()
             self._remote = remote_module.RemoteExecution()
             self._remote.start()
             deadline = time.monotonic() + max(0.1, self.discovery_timeout)
             sessions: list[dict[str, Any]] = []
             while time.monotonic() < deadline:
                 sessions = list(self._remote.remote_nodes)
-                if sessions:
-                    matching = [
-                        item
-                        for item in sessions
-                        if _normalized_root(str(item.get("project_root", "")))
-                        == _normalized_root(self.context.project_root)
-                    ]
-                    if matching:
-                        break
+                if any(
+                    str(item.get("node_id")) == self.node_id for item in sessions
+                ):
+                    break
                 time.sleep(0.1)
-            self.node = select_session(sessions, self.context, self.node_id)
+            self.node = select_session(sessions, self.node_id)
             self._remote.open_command_connection(str(self.node["node_id"]))
             return self
         except Exception:
@@ -283,13 +252,23 @@ class EditorSession(AbstractContextManager["EditorSession"]):
         )
 
 
-def editor_identity(context: ProjectContext, node: dict[str, Any]) -> dict[str, Any]:
+def editor_identity(node: dict[str, Any]) -> dict[str, Any]:
+    project_root = str(node.get("project_root", "")).replace("\\", "/").rstrip("/")
+    project_name = str(node.get("project_name", ""))
+    engine_root = str(node.get("engine_root", "")).replace("\\", "/").rstrip("/")
+    if engine_root.casefold().endswith("/engine"):
+        engine_root = engine_root[: -len("/Engine")]
+    project = (
+        f"{project_root}/{project_name}.uproject"
+        if project_root and project_name
+        else ""
+    )
     return {
-        "project": str(context.project_file).replace("\\", "/"),
-        "project_root": str(context.project_root).replace("\\", "/"),
-        "project_name": context.project_name,
-        "engine_root": str(context.engine_root).replace("\\", "/"),
-        "engine_version": str(node.get("engine_version") or context.engine_version),
+        "project": project,
+        "project_root": project_root,
+        "project_name": project_name,
+        "engine_root": engine_root,
+        "engine_version": str(node.get("engine_version", "")),
         "node_id": str(node.get("node_id", "")),
         "user": str(node.get("user", "")),
         "machine": str(node.get("machine", "")),

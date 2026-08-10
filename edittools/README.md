@@ -13,19 +13,21 @@
 
 ```powershell
 python edittools/ue_editor_list_sessions.py --project D:/Game/Game.uproject
-python edittools/ue_editor_list_gameplay_tags.py --project D:/Game/Game.uproject --parent-tag Gameplay.Message
-python edittools/ue_editor_find_tag_referencers.py --project D:/Game/Game.uproject --tag Gameplay.Message.Example
-python edittools/ue_editor_inspect_blueprint.py --project D:/Game/Game.uproject --asset /Game/BP_Example
-python edittools/ue_editor_scan_gameplay_messages.py --project D:/Game/Game.uproject --root /Game --tag Gameplay.Message.FromCode
+python edittools/ue_editor_list_gameplay_tags.py --node-id NODE_ID --parent-tag Gameplay.Message
+python edittools/ue_editor_find_tag_referencers.py --node-id NODE_ID --tag Gameplay.Message.Example
+python edittools/ue_editor_inspect_blueprint.py --node-id NODE_ID --asset /Game/BP_Example
+python edittools/ue_editor_scan_gameplay_messages.py --node-id NODE_ID --root /Game --tag Gameplay.Message.FromCode
 python edittools/ue_editor_export_message_graph.py --input message-scan.json
-python edittools/ue_editor_export_asset_graph.py --project D:/Game/Game.uproject --root /Game
-python edittools/ue_editor_scan_blueprint_structure.py --project D:/Game/Game.uproject --root /Game
-python edittools/ue_editor_scan_data_tables.py --project D:/Game/Game.uproject --root /Game
-python edittools/ue_editor_scan_data_assets.py --project D:/Game/Game.uproject --asset /Game/DA_Experience --property default_pawn_data
-python edittools/ue_editor_scan_primary_assets.py --project D:/Game/Game.uproject
+python edittools/ue_editor_export_asset_graph.py --node-id NODE_ID --root /Game
+python edittools/ue_editor_scan_blueprint_structure.py --node-id NODE_ID --root /Game
+python edittools/ue_editor_scan_data_tables.py --node-id NODE_ID --root /Game
+python edittools/ue_editor_scan_data_assets.py --node-id NODE_ID --asset /Game/DA_Experience --property default_pawn_data
+python edittools/ue_editor_scan_primary_assets.py --node-id NODE_ID
 python edittools/ue_scan_cxx_gameplay_messages.py --project D:/Game/Game.uproject
 python edittools/ue_scan_config_graph.py --project D:/Game/Game.uproject
 ```
+
+先使用 `--project` 运行 `ue_editor_list_sessions.py`，获取目标项目对应 Editor 的 `node_id`，再把该值传给实时下游工具。下游工具只按 `node_id` 精确连接；节点不存在或已经失效时会直接失败。远程通信客户端已经内置，因此下游工具不再需要传入项目或 Engine 路径。
 
 所有 Editor 工具只读取现场状态，不保存、编译或修改资产。扫描结果若包含未保存的脏包，图谱导出默认拒绝；只有显式传入 `--allow-dirty` 才会继续。
 

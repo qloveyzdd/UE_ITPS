@@ -45,7 +45,7 @@ class ContractTests(unittest.TestCase):
                 self.assertIn("输出契约", completed.stdout)
                 self.assertIn("Output contract", completed.stdout)
 
-    def test_missing_arguments_return_json(self) -> None:
+    def test_argument_errors_return_json(self) -> None:
         for script in sorted(ROOT.glob("ue_*.py")):
             with self.subTest(script=script.name):
                 completed = subprocess.run(
@@ -61,6 +61,27 @@ class ContractTests(unittest.TestCase):
                 document = json.loads(completed.stdout)
                 self.assertEqual(document["request"]["kind"], "argument")
                 self.assertEqual(document["validation"]["status"], "error")
+
+    def test_live_editor_clis_use_node_id_connection_contract(self) -> None:
+        live_scripts = sorted(
+            path
+            for path in ROOT.glob("ue_editor_*.py")
+            if path.name
+            not in {"ue_editor_list_sessions.py", "ue_editor_export_message_graph.py"}
+        )
+        for script in live_scripts:
+            with self.subTest(script=script.name):
+                completed = subprocess.run(
+                    [sys.executable, str(script), "--help"],
+                    cwd=ROOT,
+                    text=True,
+                    encoding="utf-8",
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertIn("--node-id", completed.stdout)
+                self.assertNotIn("--project", completed.stdout)
+                self.assertNotIn("--engine-root", completed.stdout)
 
 
 if __name__ == "__main__":

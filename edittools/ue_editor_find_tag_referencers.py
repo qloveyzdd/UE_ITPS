@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from ue_editor_tools.cli import (
-    READ_ONLY_BOUNDARIES,
-    add_connection_arguments,
-    context_from_args,
-)
+from ue_editor_tools.cli import READ_ONLY_BOUNDARIES, add_connection_arguments
 from ue_editor_tools.contracts import parser, result_document, write_json
 from ue_editor_tools.remote_client import EditorSession, editor_identity
 
@@ -25,12 +21,9 @@ def main() -> int:
     cli.add_argument("--tag", required=True, help="完全限定 Gameplay Tag")
     args = cli.parse_args()
     try:
-        context = context_from_args(args)
-        with EditorSession(
-            context, node_id=args.node_id, discovery_timeout=args.timeout
-        ) as session:
+        with EditorSession(args.node_id, discovery_timeout=args.timeout) as session:
             facts = session.invoke("find_tag_referencers", {"tag": args.tag})
-            editor = editor_identity(context, session.node or {})
+            editor = editor_identity(session.node or {})
     except (OSError, RuntimeError, ValueError) as exc:
         cli.error(str(exc))
     write_json(
