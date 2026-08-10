@@ -4,6 +4,145 @@ from tests.support import CliTestCase, write_text
 
 
 class CxxAnalysisTests(CliTestCase):
+    def _write_delegate_fixture(self):
+        header = write_text(
+            self.fixture.project_root
+            / "Source"
+            / "SampleGame"
+            / "Public"
+            / "DelegateSample.h",
+            """
+            #pragma once
+
+            class FDelegateOwner
+            {
+            public:
+                DECLARE_EVENT_OneParam(FDelegateOwner, FChangedEvent, int32 Value)
+                FChangedEvent OnChanged;
+
+                void Publish();
+            };
+
+            class SDelegateSubscriber
+            {
+            public:
+                void Subscribe(FDelegateOwner* Owner);
+                void HandleChanged(int32 Value);
+            };
+            """,
+        )
+        source = write_text(
+            self.fixture.project_root
+            / "Source"
+            / "SampleGame"
+            / "Private"
+            / "DelegateSample.cpp",
+            """
+            #include "DelegateSample.h"
+
+            void FDelegateOwner::Publish()
+            {
+                OnChanged.Broadcast(1);
+            }
+
+            void SDelegateSubscriber::Subscribe(FDelegateOwner* Owner)
+            {
+                Owner->OnChanged.AddSP(
+                    this,
+                    &SDelegateSubscriber::HandleChanged
+                );
+            }
+
+            void SDelegateSubscriber::HandleChanged(int32 Value)
+            {
+            }
+            """,
+        )
+        return header, source
+
+    def test_delegate_operations_preserve_event_and_callback_identity(self) -> None:
+        header, source = self._write_delegate_fixture()
+
+        types = self.cli(
+            "ue_list_cxx_types.py",
+            "--source",
+            str(header),
+        )
+        owner = next(
+            item for item in types["classes"]
+            if item["qualified_name"] == "FDelegateOwner"
+        )
+        variables = {
+            item["name"] for item in owner["member_anchors"]
+            if item["kind"] == "variable"
+        }
+        functions = {
+            item["name"] for item in owner["member_anchors"]
+            if item["kind"] == "function"
+        }
+        self.assertIn("OnChanged", variables)
+        self.assertNotIn("DECLARE_EVENT_OneParam", functions)
+        self.assertFalse(
+            any(
+                problem["code"] == "source-type-member-projection-mismatch"
+                for problem in types["validation"]["problems"]
+            )
+        )
+
+        publish = self.cli(
+            "ue_inspect_cxx_function.py",
+            "--source",
+            str(source),
+            "--function",
+            "Publish",
+        )["matches"][0]
+        self.assertEqual(
+            publish["delegate_operations"],
+            [
+                {
+                    "operation": "publish",
+                    "api": "Broadcast",
+                    "event": {
+                        "owner_type": "FDelegateOwner",
+                        "name": "OnChanged",
+                        "qualified_name": "FDelegateOwner::OnChanged",
+                    },
+                    "callback": None,
+                    "evidence": {"unit": "cpp", "line": 5},
+                }
+            ],
+        )
+
+        subscribe = self.cli(
+            "ue_inspect_cxx_function.py",
+            "--source",
+            str(source),
+            "--function",
+            "Subscribe",
+        )["matches"][0]
+        self.assertEqual(
+            subscribe["delegate_operations"],
+            [
+                {
+                    "operation": "subscribe",
+                    "api": "AddSP",
+                    "event": {
+                        "owner_type": "FDelegateOwner",
+                        "name": "OnChanged",
+                        "qualified_name": "FDelegateOwner::OnChanged",
+                    },
+                    "callback": {
+                        "owner_type": "SDelegateSubscriber",
+                        "name": "HandleChanged",
+                        "qualified_name": (
+                            "SDelegateSubscriber::HandleChanged"
+                        ),
+                    },
+                    "evidence": {"unit": "cpp", "line": 10},
+                }
+            ],
+        )
+
     def test_cpp_derives_public_header_as_one_source_unit(self) -> None:
         result = self.cli(
             "ue_list_cxx_includes.py",

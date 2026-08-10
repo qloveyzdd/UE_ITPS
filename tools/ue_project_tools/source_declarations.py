@@ -63,7 +63,12 @@ def _field_type_start(
             continue
         if (
             cursor + 1 < end
-            and tokens[cursor].value in _MEMBER_ANNOTATION_MACROS
+            and (
+                tokens[cursor].value in _MEMBER_ANNOTATION_MACROS
+                or tokens[cursor].value.startswith(
+                    ("DECLARE_", "UE_DECLARE_")
+                )
+            )
             and tokens[cursor + 1].value == "("
             and cursor + 1 in forward
             and forward[cursor + 1] < end
@@ -108,10 +113,16 @@ def _class_field_details(
             and paren_depth == 0
             and bracket_depth == 0
         ):
-            classification = _classify_declaration(
+            declaration_start = _field_type_start(
                 tokens,
                 forward,
                 statement_start,
+                cursor,
+            )
+            classification = _classify_declaration(
+                tokens,
+                forward,
+                declaration_start,
                 cursor,
             )
             if classification["kind"] == "variable":
@@ -119,7 +130,7 @@ def _class_field_details(
                 type_start = _field_type_start(
                     tokens,
                     forward,
-                    statement_start,
+                    declaration_start,
                     name_index,
                 )
                 fields.append(
@@ -559,6 +570,11 @@ def _class_members(
         if (
             name_index < start
             or tokens[name_index].kind != "identifier"
+        ):
+            index = close + 1
+            continue
+        if tokens[name_index].value.startswith(
+            ("DECLARE_", "UE_DECLARE_")
         ):
             index = close + 1
             continue

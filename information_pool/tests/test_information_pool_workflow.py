@@ -20,7 +20,7 @@ for path in (str(REPOSITORY_ROOT), str(INFORMATION_POOL_ROOT)):
 sys.path.insert(0, str(INFORMATION_POOL_ROOT))
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from tests.support import create_fixture  # noqa: E402
+from tests.support import create_fixture, write_text  # noqa: E402
 from ue_itps_information_pool import (  # noqa: E402
     build_information_pool,
     query_information_pool,
@@ -74,6 +74,96 @@ class InformationPoolWorkflowTests(unittest.TestCase):
         self._git("add", ".")
         self._git("commit", "--quiet", "-m", message)
         return self._git("rev-parse", "HEAD")
+
+    def _write_delegate_fixture(self) -> None:
+        write_text(
+            self.fixture.project_root
+            / "Source"
+            / "SampleGame"
+            / "Public"
+            / "DelegateSample.h",
+            """
+            #pragma once
+
+            class FDelegateOwner
+            {
+            public:
+                DECLARE_EVENT_OneParam(FDelegateOwner, FChangedEvent, int32 Value)
+                FChangedEvent OnChanged;
+                void Publish();
+            };
+
+            class SDelegateSubscriber
+            {
+            public:
+                void Subscribe(FDelegateOwner* Owner);
+                void HandleChanged(int32 Value);
+            };
+            """,
+        )
+        write_text(
+            self.fixture.project_root
+            / "Source"
+            / "SampleGame"
+            / "Private"
+            / "DelegateSample.cpp",
+            """
+            #include "DelegateSample.h"
+
+            void FDelegateOwner::Publish()
+            {
+                OnChanged.Broadcast(1);
+            }
+
+            void SDelegateSubscriber::Subscribe(FDelegateOwner* Owner)
+            {
+                Owner->OnChanged.AddSP(this, &SDelegateSubscriber::HandleChanged);
+            }
+
+            void SDelegateSubscriber::HandleChanged(int32 Value)
+            {
+            }
+            """,
+        )
+
+    def test_delegate_publish_subscribe_edges_form_runtime_path(self) -> None:
+        self._write_delegate_fixture()
+        self._commit("add delegate fixture")
+
+        build_information_pool(self.fixture.project, self.pool)
+        path = query_information_pool(
+            self.pool,
+            "path",
+            selector="FDelegateOwner::Publish",
+            target="SDelegateSubscriber::HandleChanged",
+            depth=4,
+        )
+
+        self.assertEqual(path["status"], "selected")
+        self.assertEqual(
+            [item["qualified_name"] for item in path["result"]["path"]],
+            [
+                "FDelegateOwner::Publish",
+                "FDelegateOwner::OnChanged",
+                "SDelegateSubscriber::HandleChanged",
+            ],
+        )
+        self.assertEqual(
+            [item["kind"] for item in path["result"]["relations"]],
+            ["PUBLISHES_EVENT", "DISPATCHES_TO"],
+        )
+
+        lookup = query_information_pool(
+            self.pool,
+            "lookup",
+            selector="SDelegateSubscriber::Subscribe",
+            depth=1,
+        )
+        relations = {
+            item["kind"] for item in lookup["result"]["relations"]
+        }
+        self.assertIn("SUBSCRIBES_EVENT", relations)
+        self.assertIn("BINDS_CALLBACK", relations)
 
     def test_build_and_query_resolved_relations(self) -> None:
         build = build_information_pool(self.fixture.project, self.pool)

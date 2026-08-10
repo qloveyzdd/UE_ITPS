@@ -163,9 +163,14 @@ def _declaration_variables(
             if (
                 statement_start + 1 < semicolon
                 and tokens[statement_start].kind == "identifier"
-                and re.fullmatch(
-                    r"[A-Z][A-Z0-9_]*",
-                    tokens[statement_start].value,
+                and (
+                    re.fullmatch(
+                        r"[A-Z][A-Z0-9_]*",
+                        tokens[statement_start].value,
+                    )
+                    or tokens[statement_start].value.startswith(
+                        ("DECLARE_", "UE_DECLARE_")
+                    )
                 )
                 and tokens[statement_start + 1].value == "("
                 and statement_start + 1 in parsed["forward"]

@@ -18,6 +18,7 @@ from .source_function_index import (
 )
 from .source_function_symbols import (
     _bare_call_facts,
+    _delegate_operations,
     _function_address_facts,
     _global_variable_facts,
     _member_call_facts,
@@ -62,6 +63,9 @@ _BOUNDARIES = [
     "provide evidence; callable matching resolves owner spellings "
     "through the current lexical Namespace, and owner_type is present "
     "only for confirmed type qualifiers.",
+    "Delegate operations preserve a resolved event owner and member for "
+    "recognized publish or subscription APIs; unresolved receiver chains "
+    "are not promoted to delegate semantics.",
     "Called functions, inheritance, overloads, macros, and included "
     "source are not followed.",
 ]
@@ -203,6 +207,12 @@ def inspect_source_function(
                     relations[candidate["_identity"]]
                 ),
                 "external_symbols": external_symbols,
+                "delegate_operations": _delegate_operations(
+                    candidate,
+                    loaded,
+                    symbol_types,
+                    confirmed_type_names,
+                ),
                 "syntax_flow": _syntax_flow(candidate, loaded),
             }
         )

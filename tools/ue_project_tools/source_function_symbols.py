@@ -193,9 +193,182 @@ def _callback_api(name: str) -> bool:
             r"UFunction|UObject|WeakLambda)?",
             name,
         )
+        or name == "AddUniqueDynamic"
         or name in {"SetTimer", "SetTimerForNextTick"}
         or re.search(r"(?:Callback|Handler)$", name)
     )
+
+
+def _delegate_subscription_api(name: str) -> bool:
+    return bool(
+        re.fullmatch(
+            r"(?:Add|Bind)(?:Dynamic|Lambda|Raw|SP|Static|UFunction|"
+            r"UObject|WeakLambda)",
+            name,
+        )
+        or name in {"AddUniqueDynamic", "Bind"}
+    )
+
+
+def _delegate_publish_api(name: str) -> bool:
+    return name in {"Broadcast", "Execute", "ExecuteIfBound"}
+
+
+def _delegate_event_owner(
+    tokens: list[Token],
+    callee_start: int,
+    event_index: int,
+    part: dict[str, Any],
+    symbol_types: dict[str, str],
+    confirmed_type_names: set[str],
+) -> str | None:
+    if event_index == callee_start:
+        return part.get("owner")
+    identifiers = [
+        token.value
+        for token in tokens[callee_start:event_index]
+        if token.kind == "identifier"
+    ]
+    if not identifiers:
+        return None
+    root = identifiers[0]
+    if root == "this":
+        return part.get("owner")
+    owner_type = symbol_types.get(root)
+    if owner_type:
+        return owner_type
+    if _qualifier_is_confirmed_type(root, confirmed_type_names):
+        return root
+    return None
+
+
+def _delegate_callback(
+    tokens: list[Token],
+    open_index: int,
+    close_index: int,
+    confirmed_type_names: set[str],
+) -> dict[str, str] | None:
+    for index in range(open_index + 1, close_index):
+        if tokens[index].value != "&":
+            continue
+        address = _address_expression(tokens, index, close_index)
+        if address is None:
+            continue
+        spelling, qualifier, _ = address
+        if (
+            qualifier is None
+            or not _qualifier_is_confirmed_type(
+                qualifier,
+                confirmed_type_names,
+            )
+        ):
+            continue
+        return {
+            "owner_type": qualifier,
+            "name": spelling.rsplit("::", 1)[-1],
+            "qualified_name": spelling,
+        }
+    return None
+
+
+def _delegate_operations(
+    part: dict[str, Any],
+    loaded: dict[str, Any],
+    symbol_types: dict[str, str],
+    confirmed_type_names: set[str],
+) -> list[dict[str, Any]]:
+    parsed = loaded["parsed_by_path"][part["_path"]]
+    tokens: list[Token] = parsed["tokens"]
+    forward: dict[int, int] = parsed["forward"]
+    reverse: dict[int, int] = parsed["reverse"]
+    start, end = part["_body_range"]
+    results: list[dict[str, Any]] = []
+    for open_index in range(start, end):
+        if tokens[open_index].value != "(" or open_index not in forward:
+            continue
+        close_index = forward[open_index]
+        if close_index >= end:
+            continue
+        name_index = _call_name_before_open(tokens, open_index, start)
+        if name_index is None or name_index - 2 < start:
+            continue
+        api = tokens[name_index].value
+        operation = (
+            "publish"
+            if _delegate_publish_api(api)
+            else "subscribe"
+            if _delegate_subscription_api(api)
+            else None
+        )
+        if operation is None:
+            continue
+        if (
+            tokens[name_index - 1].value not in {".", "->", "::"}
+            or tokens[name_index - 2].kind != "identifier"
+        ):
+            continue
+        event_index = name_index - 2
+        callee_start = _member_chain_start(
+            tokens,
+            reverse,
+            name_index,
+            start,
+        )
+        if (
+            event_index != callee_start
+            and tokens[event_index - 1].value not in {".", "->", "::"}
+        ):
+            continue
+        owner_type = _delegate_event_owner(
+            tokens,
+            callee_start,
+            event_index,
+            part,
+            symbol_types,
+            confirmed_type_names,
+        )
+        if owner_type is None:
+            continue
+        event_name = tokens[event_index].value
+        if (
+            api in {"Execute", "ExecuteIfBound"}
+            and not (
+                event_name.startswith("On")
+                or event_name.endswith(("Delegate", "Event"))
+            )
+        ):
+            continue
+        callback = (
+            _delegate_callback(
+                tokens,
+                open_index,
+                close_index,
+                confirmed_type_names,
+            )
+            if operation == "subscribe"
+            else None
+        )
+        results.append(
+            {
+                "operation": operation,
+                "api": api,
+                "event": {
+                    "owner_type": owner_type,
+                    "name": event_name,
+                    "qualified_name": f"{owner_type}::{event_name}",
+                },
+                "callback": callback,
+                "evidence": {
+                    "unit": (
+                        "header"
+                        if part["_path"].suffix.casefold() in {".h", ".hpp"}
+                        else "cpp"
+                    ),
+                    "line": tokens[callee_start].line,
+                },
+            }
+        )
+    return results
 
 
 def _address_expression(

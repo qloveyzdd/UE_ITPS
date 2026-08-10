@@ -886,6 +886,122 @@ def _add_reference_relations(graph: Graph, unit: SourceUnitProbe) -> None:
                     )
 
 
+def _delegate_event_resolution(
+    graph: Graph,
+    event: dict[str, Any],
+) -> Resolution:
+    owner_type = str(event["owner_type"])
+    event_name = str(event["name"])
+    qualified = str(event["qualified_name"])
+    exact_candidates = sorted(
+        str(node["node_id"])
+        for node in graph.nodes.values()
+        if node["kind"] in {"member_variable", "delegate_event"}
+        and str(node["name"]) == event_name
+        and str(node.get("qualified_name") or "") == qualified
+    )
+    candidates = exact_candidates or sorted(
+        str(node["node_id"])
+        for node in graph.nodes.values()
+        if node["kind"] in {"member_variable", "delegate_event"}
+        and str(node["name"]) == event_name
+        and _short_name(str(node.get("owner") or ""))
+        == _short_name(owner_type)
+    )
+    if len(candidates) == 1:
+        node = graph.nodes[candidates[0]]
+        properties = json.loads(str(node["properties_json"]))
+        properties["delegate_event"] = True
+        node["properties_json"] = json_value(properties)
+        return Resolution(candidates[0], "resolved", candidates)
+    if len(candidates) > 1:
+        external = graph.ensure_external("delegate_event", qualified)
+        return Resolution(external, "ambiguous", candidates)
+    node_id, canonical = symbol_id(
+        graph.key,
+        kind="delegate_event",
+        qualified_name=qualified,
+        owner=owner_type,
+    )
+    graph.add_node(
+        node_id=node_id,
+        kind="delegate_event",
+        name=event_name,
+        qualified_name=qualified,
+        owner=owner_type,
+        canonical_key=canonical,
+        properties={"delegate_event": True, "inferred": True},
+    )
+    return Resolution(node_id, "resolved", [node_id])
+
+
+def _add_delegate_relations(graph: Graph, unit: SourceUnitProbe) -> None:
+    relation_schema = "ue-itps.information-pool.delegate-semantics.v1"
+    for document in unit.function_references:
+        source_unit = _source_unit_key(document)
+        for match in document.get("matches", []):
+            source_id = graph.function_ids.get(
+                (source_unit, str(match["function_id"]))
+            )
+            if source_id is None:
+                continue
+            for operation in match.get("delegate_operations", []):
+                event = dict(operation["event"])
+                event_resolution = _delegate_event_resolution(graph, event)
+                if event_resolution.status != "resolved":
+                    continue
+                location = _location(document, operation["evidence"])
+                properties = {
+                    "api": operation["api"],
+                    "event": event,
+                }
+                if operation["operation"] == "publish":
+                    graph.add_relation(
+                        source_id=source_id,
+                        kind="PUBLISHES_EVENT",
+                        target_id=event_resolution.node_id,
+                        certainty="inferred",
+                        resolution_status="resolved",
+                        confidence=0.9,
+                        probe_schema=relation_schema,
+                        location=location,
+                        properties=properties,
+                    )
+                    continue
+                graph.add_relation(
+                    source_id=source_id,
+                    kind="SUBSCRIBES_EVENT",
+                    target_id=event_resolution.node_id,
+                    certainty="inferred",
+                    resolution_status="resolved",
+                    confidence=0.9,
+                    probe_schema=relation_schema,
+                    location=location,
+                    properties=properties,
+                )
+                callback = operation.get("callback")
+                if not isinstance(callback, dict):
+                    continue
+                callback_resolution = graph.resolve(
+                    "callback_target",
+                    str(callback["qualified_name"]),
+                    str(callback["owner_type"]),
+                )
+                if callback_resolution.status != "resolved":
+                    continue
+                graph.add_relation(
+                    source_id=event_resolution.node_id,
+                    kind="DISPATCHES_TO",
+                    target_id=callback_resolution.node_id,
+                    certainty="inferred",
+                    resolution_status="resolved",
+                    confidence=0.85,
+                    probe_schema=relation_schema,
+                    location=location,
+                    properties={**properties, "callback": callback},
+                )
+
+
 def build_graph_model(probe: ProjectProbe) -> Graph:
     project = probe.inventory["project"]
     key = project_key(str(project["name"]), str(project["descriptor"]))
@@ -900,4 +1016,5 @@ def build_graph_model(probe: ProjectProbe) -> Graph:
     for unit in probe.units:
         _add_include_relations(graph, unit)
         _add_reference_relations(graph, unit)
+        _add_delegate_relations(graph, unit)
     return graph

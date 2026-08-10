@@ -61,7 +61,9 @@ python information_pool/query_information_pool.py `
 语义关系按“源节点、关系类型、目标节点”唯一保存，多处源码位置作为同一关系的独立
 证据。已解析的调用和类型使用分别保存为 `CALLS`、`USES_TYPE`；只有无法进一步分类
 的引用才保存为 `REFERENCES`。类与结构体之间的 `path` 查询会将成员关系投影到所属
-类型，同时保留底层成员关系明细。
+类型，同时保留底层成员关系明细。委托事件使用 `PUBLISHES_EVENT`、
+`SUBSCRIBES_EVENT` 和 `DISPATCHES_TO` 表示静态可见的发布、订阅及潜在回调路径；
+这些关系表达可能的运行时分发，不保证订阅在每次发布时都处于有效状态。
 
 ## 目录
 

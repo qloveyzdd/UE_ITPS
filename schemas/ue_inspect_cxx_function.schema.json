@@ -81,7 +81,8 @@
         "function_id",
         "function",
         "relation",
-        "external_symbols"
+        "external_symbols",
+        "delegate_operations"
       ],
       "properties": {
         "function_id": {
@@ -98,6 +99,12 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/externalSymbol"
+          }
+        },
+        "delegate_operations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/delegateOperation"
           }
         },
         "syntax_flow": {
@@ -187,6 +194,51 @@
         },
         "evidence": {
           "$ref": "#/$defs/sourceEvidence"
+        }
+      },
+      "additionalProperties": false
+    },
+    "delegateOperation": {
+      "type": "object",
+      "required": ["operation", "api", "event", "callback", "evidence"],
+      "properties": {
+        "operation": {
+          "enum": ["publish", "subscribe"]
+        },
+        "api": {
+          "type": "string",
+          "minLength": 1
+        },
+        "event": {
+          "$ref": "#/$defs/delegateEndpoint"
+        },
+        "callback": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/delegateEndpoint"}
+          ]
+        },
+        "evidence": {
+          "$ref": "#/$defs/sourceEvidence"
+        }
+      },
+      "additionalProperties": false
+    },
+    "delegateEndpoint": {
+      "type": "object",
+      "required": ["owner_type", "name", "qualified_name"],
+      "properties": {
+        "owner_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "qualified_name": {
+          "type": "string",
+          "minLength": 1
         }
       },
       "additionalProperties": false
