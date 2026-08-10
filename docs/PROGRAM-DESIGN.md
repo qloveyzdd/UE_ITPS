@@ -40,10 +40,10 @@ UE ITPS 的目标是：从调用方明确选择的 Unreal Engine 项目或源码
 正式工具分为四层：
 
 ```text
-tools/ue_*.py
+sourcetools/ue_*.py
     │  参数、双语帮助、退出码
     ▼
-tools/ue_project_tools/
+sourcetools/ue_project_tools/
     │  项目、描述符、规则、Module、C++ 领域服务
     ▼
 共享解析与输出组件
@@ -55,7 +55,7 @@ schemas/
 
 ### 3.1 CLI 入口层
 
-`tools/ue_*.py` 负责：
+`sourcetools/ue_*.py` 负责：
 
 - 声明中英双语参数和帮助。
 - 接受一个明确入口及少量选择条件。
@@ -67,7 +67,7 @@ schemas/
 
 ### 3.2 领域服务层
 
-`tools/ue_project_tools/` 的模块族：
+`sourcetools/ue_project_tools/` 的模块族：
 
 | 模块族 | 职责 |
 |---|---|

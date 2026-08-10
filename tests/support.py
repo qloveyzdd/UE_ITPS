@@ -17,7 +17,7 @@ from referencing import Registry, Resource
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-TOOLS_ROOT = REPOSITORY_ROOT / "tools"
+TOOLS_ROOT = REPOSITORY_ROOT / "sourcetools"
 SCHEMAS_ROOT = REPOSITORY_ROOT / "schemas"
 
 if str(TOOLS_ROOT) not in sys.path:

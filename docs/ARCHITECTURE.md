@@ -12,13 +12,13 @@ UE ITPS 是一套面向 Unreal Engine 工程的只读检查与关系浏览系统
      │                                        │
      ▼                                        ▼
 +----------------+                  +----------------------+
-| tools/ue_*.py  |                  | edittools/ CLI       |
+| sourcetools/ue_*.py |             | edittools/ CLI       |
 | 21 个薄 CLI    |                  +----------+-----------+
 +-------+--------+                             │ Remote Execution
         │                                      ▼
         ▼                           +----------------------+
 +------------------------+         | Editor 运行时适配层  |
-| tools/ue_project_tools |         +----------+-----------+
+| sourcetools/ue_project_tools |   +----------+-----------+
 | 领域服务与解析器       |                    │
 +-----+-------------+----+                    │
       │             │                         │
@@ -49,8 +49,8 @@ UE ITPS 是一套面向 Unreal Engine 工程的只读检查与关系浏览系统
 
 ### 静态项目检查
 
-1. 调用方通过 `tools/ue_*.py` 传入一个搜索根、项目描述符、构建规则文件或 C++ 源文件。CLI 只负责参数、双语帮助、退出码和 JSON 输出。
-2. `tools/ue_project_tools/` 中对应的领域服务校验入口并限定扫描边界；遇到多个候选项目、Plugin 或伴随源码时返回歧义或警告，不自行猜测目标。
+1. 调用方通过 `sourcetools/ue_*.py` 传入一个搜索根、项目描述符、构建规则文件或 C++ 源文件。CLI 只负责参数、双语帮助、退出码和 JSON 输出。
+2. `sourcetools/ue_project_tools/` 中对应的领域服务校验入口并限定扫描边界；遇到多个候选项目、Plugin 或伴随源码时返回歧义或警告，不自行猜测目标。
 3. 描述符与版本文件由严格 JSON/Unreal JSON 读取器解析，C# 与 C++ 由 Tree-sitter 前端投影为声明、操作、控制条件和引用事实；依赖、继承、循环和影响查询使用确定性图算法处理。
 4. 领域结果通过公共组装器补充 `schema_version`、`validation` 和 `limits`，稳定序列化到 stdout。调用失败、扫描阻断和带警告的完成状态通过不同退出码表达。
 5. 消费方用 `schemas/` 下同名 JSON Schema 校验结果，并根据 `limits` 判断这些静态事实不能证明的运行时语义。
@@ -80,10 +80,10 @@ UE ITPS 是一套面向 Unreal Engine 工程的只读检查与关系浏览系统
 
 | 抽象 | 位置 | 职责 |
 |---|---|---|
-| `BilingualArgumentParser` / `result_document()` | [`tools/ue_project_tools/common.py`](../tools/ue_project_tools/common.py) | 统一静态 CLI 的双语参数处理、失败信封、Validation、Limits 与稳定 JSON 契约。 |
-| Tree-sitter 语法前端 | [`tools/ue_project_tools/syntax_tree.py`](../tools/ue_project_tools/syntax_tree.py) | 在保留字节与行位置的前提下屏蔽会破坏 AST 的 UE 宏，并投影 C++/C# 语法事实。 |
-| `DependencyGraph` | [`tools/ue_project_tools/dependency_graph.py`](../tools/ue_project_tools/dependency_graph.py) | 保存确定性的类型依赖节点与边，支持循环、继承和反向影响等图查询。 |
-| `list_source_types()` 源码单元入口 | [`tools/ue_project_tools/source_unit.py`](../tools/ue_project_tools/source_unit.py) | 从一个显式 C++ 文件及唯一可推导伴随文件组装类型、成员和声明锚点结果。 |
+| `BilingualArgumentParser` / `result_document()` | [`sourcetools/ue_project_tools/common.py`](../sourcetools/ue_project_tools/common.py) | 统一静态 CLI 的双语参数处理、失败信封、Validation、Limits 与稳定 JSON 契约。 |
+| Tree-sitter 语法前端 | [`sourcetools/ue_project_tools/syntax_tree.py`](../sourcetools/ue_project_tools/syntax_tree.py) | 在保留字节与行位置的前提下屏蔽会破坏 AST 的 UE 宏，并投影 C++/C# 语法事实。 |
+| `DependencyGraph` | [`sourcetools/ue_project_tools/dependency_graph.py`](../sourcetools/ue_project_tools/dependency_graph.py) | 保存确定性的类型依赖节点与边，支持循环、继承和反向影响等图查询。 |
+| `list_source_types()` 源码单元入口 | [`sourcetools/ue_project_tools/source_unit.py`](../sourcetools/ue_project_tools/source_unit.py) | 从一个显式 C++ 文件及唯一可推导伴随文件组装类型、成员和声明锚点结果。 |
 | `EditorSession` | [`edittools/ue_editor_tools/remote_client.py`](../edittools/ue_editor_tools/remote_client.py) | 发现、选择并串行连接目标 Editor 会话，将结构化操作分派到 Editor 进程。 |
 | `scan_gameplay_messages()` | [`edittools/ue_editor_tools/scanner.py`](../edittools/ue_editor_tools/scanner.py) | 分批扫描 Blueprint 消息节点，归并静态 Channel、动态连接与 Tag 引用者。 |
 | `ProjectProbe` / `SourceUnitProbe` | [`information_pool/ue_itps_information_pool/probe_adapter.py`](../information_pool/ue_itps_information_pool/probe_adapter.py) | 定义信息池构建所消费的项目级与源码单元级探针结果，并承载缓存和并行扫描元数据。 |
@@ -95,7 +95,7 @@ UE ITPS 是一套面向 Unreal Engine 工程的只读检查与关系浏览系统
 
 ```text
 .
-├─ tools/                    # 21 个正式静态 CLI 及其领域实现
+├─ sourcetools/              # 21 个正式静态 CLI 及其领域实现
 │  └─ ue_project_tools/      # 解析、源码事实、图算法和公共输出组件
 ├─ schemas/                  # 静态 CLI 的公共及逐工具 JSON Schema
 ├─ edittools/                # 运行中 Editor 的独立只读 CLI、运行时适配器与 Schema
@@ -108,4 +108,4 @@ UE ITPS 是一套面向 Unreal Engine 工程的只读检查与关系浏览系统
 └─ docs/                     # 设计、架构和维护说明
 ```
 
-该结构按事实来源和副作用边界拆分：`tools/` 只读取磁盘上的 Unreal 项目与源码；`edittools/` 必须连接运行中的 Editor，因此保持独立的连接、运行时和 Schema；`information_pool/` 是唯一负责生成持久化派生快照的子系统；`show/` 只消费已有快照，不依赖扫描实现。`LyraStarterGame/` 与 `ExternalProjects/` 是验证和人工研究输入，不属于正式 CLI 的运行依赖，自动化测试使用 `tests/` 中临时构造的最小工程以保持隔离和可重复性。
+该结构按事实来源和副作用边界拆分：`sourcetools/` 只读取磁盘上的 Unreal 项目与源码；`edittools/` 必须连接运行中的 Editor，因此保持独立的连接、运行时和 Schema；`information_pool/` 是唯一负责生成持久化派生快照的子系统；`show/` 只消费已有快照，不依赖扫描实现。`LyraStarterGame/` 与 `ExternalProjects/` 是验证和人工研究输入，不属于正式 CLI 的运行依赖，自动化测试使用 `tests/` 中临时构造的最小工程以保持隔离和可重复性。

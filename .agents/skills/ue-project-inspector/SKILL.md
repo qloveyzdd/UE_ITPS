@@ -9,7 +9,7 @@ Use the smallest tool that answers the user's question. Treat every result as st
 
 ## Locate the tools
 
-Work from the repository root. Use the scripts under `tools/` without copying or editing them.
+Work from the repository root. Use the scripts under `sourcetools/` without copying or editing them.
 
 If the scripts are missing, report that this repository does not contain the expected inspector implementation. Do not recreate them inside the skill.
 
@@ -41,7 +41,7 @@ When the user explicitly requests all categories, run the relevant focused tools
 1. If no `.uproject` path is known, run:
 
    ```powershell
-   python tools/ue_find_projects.py --search-root <repo-root>
+   python sourcetools/ue_find_projects.py --search-root <repo-root>
    ```
 
 2. If exactly one candidate exists, use it. If multiple candidates exist, report the ambiguity and ask the user which project to inspect.
@@ -71,31 +71,31 @@ All normal scan results follow this top-level order: `schema_version`, module fa
 Replace `<project>` with the absolute `.uproject` path.
 
 ```powershell
-python tools/ue_read_project_descriptor.py --project <project>
-python tools/ue_resolve_engine.py --project <project>
-python tools/ue_inspect_modules.py --project <project>
-python tools/ue_inspect_targets.py --project <project>
-python tools/ue_list_project_cxx_sources.py --project <project>
-python tools/ue_classify_project_paths.py --project <project>
+python sourcetools/ue_read_project_descriptor.py --project <project>
+python sourcetools/ue_resolve_engine.py --project <project>
+python sourcetools/ue_inspect_modules.py --project <project>
+python sourcetools/ue_inspect_targets.py --project <project>
+python sourcetools/ue_list_project_cxx_sources.py --project <project>
+python sourcetools/ue_classify_project_paths.py --project <project>
 ```
 
 Replace `<plugin>`, `<rules>`, and `<target>` with one explicit file selected from prior evidence or supplied by the user:
 
 ```powershell
-python tools/ue_read_plugin_descriptor.py --plugin <plugin>
-python tools/ue_inspect_module_rules.py --rules <rules>
-python tools/ue_inspect_target_rules.py --target <target>
-python tools/ue_inspect_cs_function.py --source <cs-source> --function <name>
-python tools/ue_inspect_module_entry.py --rules <rules>
-python tools/ue_list_cxx_includes.py --source <source>
-python tools/ue_list_cxx_types.py --source <source>
-python tools/ue_inspect_cxx_function.py --source <source> --function <name>
+python sourcetools/ue_read_plugin_descriptor.py --plugin <plugin>
+python sourcetools/ue_inspect_module_rules.py --rules <rules>
+python sourcetools/ue_inspect_target_rules.py --target <target>
+python sourcetools/ue_inspect_cs_function.py --source <cs-source> --function <name>
+python sourcetools/ue_inspect_module_entry.py --rules <rules>
+python sourcetools/ue_list_cxx_includes.py --source <source>
+python sourcetools/ue_list_cxx_types.py --source <source>
+python sourcetools/ue_inspect_cxx_function.py --source <source> --function <name>
 ```
 
 Plugin resolution derives the Engine root from the project's `EngineAssociation` by default. Pass `--engine-root` only as an explicit override:
 
 ```powershell
-python tools/ue_resolve_plugins.py --project <project> --operation scan --platform Win64 --target-type Editor
+python sourcetools/ue_resolve_plugins.py --project <project> --operation scan --platform Win64 --target-type Editor
 ```
 
 Use `Win64 / Editor` only as the default focused Plugin profile. If the user provides another platform, target type, or operation, pass it through and state the active profile. Configuration is not accepted or evaluated by the focused Plugin tool.

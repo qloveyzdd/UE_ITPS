@@ -52,7 +52,7 @@ git --version
 在仓库根目录列出全部只读工具：
 
 ```powershell
-python tools/ue_list_tools.py
+python sourcetools/ue_list_tools.py
 ```
 
 命令成功时会向标准输出写入 JSON，其中包含工具列表和如下校验状态：
@@ -70,13 +70,13 @@ python tools/ue_list_tools.py
 随后可在自己的工程目录中发现 `.uproject`：
 
 ```powershell
-python tools/ue_find_projects.py --search-root D:/Projects/MyGame
+python sourcetools/ue_find_projects.py --search-root D:/Projects/MyGame
 ```
 
 如果结果只有一个候选工程，可将其绝对路径传给聚焦工具：
 
 ```powershell
-python tools/ue_read_project_descriptor.py --project D:/Projects/MyGame/MyGame.uproject
+python sourcetools/ue_read_project_descriptor.py --project D:/Projects/MyGame/MyGame.uproject
 ```
 
 每个正式 CLI 都输出带 `schema_version`、`validation` 和 `limits` 的 JSON。`validation.status` 为 `ok` 或 `warning` 表示扫描已完成；`error` 表示工具发现了阻断问题。
@@ -96,10 +96,10 @@ python -c "import tree_sitter; print('tree-sitter ready')"
 
 ### 搜索结果包含多个 `.uproject`
 
-`tools/ue_find_projects.py` 遇到多个候选工程时会返回 `project-discovery-ambiguous`，不会自动替你选择。缩小 `--search-root`，或从返回的 `candidates` 中选择明确的 `.uproject` 路径，再传给后续命令：
+`sourcetools/ue_find_projects.py` 遇到多个候选工程时会返回 `project-discovery-ambiguous`，不会自动替你选择。缩小 `--search-root`，或从返回的 `candidates` 中选择明确的 `.uproject` 路径，再传给后续命令：
 
 ```powershell
-python tools/ue_read_project_descriptor.py --project D:/Projects/MyGame/MyGame.uproject
+python sourcetools/ue_read_project_descriptor.py --project D:/Projects/MyGame/MyGame.uproject
 ```
 
 ### 无法解析 Unreal Engine
@@ -107,7 +107,7 @@ python tools/ue_read_project_descriptor.py --project D:/Projects/MyGame/MyGame.u
 `EngineAssociation` 只是工程与 Engine 的关联键。如果本机没有对应注册信息，可在确知 Engine 根目录时显式覆盖：
 
 ```powershell
-python tools/ue_resolve_engine.py `
+python sourcetools/ue_resolve_engine.py `
   --project D:/Projects/MyGame/MyGame.uproject `
   --engine-root D:/Epic/UE_5.8
 ```

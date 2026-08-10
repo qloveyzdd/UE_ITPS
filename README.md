@@ -34,19 +34,19 @@ python -m pip install -r requirements-dev.txt
 1. 查看可用工具及其输入和能力：
 
    ```bash
-   python tools/ue_list_tools.py
+   python sourcetools/ue_list_tools.py
    ```
 
 2. 在一个目录下查找 Unreal 项目：
 
    ```bash
-   python tools/ue_find_projects.py --search-root D:/Projects/MyGame
+   python sourcetools/ue_find_projects.py --search-root D:/Projects/MyGame
    ```
 
 3. 从返回结果中明确选择一个 `.uproject`，再读取其声明：
 
    ```bash
-   python tools/ue_read_project_descriptor.py --project D:/Projects/MyGame/MyGame.uproject
+   python sourcetools/ue_read_project_descriptor.py --project D:/Projects/MyGame/MyGame.uproject
    ```
 
 每个正式 CLI 都将 JSON 写入标准输出，并使用统一的顶层结构：领域事实、`validation` 和 `limits`。当搜索范围内存在多个项目时，发现工具会返回歧义错误和候选列表，不会自行选择。
@@ -56,10 +56,10 @@ python -m pip install -r requirements-dev.txt
 ### 检查项目结构
 
 ```bash
-python tools/ue_resolve_engine.py --project D:/Projects/MyGame/MyGame.uproject
-python tools/ue_inspect_modules.py --project D:/Projects/MyGame/MyGame.uproject
-python tools/ue_inspect_targets.py --project D:/Projects/MyGame/MyGame.uproject
-python tools/ue_list_project_cxx_sources.py --project D:/Projects/MyGame/MyGame.uproject
+python sourcetools/ue_resolve_engine.py --project D:/Projects/MyGame/MyGame.uproject
+python sourcetools/ue_inspect_modules.py --project D:/Projects/MyGame/MyGame.uproject
+python sourcetools/ue_inspect_targets.py --project D:/Projects/MyGame/MyGame.uproject
+python sourcetools/ue_list_project_cxx_sources.py --project D:/Projects/MyGame/MyGame.uproject
 ```
 
 结果分别提供 Engine 定位证据、Module 声明与规则对应关系、Target 清单以及按 Module 和可见性组织的项目 C++ 源文件清单。
@@ -67,9 +67,9 @@ python tools/ue_list_project_cxx_sources.py --project D:/Projects/MyGame/MyGame.
 ### 检查一个 C++ 源码单元
 
 ```bash
-python tools/ue_list_cxx_includes.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp
-python tools/ue_list_cxx_types.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp
-python tools/ue_inspect_cxx_function.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp --function BeginPlay
+python sourcetools/ue_list_cxx_includes.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp
+python sourcetools/ue_list_cxx_types.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp
+python sourcetools/ue_inspect_cxx_function.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp --function BeginPlay
 ```
 
 结果包含直接 include 来源、类型与成员锚点，以及指定同名函数定义中的外部符号候选。工具只检查显式选择的文件和唯一可推导的同名伴随文件，不递归读取 include 或被调用函数。
@@ -77,9 +77,9 @@ python tools/ue_inspect_cxx_function.py --source D:/Projects/MyGame/Source/MyGam
 ### 分析项目内 C++ 关系
 
 ```bash
-python tools/ue_analyze_cxx_dependencies.py --project D:/Projects/MyGame/MyGame.uproject
-python tools/ue_query_cxx_hierarchy.py --project D:/Projects/MyGame/MyGame.uproject --class AMyActor
-python tools/ue_analyze_cxx_impact.py --project D:/Projects/MyGame/MyGame.uproject --symbol AMyActor
+python sourcetools/ue_analyze_cxx_dependencies.py --project D:/Projects/MyGame/MyGame.uproject
+python sourcetools/ue_query_cxx_hierarchy.py --project D:/Projects/MyGame/MyGame.uproject --class AMyActor
+python sourcetools/ue_analyze_cxx_impact.py --project D:/Projects/MyGame/MyGame.uproject --symbol AMyActor
 ```
 
 结果可用于检查项目内类依赖与循环、查询继承关系，以及反向追踪某个类型的静态影响范围。这些关系是保守的静态证据，不是完整编译器符号表或运行时调用图。

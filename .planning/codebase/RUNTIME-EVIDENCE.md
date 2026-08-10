@@ -51,7 +51,7 @@ status: historical-ue-5.6.1-capture-protocol-and-tool-ready; ue-5.8.2-run-not-ar
 ## 使用工具
 
 ```powershell
-& E:\UE_ITPS\tools\archive_lyra_run.ps1 `
+& E:\UE_ITPS\sourcetools\archive_lyra_run.ps1 `
   -SourceLog E:\UE_ITPS\LyraStarterGame\Saved\Logs\LyraStarterGame.log `
   -RunId 20260715T153000Z-L0-editor-pie `
   -Level L0 `

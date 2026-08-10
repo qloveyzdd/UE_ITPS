@@ -43,13 +43,13 @@ UE ITPS 没有统一的全局配置文件。核心 Python CLI 通过每次调用
 
 ```powershell
 # 先发现候选工程
-python tools/ue_find_projects.py --search-root D:/Projects
+python sourcetools/ue_find_projects.py --search-root D:/Projects
 
 # 再把唯一、明确的工程传给聚焦工具
-python tools/ue_read_project_descriptor.py --project D:/Projects/MyGame/MyGame.uproject
+python sourcetools/ue_read_project_descriptor.py --project D:/Projects/MyGame/MyGame.uproject
 
 # Engine 自动解析不满足需要时才使用显式覆盖
-python tools/ue_resolve_engine.py `
+python sourcetools/ue_resolve_engine.py `
   --project D:/Projects/MyGame/MyGame.uproject `
   --engine-root D:/Epic/UE_5.8
 ```
@@ -57,7 +57,7 @@ python tools/ue_resolve_engine.py `
 当搜索根目录内存在多个 `.uproject` 时，发现工具返回歧义错误，不会选取默认工程。每个命令的完整参数和默认值以其 `--help` 输出为准，例如：
 
 ```powershell
-python tools/ue_resolve_plugins.py --help
+python sourcetools/ue_resolve_plugins.py --help
 python information_pool/build_information_pool.py --help
 python edittools/ue_editor_list_sessions.py --help
 ```
@@ -93,11 +93,11 @@ python edittools/ue_editor_list_sessions.py --help
 
 | 范围 | 设置 | 默认值 | 定义位置 |
 |---|---|---|---|
-| 项目发现 | `--search-root` | 当前目录 `.` | `tools/ue_find_projects.py` |
-| Plugin 解析 | `--operation` | `scan` | `tools/ue_resolve_plugins.py` |
-| Plugin 解析 | `--platform` | `Win64` | `tools/ue_resolve_plugins.py` |
-| Plugin 解析 | `--target-type` | `Editor` | `tools/ue_resolve_plugins.py` |
-| C++ 影响分析 | 最大深度 | `3` | `tools/ue_analyze_cxx_impact.py` |
+| 项目发现 | `--search-root` | 当前目录 `.` | `sourcetools/ue_find_projects.py` |
+| Plugin 解析 | `--operation` | `scan` | `sourcetools/ue_resolve_plugins.py` |
+| Plugin 解析 | `--platform` | `Win64` | `sourcetools/ue_resolve_plugins.py` |
+| Plugin 解析 | `--target-type` | `Editor` | `sourcetools/ue_resolve_plugins.py` |
+| C++ 影响分析 | 最大深度 | `3` | `sourcetools/ue_analyze_cxx_impact.py` |
 | 信息池查询 | `--depth` | `3` | `information_pool/query_information_pool.py` |
 | 信息池查询 | `--limit` | `100` | `information_pool/query_information_pool.py` |
 | Editor 连接 | `--timeout` | `3.0` 秒 | `edittools/ue_editor_tools/cli.py` |
@@ -114,14 +114,14 @@ python edittools/ue_editor_list_sessions.py --help
 
 ```powershell
 # 本地静态扫描
-python tools/ue_resolve_plugins.py `
+python sourcetools/ue_resolve_plugins.py `
   --project D:/Projects/MyGame/MyGame.uproject `
   --operation scan `
   --platform Win64 `
   --target-type Editor
 
 # 另一目标 Profile
-python tools/ue_resolve_plugins.py `
+python sourcetools/ue_resolve_plugins.py `
   --project D:/Projects/MyGame/MyGame.uproject `
   --operation cook_package `
   --platform Linux `

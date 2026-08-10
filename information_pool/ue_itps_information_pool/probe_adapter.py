@@ -15,7 +15,7 @@ from .storage import json_value
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-TOOLS_ROOT = REPOSITORY_ROOT / "tools"
+TOOLS_ROOT = REPOSITORY_ROOT / "sourcetools"
 if str(TOOLS_ROOT) not in sys.path:
     sys.path.insert(0, str(TOOLS_ROOT))
 

@@ -39,7 +39,7 @@ npm run dev
 
 | 命令 | 说明 |
 |---|---|
-| `python tools/ue_list_tools.py` | 列出正式工具、输入要求与能力边界，可作为 Python 环境的快速检查。 |
+| `python sourcetools/ue_list_tools.py` | 列出正式工具、输入要求与能力边界，可作为 Python 环境的快速检查。 |
 | `python -m unittest discover -s tests -v` | 运行核心 CLI、Schema、导航、Module 和 C++ 分析测试。 |
 | `python -m unittest discover -s edittools/tests -t edittools -v` | 运行 Editor 工具的独立测试套件。 |
 | `python -m unittest discover -s information_pool/tests -v` | 运行工程信息池构建与查询测试。 |
