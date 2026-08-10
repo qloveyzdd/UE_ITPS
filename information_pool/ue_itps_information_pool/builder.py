@@ -10,7 +10,11 @@ from typing import Any
 
 from .graph_model import build_graph_model
 from .identity import stable_id
-from .knowledge_adapter import merge_knowledge_graph, read_knowledge_graph
+from .knowledge_adapter import (
+    bridge_gameplay_message_dispatches,
+    merge_knowledge_graph,
+    read_knowledge_graph,
+)
 from .manifest import activate_snapshot
 from .probe_adapter import scan_project
 from .source_revision import (
@@ -78,6 +82,7 @@ def build_information_pool(
             merge_knowledge_graph(graph, document, path)
             for path, document in knowledge_documents
         ]
+        bridge_gameplay_message_dispatches(graph)
         knowledge_hashes = [
             hashlib.sha256(
                 json.dumps(document, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")

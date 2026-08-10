@@ -126,6 +126,159 @@ class InformationPoolWorkflowTests(unittest.TestCase):
             """,
         )
 
+    def _write_gameplay_message_knowledge_graph(self) -> Path:
+        self.pool.mkdir(parents=True, exist_ok=True)
+        path = self.pool / "gameplay-messages.json"
+        publisher_key = "/Game/BP_MessagePublisher|EventGraph|Broadcast"
+        subscriber_key = "/Game/BP_MessageSubscriber|EventGraph|Listen"
+        document = {
+            "schema_version": "ue_build_knowledge_graph",
+            "validation": {"status": "ok"},
+            "graph": {
+                "counts": {"nodes": 4, "relations": 3, "evidence": 3},
+                "nodes": [
+                    {
+                        "node_id": "cxx-publisher",
+                        "kind": "cxx_function",
+                        "name": "BeginPlay",
+                        "properties": {
+                            "qualified_name": "Gameplay::ASampleActor::BeginPlay"
+                        },
+                    },
+                    {
+                        "node_id": "blueprint-publisher",
+                        "kind": "blueprint_node",
+                        "name": "Broadcast Message",
+                        "canonical_key": (
+                            f"Sample|blueprint_node|{publisher_key}"
+                        ),
+                        "properties": {"asset": "/Game/BP_MessagePublisher"},
+                    },
+                    {
+                        "node_id": "blueprint-subscriber",
+                        "kind": "blueprint_node",
+                        "name": "ListenForGameplayMessages",
+                        "canonical_key": (
+                            f"Sample|blueprint_node|{subscriber_key}"
+                        ),
+                        "properties": {"asset": "/Game/BP_MessageSubscriber"},
+                    },
+                    {
+                        "node_id": "message-tag",
+                        "kind": "gameplay_tag",
+                        "name": "Gameplay.Message.Test",
+                        "canonical_key": (
+                            "Sample|gameplay_tag|Gameplay.Message.Test"
+                        ),
+                        "properties": {"tag": "Gameplay.Message.Test"},
+                    },
+                ],
+                "relations": [
+                    {
+                        "relation_id": "cxx-publishes",
+                        "source_id": "cxx-publisher",
+                        "kind": "PUBLISHES_EVENT",
+                        "target_id": "message-tag",
+                        "certainty": "confirmed",
+                    },
+                    {
+                        "relation_id": "blueprint-publishes",
+                        "source_id": "blueprint-publisher",
+                        "kind": "PUBLISHES_EVENT",
+                        "target_id": "message-tag",
+                        "certainty": "confirmed",
+                    },
+                    {
+                        "relation_id": "blueprint-subscribes",
+                        "source_id": "blueprint-subscriber",
+                        "kind": "SUBSCRIBES_EVENT",
+                        "target_id": "message-tag",
+                        "certainty": "confirmed",
+                        "properties": {"match_type": "ExactMatch"},
+                    },
+                ],
+                "evidence": [
+                    {
+                        "evidence_id": "cxx-publish-evidence",
+                        "relation_id": "cxx-publishes",
+                        "path": "Source/SampleGame/Private/SampleActor.cpp",
+                        "line": 7,
+                    },
+                    {
+                        "evidence_id": "blueprint-publish-evidence",
+                        "relation_id": "blueprint-publishes",
+                        "node": publisher_key,
+                    },
+                    {
+                        "evidence_id": "blueprint-subscribe-evidence",
+                        "relation_id": "blueprint-subscribes",
+                        "node": subscriber_key,
+                    },
+                ],
+            },
+        }
+        path.write_text(
+            json.dumps(document, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return path
+
+    def test_gameplay_message_publishers_reach_blueprint_subscriber(self) -> None:
+        knowledge_graph = self._write_gameplay_message_knowledge_graph()
+        build = build_information_pool(
+            self.fixture.project,
+            self.pool,
+            knowledge_graphs=[knowledge_graph],
+        )
+
+        connection = sqlite3.connect(build["snapshot"])
+        connection.row_factory = sqlite3.Row
+        try:
+            dispatches = connection.execute(
+                """
+                SELECT r.properties_json
+                FROM relations r
+                JOIN nodes source ON source.node_id = r.source_id
+                JOIN nodes target ON target.node_id = r.target_id
+                WHERE r.kind = 'DISPATCHES_TO'
+                  AND source.kind = 'gameplay_tag'
+                  AND target.kind = 'blueprint_node'
+                """
+            ).fetchall()
+            self.assertEqual(len(dispatches), 1)
+            bridge = json.loads(dispatches[0]["properties_json"])
+            self.assertEqual(len(bridge["publisher_relation_ids"]), 2)
+            self.assertTrue(bridge["subscriber_relation_id"])
+        finally:
+            connection.close()
+
+        expected_relations = ["PUBLISHES_EVENT", "DISPATCHES_TO"]
+        cxx_path = query_information_pool(
+            self.pool,
+            "path",
+            selector="Gameplay::ASampleActor::BeginPlay",
+            target="/Game/BP_MessageSubscriber|EventGraph|Listen",
+            depth=3,
+        )
+        self.assertEqual(cxx_path["status"], "selected")
+        self.assertEqual(
+            [item["kind"] for item in cxx_path["result"]["relations"]],
+            expected_relations,
+        )
+
+        blueprint_path = query_information_pool(
+            self.pool,
+            "path",
+            selector="/Game/BP_MessagePublisher|EventGraph|Broadcast",
+            target="/Game/BP_MessageSubscriber|EventGraph|Listen",
+            depth=3,
+        )
+        self.assertEqual(blueprint_path["status"], "selected")
+        self.assertEqual(
+            [item["kind"] for item in blueprint_path["result"]["relations"]],
+            expected_relations,
+        )
+
     def test_delegate_publish_subscribe_edges_form_runtime_path(self) -> None:
         self._write_delegate_fixture()
         self._commit("add delegate fixture")

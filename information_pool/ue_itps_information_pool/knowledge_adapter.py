@@ -9,6 +9,11 @@ from .identity import stable_id
 from .storage import json_value
 
 
+GAMEPLAY_MESSAGE_BRIDGE_SCHEMA = (
+    "ue-itps.information-pool.gameplay-message-bridge"
+)
+
+
 def read_knowledge_graph(path: Path) -> dict[str, Any]:
     resolved = path.resolve()
     value = json.loads(resolved.read_text(encoding="utf-8-sig"))
@@ -154,3 +159,72 @@ def merge_knowledge_graph(
         "schema_version": schema,
         "payload_json": json_value(document),
     }
+
+
+def bridge_gameplay_message_dispatches(graph: Graph) -> int:
+    publishers_by_tag: dict[str, list[dict[str, Any]]] = {}
+    subscribers_by_tag: dict[str, list[dict[str, Any]]] = {}
+    existing = {
+        (
+            str(relation["source_id"]),
+            str(relation["kind"]),
+            str(relation["target_id"]),
+        )
+        for relation in graph.relations.values()
+    }
+    for relation in graph.relations.values():
+        if relation["resolution_status"] != "resolved":
+            continue
+        target_id = str(relation["target_id"])
+        target = graph.nodes.get(target_id)
+        if target is None or target["kind"] != "gameplay_tag":
+            continue
+        if relation["kind"] == "PUBLISHES_EVENT":
+            publishers_by_tag.setdefault(target_id, []).append(relation)
+        elif relation["kind"] == "SUBSCRIBES_EVENT":
+            subscribers_by_tag.setdefault(target_id, []).append(relation)
+
+    added = 0
+    for tag_id in sorted(set(publishers_by_tag) & set(subscribers_by_tag)):
+        publishers = sorted(
+            publishers_by_tag[tag_id],
+            key=lambda item: str(item["relation_id"]),
+        )
+        publisher_ids = [str(item["relation_id"]) for item in publishers]
+        publisher_confidence = max(
+            float(item["confidence"]) for item in publishers
+        )
+        subscribers = sorted(
+            subscribers_by_tag[tag_id],
+            key=lambda item: (
+                str(item["source_id"]),
+                str(item["relation_id"]),
+            ),
+        )
+        for subscriber in subscribers:
+            subscriber_id = str(subscriber["source_id"])
+            edge = (tag_id, "DISPATCHES_TO", subscriber_id)
+            if edge in existing:
+                continue
+            graph.add_relation(
+                source_id=tag_id,
+                kind="DISPATCHES_TO",
+                target_id=subscriber_id,
+                certainty="inferred",
+                resolution_status="resolved",
+                confidence=min(
+                    0.9,
+                    publisher_confidence,
+                    float(subscriber["confidence"]),
+                ),
+                probe_schema=GAMEPLAY_MESSAGE_BRIDGE_SCHEMA,
+                properties={
+                    "dispatch_semantics": "potential_runtime_delivery",
+                    "publisher_relation_ids": publisher_ids,
+                    "subscriber_relation_id": str(subscriber["relation_id"]),
+                    "tag_node_id": tag_id,
+                },
+            )
+            existing.add(edge)
+            added += 1
+    return added

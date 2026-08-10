@@ -75,7 +75,9 @@ python information_pool/query_information_pool.py `
 证据。已解析的调用和类型使用分别保存为 `CALLS`、`USES_TYPE`；只有无法进一步分类
 的引用才保存为 `REFERENCES`。类与结构体之间的 `path` 查询会将成员关系投影到所属
 类型，同时保留底层成员关系明细。委托事件使用 `PUBLISHES_EVENT`、
-`SUBSCRIBES_EVENT` 和 `DISPATCHES_TO` 表示静态可见的发布、订阅及潜在回调路径；
+`SUBSCRIBES_EVENT` 和 `DISPATCHES_TO` 表示静态可见的发布、订阅及潜在回调路径。
+对于同时存在已解析发布者和订阅者的 Gameplay Message Tag，建图阶段只派生一条
+`Tag -> 订阅者` 的 `DISPATCHES_TO` 关系，不生成发布者与订阅者的笛卡尔积直连。
 这些关系表达可能的运行时分发，不保证订阅在每次发布时都处于有效状态。
 
 ## 目录

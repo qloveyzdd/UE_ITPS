@@ -7,10 +7,81 @@ import unittest
 
 from ue_itps_information_pool.graph_model import Graph
 from ue_itps_information_pool.identity import project_id
-from ue_itps_information_pool.knowledge_adapter import merge_knowledge_graph
+from ue_itps_information_pool.knowledge_adapter import (
+    bridge_gameplay_message_dispatches,
+    merge_knowledge_graph,
+)
 
 
 class KnowledgeAdapterTests(unittest.TestCase):
+    def test_gameplay_message_bridge_ignores_unshared_and_unresolved_channels(
+        self,
+    ) -> None:
+        key = "Sample|Sample.uproject"
+        graph = Graph(key, project_id(key))
+        document = {
+            "schema_version": "ue_build_knowledge_graph",
+            "validation": {"status": "ok"},
+            "graph": {
+                "counts": {"nodes": 4, "relations": 3, "evidence": 0},
+                "nodes": [
+                    {
+                        "node_id": "orphan-subscriber",
+                        "kind": "blueprint_node",
+                        "name": "Orphan Subscriber",
+                    },
+                    {
+                        "node_id": "orphan-tag",
+                        "kind": "gameplay_tag",
+                        "name": "Game.Orphan",
+                    },
+                    {
+                        "node_id": "dynamic-publisher",
+                        "kind": "blueprint_node",
+                        "name": "Dynamic Publisher",
+                    },
+                    {
+                        "node_id": "dynamic-channel",
+                        "kind": "message_channel_expression",
+                        "name": "Dynamic Channel",
+                    },
+                ],
+                "relations": [
+                    {
+                        "relation_id": "orphan-subscription",
+                        "source_id": "orphan-subscriber",
+                        "kind": "SUBSCRIBES_EVENT",
+                        "target_id": "orphan-tag",
+                        "certainty": "confirmed",
+                    },
+                    {
+                        "relation_id": "dynamic-publish",
+                        "source_id": "dynamic-publisher",
+                        "kind": "PUBLISHES_EVENT",
+                        "target_id": "dynamic-channel",
+                        "certainty": "unresolved",
+                    },
+                    {
+                        "relation_id": "dynamic-subscribe",
+                        "source_id": "orphan-subscriber",
+                        "kind": "SUBSCRIBES_EVENT",
+                        "target_id": "dynamic-channel",
+                        "certainty": "unresolved",
+                    },
+                ],
+                "evidence": [],
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as temporary:
+            merge_knowledge_graph(graph, document, Path(temporary) / "graph.json")
+
+        self.assertEqual(bridge_gameplay_message_dispatches(graph), 0)
+        self.assertNotIn(
+            "DISPATCHES_TO",
+            {relation["kind"] for relation in graph.relations.values()},
+        )
+
     def test_merges_logical_nodes_relations_and_editor_evidence(self) -> None:
         key = "Sample|Sample.uproject"
         graph = Graph(key, project_id(key))
