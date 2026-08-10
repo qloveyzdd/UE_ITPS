@@ -8,13 +8,12 @@
   "$defs": {
     "success": {
       "type": "object",
-      "required": ["schema_version", "engine_root", "engine_version", "sessions", "matching_sessions", "validation", "limits"],
+      "required": ["schema_version", "engine_root", "engine_version", "sessions", "validation", "limits"],
       "properties": {
         "schema_version": {"const": "ue_editor_list_sessions"},
         "engine_root": {"type": "string"},
         "engine_version": {"type": "string"},
         "sessions": {"type": "array", "items": {"type": "object"}},
-        "matching_sessions": {"type": "array", "items": {"type": "object"}},
         "validation": {"$ref": "urn:ue-itps:edittools:common#/$defs/validation"},
         "limits": {"$ref": "urn:ue-itps:edittools:common#/$defs/limits"}
       },
