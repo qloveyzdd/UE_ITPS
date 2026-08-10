@@ -256,7 +256,7 @@ class EditorSession(AbstractContextManager["EditorSession"]):
                 f"_edittools_root = {str(edittools_root)!r}",
                 "if _edittools_root not in sys.path: sys.path.insert(0, _edittools_root)",
                 "for _ue_itps_module in list(sys.modules):",
-                "    if _ue_itps_module.startswith('ue_editor_tools.runtime') or _ue_itps_module in {'ue_editor_tools.message_model', 'ue_editor_tools.data_asset_values'}:",
+                "    if _ue_itps_module.startswith('ue_editor_tools.runtime') or _ue_itps_module in {'ue_editor_tools.message_model', 'ue_editor_tools.data_asset_values', 'ue_editor_tools.blueprint_reachability'}:",
                 "        sys.modules.pop(_ue_itps_module, None)",
                 "from ue_editor_tools.runtime.dispatch import invoke as _ue_itps_invoke",
                 f"_ue_itps_args = json.loads({arguments_json!r})",

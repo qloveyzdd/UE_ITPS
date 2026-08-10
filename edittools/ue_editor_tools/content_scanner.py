@@ -5,6 +5,25 @@ from typing import Any
 from .remote_client import EditorSession
 
 
+def is_logical_asset_package(package: str) -> bool:
+    normalized = package.replace("\\", "/").casefold()
+    return not any(
+        marker in normalized
+        for marker in ("/__externalactors__/", "/__externalobjects__/")
+    )
+
+
+def _logical_dependencies(
+    dependencies: dict[str, list[str]],
+) -> dict[str, list[str]]:
+    return {
+        str(kind): [
+            str(target) for target in targets if is_logical_asset_package(str(target))
+        ]
+        for kind, targets in dependencies.items()
+    }
+
+
 def chunks(values: list[str], size: int) -> list[list[str]]:
     if size < 1 or size > 200:
         raise ValueError("batch_size must be between 1 and 200")
@@ -29,7 +48,11 @@ def scan_asset_graph(
             "class_names": class_names or None,
         },
     )
-    rows = list(inventory.get("packages", []))
+    rows = [
+        row
+        for row in inventory.get("packages", [])
+        if is_logical_asset_package(str(row.get("package", "")))
+    ]
     if assets:
         selected = set(assets)
         rows = [row for row in rows if str(row.get("package")) in selected]
@@ -41,7 +64,9 @@ def scan_asset_graph(
             {"package_names": batch, "dependency_kinds": dependency_kinds or None},
         )
         for item in result.get("items", []):
-            dependencies[str(item["package"])] = dict(item.get("dependencies", {}))
+            dependencies[str(item["package"])] = _logical_dependencies(
+                dict(item.get("dependencies", {}))
+            )
     for row in rows:
         row["dependencies"] = dependencies.get(str(row["package"]), {})
     return {

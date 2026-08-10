@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 
+from ue_editor_tools.content_scanner import scan_asset_graph
 from ue_editor_tools.scanner import scan_gameplay_messages
 
 
@@ -43,6 +44,50 @@ class FakeSession:
 
 
 class ScannerTests(unittest.TestCase):
+    def test_asset_graph_excludes_world_partition_external_packages(self) -> None:
+        class AssetGraphSession:
+            def invoke(self, operation: str, arguments: dict | None = None):
+                if operation == "editor_state":
+                    return {"dirty_packages": []}
+                if operation == "list_asset_inventory":
+                    return {
+                        "roots": ["/Game"],
+                        "packages": [
+                            {"package": "/Game/Main", "assets": []},
+                            {
+                                "package": "/Game/__ExternalActors__/Map/A",
+                                "assets": [],
+                            },
+                            {
+                                "package": "/Game/__ExternalObjects__/Map/B",
+                                "assets": [],
+                            },
+                        ],
+                    }
+                if operation == "scan_asset_dependencies_batch":
+                    return {
+                        "items": [
+                            {
+                                "package": "/Game/Main",
+                                "dependencies": {
+                                    "hard_package": [
+                                        "/Game/Shared",
+                                        "/Game/__ExternalActors__/Map/A",
+                                    ]
+                                },
+                            }
+                        ]
+                    }
+                raise AssertionError(operation)
+
+        result = scan_asset_graph(AssetGraphSession())
+        self.assertEqual(result["package_count"], 1)
+        self.assertEqual(result["packages"][0]["package"], "/Game/Main")
+        self.assertEqual(
+            result["packages"][0]["dependencies"]["hard_package"],
+            ["/Game/Shared"],
+        )
+
     def test_scanner_aggregates_batches_and_referencers(self) -> None:
         result = scan_gameplay_messages(
             FakeSession(), batch_size=1, tags=["Code.Only.Message"]

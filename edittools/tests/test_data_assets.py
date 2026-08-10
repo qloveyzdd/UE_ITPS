@@ -6,6 +6,7 @@ from ue_editor_tools.content_scanner import scan_data_assets
 from ue_editor_tools.data_asset_values import (
     editor_properties,
     references_from_serialized,
+    serialize_property_differences,
     serialize_value,
 )
 
@@ -60,6 +61,34 @@ class FakeSession:
 
 
 class DataAssetTests(unittest.TestCase):
+    def test_only_properties_different_from_baseline_become_deltas(self) -> None:
+        observed, deltas = serialize_property_differences(
+            [("empty", []), ("changed", 2), ("child_only", "value")],
+            {"empty": [], "changed": 1},
+            baseline_available=True,
+            max_depth=3,
+            max_items=20,
+        )
+        self.assertEqual(
+            {item["name"] for item in observed}, {"empty", "changed", "child_only"}
+        )
+        self.assertEqual({item["name"] for item in deltas}, {"changed", "child_only"})
+        comparisons = {item["name"]: item["comparison"] for item in observed}
+        self.assertEqual(comparisons["empty"], "matches_default")
+        self.assertEqual(comparisons["changed"], "differs_from_default")
+        self.assertEqual(comparisons["child_only"], "baseline_property_missing")
+
+    def test_unavailable_baseline_does_not_guess_property_deltas(self) -> None:
+        observed, deltas = serialize_property_differences(
+            [("value", 7)],
+            {},
+            baseline_available=False,
+            max_depth=3,
+            max_items=20,
+        )
+        self.assertEqual(observed[0]["comparison"], "baseline_unavailable")
+        self.assertEqual(deltas, [])
+
     def test_serializes_nested_values_and_extracts_asset_references(self) -> None:
         value = FakeStruct(
             pawn=FakeObject("/Game/Pawns/DA_Pawn.DA_Pawn", "/Script/Game.LyraPawnData"),

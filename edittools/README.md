@@ -31,7 +31,7 @@ python edittools/ue_scan_config_graph.py --project D:/Game/Game.uproject
 
 `ue_editor_scan_gameplay_messages.py` 会自动查询 Blueprint 中发现的静态 Channel。对于只在 C++ 中出现的消息 Channel，可重复传入 `--tag`，把代码图谱已经识别出的 Tag 一并用于资产引用者查询。
 
-`ue_editor_scan_data_assets.py` 只读取显式传入的 DataAsset 和顶层属性，不执行项目级发现。它同时支持原生 DataAsset 实例和 Blueprint 派生 DataAsset 的生成类默认对象，并保存属性值、资产或类路径、Gameplay Tag 和 Primary Asset ID 引用。属性名应先从 C++ 类型或 Blueprint 结构工具获得；UE Python 不能可靠枚举任意 DataAsset 的全部 UPROPERTY。被引用的 UObject（包括内嵌子对象）只保存稳定路径和类身份，不递归展开其内部属性。
+`ue_editor_scan_data_assets.py` 只读取显式传入的 DataAsset 和顶层属性，不执行项目级发现。它同时支持原生 DataAsset 实例和 Blueprint 派生 DataAsset 的生成类默认对象。原始证据保留请求属性的观察值，统一图谱只接收相对本类 CDO 或父类 CDO 不同的属性；无法取得默认基线时不会猜测差异。属性名应先从 C++ 类型或 Blueprint 结构工具获得；UE Python 不能可靠枚举任意 DataAsset 的全部 UPROPERTY。被引用的 UObject（包括内嵌子对象）只保存稳定路径和类身份，不递归展开其内部属性。
 
 ## 消息关系
 
@@ -49,6 +49,8 @@ python edittools/ue_scan_config_graph.py --project D:/Game/Game.uproject
 Primary Asset、项目本地配置和 C++ Gameplay Message。Map 作为普通资产以及配置或 Primary Asset 的目标进入
 图谱；工具不会枚举 Map 内的 Actor、Component、Transform、World Partition Actor Descriptor
 或 External Actor，这些属于场景组装而非逻辑相关性。
+
+Blueprint 原始证据保留物理节点清单，统一图谱只写入从执行入口或结果节点静态可达的语义节点，并排除 Entry、Result、Knot、Tunnel 等结构节点以及未实现的继承函数和事件。该投影表示编辑器中可见的静态连接，不声称覆盖动态调用或运行时可达性。
 
 建议把各工具输出保存为独立 JSON，再统一构建：
 

@@ -119,7 +119,8 @@ python -m unittest discover -s edittools/tests -t edittools -v
 
 Editor、按需 DataAsset 属性、配置和 Gameplay Message 事实可先由 `edittools/ue_build_knowledge_graph.py` 合并为统一
 逻辑图谱，再通过信息池构建命令的 `--knowledge-graph` 参数写入同一个不可变 SQLite 快照。
-Map 只作为资产和逻辑配置目标进入图谱，不采集关卡内 Actor 或 Component 实例。
+正式图谱遵循“项目差异优先”：Map 只作为资产和逻辑配置目标，不采集 World Partition 外部分包中的 Actor 或 Component；
+Blueprint 只投影静态可达的语义节点和已实现声明；DataAsset 只持久化相对本类或父类默认对象发生变化的属性。
 
 ## 能力边界
 

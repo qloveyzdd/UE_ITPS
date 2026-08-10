@@ -7,6 +7,10 @@ from editor_toolset.toolsets.blueprint import BlueprintTools
 import unreal
 
 from .blueprints import _load_blueprint, serialize_node
+from ue_editor_tools.blueprint_reachability import (
+    project_blueprint_nodes,
+    semantic_node_references,
+)
 from ue_editor_tools.value_refs import unique_references
 
 
@@ -146,11 +150,21 @@ def inspect_blueprint_structure(asset_path: str) -> dict[str, Any]:
     )
     graphs: list[dict[str, Any]] = []
     references: list[dict[str, Any]] = []
+    observed_references: list[dict[str, Any]] = []
     for graph in sorted(
         BlueprintTools.list_graphs(blueprint),
         key=lambda item: item.get_name().casefold(),
     ):
         nodes = [serialize_node(node) for node in BlueprintTools.find_nodes(graph)]
+        projection = project_blueprint_nodes(nodes)
+        semantic_paths = {
+            str(item["object_path"])
+            for item in projection["semantic_nodes"]
+            if item.get("object_path")
+        }
+        semantic_nodes = [
+            node for node in nodes if str(node.get("object_path")) in semantic_paths
+        ]
         graphs.append(
             {
                 "name": graph.get_name(),
@@ -159,6 +173,8 @@ def inspect_blueprint_structure(asset_path: str) -> dict[str, Any]:
                 if hasattr(graph, "get_class")
                 else None,
                 "node_count": len(nodes),
+                "reachable_node_count": len(projection["reachable_paths"]),
+                "semantic_node_count": len(projection["semantic_nodes"]),
                 "nodes": [
                     {
                         "object_path": node["object_path"],
@@ -168,13 +184,21 @@ def inspect_blueprint_structure(asset_path: str) -> dict[str, Any]:
                     }
                     for node in nodes
                 ],
+                "semantic_nodes": projection["semantic_nodes"],
             }
         )
-        references.extend(unique_references(nodes))
+        references.extend(semantic_node_references(semantic_nodes))
+        observed_references.extend(unique_references(nodes))
     unique = {
         (item["kind"], item["target"], item.get("field", "")): item
         for item in references
     }
+    observed_unique = {
+        (item["kind"], item["target"], item.get("field", "")): item
+        for item in observed_references
+    }
+    observed_functions = _callable_info(blueprint, "list_functions")
+    observed_events = _callable_info(blueprint, "list_events")
     return {
         "asset": asset_path,
         "asset_object_path": blueprint.get_path_name(),
@@ -182,11 +206,16 @@ def inspect_blueprint_structure(asset_path: str) -> dict[str, Any]:
         "parent_class": _path(parent),
         "interfaces": _interfaces(blueprint),
         "variables": _variables(blueprint),
-        "functions": _callable_info(blueprint, "list_functions"),
-        "events": _callable_info(blueprint, "list_events"),
+        "functions": [item for item in observed_functions if item["implemented"]],
+        "events": [item for item in observed_events if item["implemented"]],
+        "observed_functions": observed_functions,
+        "observed_events": observed_events,
         "components": _components(blueprint),
         "graphs": graphs,
         "references": [unique[key] for key in sorted(unique)],
+        "observed_references": [
+            observed_unique[key] for key in sorted(observed_unique)
+        ],
     }
 
 

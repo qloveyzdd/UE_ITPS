@@ -14,6 +14,54 @@ PROJECT = "D:/Game/Game.uproject"
 
 
 class KnowledgeGraphTests(unittest.TestCase):
+    def test_blueprints_keep_only_implemented_callables_and_semantic_nodes(
+        self,
+    ) -> None:
+        document = {
+            "schema_version": "ue_editor_scan_blueprint_structure",
+            "editor": {"project": PROJECT},
+            "blueprints": [
+                {
+                    "asset": "/Game/BP_Test",
+                    "functions": [
+                        {"name": "ImplementedFunction", "implemented": True},
+                        {"name": "InheritedFunction", "implemented": False},
+                    ],
+                    "events": [
+                        {"name": "ImplementedEvent", "implemented": True},
+                        {"name": "InheritedEvent", "implemented": False},
+                    ],
+                    "graphs": [
+                        {
+                            "name": "EventGraph",
+                            "object_path": "/Game/BP_Test.BP_Test:EventGraph",
+                            "nodes": [
+                                {
+                                    "object_path": "/Game/BP_Test.Node_Default",
+                                    "title": "Unused default node",
+                                }
+                            ],
+                            "semantic_nodes": [
+                                {
+                                    "object_path": "/Game/BP_Test.Node_Call",
+                                    "title": "Project call",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+        graph, problems = build_knowledge_graph([("blueprints.json", document)])
+        self.assertEqual(problems, [])
+        names = {item["name"] for item in graph["nodes"]}
+        self.assertIn("ImplementedFunction", names)
+        self.assertIn("ImplementedEvent", names)
+        self.assertIn("Project call", names)
+        self.assertNotIn("InheritedFunction", names)
+        self.assertNotIn("InheritedEvent", names)
+        self.assertNotIn("Unused default node", names)
+
     def test_merges_asset_and_message_evidence_by_canonical_identity(self) -> None:
         asset_document = {
             "schema_version": "ue_editor_export_asset_graph",
@@ -145,7 +193,16 @@ class KnowledgeGraphTests(unittest.TestCase):
                                     "field": "path",
                                 }
                             ],
-                        }
+                            "comparison": "differs_from_default",
+                        },
+                        {
+                            "name": "empty_default",
+                            "path": "empty_default",
+                            "value_kind": "array",
+                            "value": {"kind": "array", "items": []},
+                            "references": [],
+                            "comparison": "matches_default",
+                        },
                     ],
                 }
             ],
@@ -161,6 +218,9 @@ class KnowledgeGraphTests(unittest.TestCase):
         ]
         self.assertEqual(len(properties), 1)
         self.assertEqual(properties[0]["properties"]["path"], "default_pawn_data")
+        self.assertEqual(
+            properties[0]["properties"]["comparison"], "differs_from_default"
+        )
         self.assertEqual(validate_graph(graph), [])
 
 

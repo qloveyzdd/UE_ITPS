@@ -6,8 +6,7 @@ import unreal
 
 from ue_editor_tools.data_asset_values import (
     editor_properties,
-    references_from_serialized,
-    serialize_value,
+    serialize_property_differences,
 )
 
 
@@ -16,6 +15,27 @@ def _path(value: Any) -> str | None:
         return None
     try:
         return str(value.get_path_name() or "") or None
+    except Exception:
+        return None
+
+
+def _blueprint_parent_class(asset: Any) -> Any:
+    try:
+        parent = asset.get_editor_property("parent_class")
+        if parent is not None:
+            return parent
+    except Exception:
+        pass
+    library = getattr(unreal, "BlueprintEditorLibrary", None)
+    method = (
+        getattr(library, "get_blueprint_parent_class", None)
+        if library is not None
+        else None
+    )
+    if method is None:
+        return None
+    try:
+        return method(asset)
     except Exception:
         return None
 
@@ -34,29 +54,35 @@ def inspect_data_asset(
     source = asset
     source_kind = "data_asset"
     generated_class = None
+    baseline = None
+    baseline_kind = "class_cdo"
     if not isinstance(source, unreal.DataAsset) and hasattr(asset, "generated_class"):
         generated_class = asset.generated_class()
         if generated_class is not None:
             source = unreal.get_default_object(generated_class)
             source_kind = "blueprint_cdo"
+            baseline_kind = "parent_cdo"
+            parent_class = _blueprint_parent_class(asset)
+            if parent_class is not None:
+                baseline = unreal.get_default_object(parent_class)
     if source is None or not isinstance(source, unreal.DataAsset):
         raise ValueError(
             f"Asset is not a DataAsset or DataAsset Blueprint: {asset_path}"
         )
+    if source_kind == "data_asset":
+        try:
+            baseline = unreal.get_default_object(source.get_class())
+        except Exception:
+            baseline = None
     properties, missing = editor_properties(source, property_names)
-    rows: list[dict[str, Any]] = []
-    for name, value in properties:
-        serialized = serialize_value(value, max_depth=max_depth, max_items=max_items)
-        rows.append(
-            {
-                "name": name,
-                "path": name,
-                "value_kind": str(serialized.get("kind", "unknown")),
-                "value": serialized,
-                "references": references_from_serialized(serialized),
-            }
-        )
-    rows.sort(key=lambda item: str(item["path"]).casefold())
+    baseline_properties, _ = editor_properties(baseline, property_names)
+    observed_rows, delta_rows = serialize_property_differences(
+        properties,
+        dict(baseline_properties),
+        baseline_available=baseline is not None,
+        max_depth=max_depth,
+        max_items=max_items,
+    )
     problems = [
         {
             "severity": "warning",
@@ -67,6 +93,15 @@ def inspect_data_asset(
         }
         for name in missing
     ]
+    if baseline is None:
+        problems.append(
+            {
+                "severity": "warning",
+                "code": "data-asset-baseline-unavailable",
+                "asset": package,
+                "message": "Class or parent default object could not be resolved; no property deltas were emitted.",
+            }
+        )
     return (
         {
             "asset": package,
@@ -75,8 +110,15 @@ def inspect_data_asset(
             "source_object_path": _path(source),
             "asset_class": _path(source.get_class()),
             "generated_class": _path(generated_class),
-            "property_count": len(rows),
-            "properties": rows,
+            "baseline_kind": baseline_kind,
+            "baseline_object_path": _path(baseline),
+            "baseline_class": _path(baseline.get_class())
+            if baseline is not None
+            else None,
+            "observed_property_count": len(observed_rows),
+            "observed_properties": observed_rows,
+            "property_count": len(delta_rows),
+            "properties": delta_rows,
         },
         problems,
     )

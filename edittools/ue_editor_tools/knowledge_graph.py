@@ -296,6 +296,8 @@ def _blueprints(graph: KnowledgeGraph, document: dict[str, Any], producer: str) 
             ("events", "DECLARES_EVENT"),
         ):
             for callable_item in item.get(category, []):
+                if callable_item.get("implemented") is False:
+                    continue
                 callable_key = (
                     f"{generated or package}|{category}|{callable_item.get('name')}"
                 )
@@ -362,7 +364,8 @@ def _blueprints(graph: KnowledgeGraph, document: dict[str, Any], producer: str) 
                 producer=producer,
                 evidence={"asset": item.get("asset_object_path"), "graph": path},
             )
-            for node in graph_row.get("nodes", []):
+            nodes = graph_row.get("semantic_nodes", graph_row.get("nodes", []))
+            for node in nodes:
                 node_path = str(node["object_path"])
                 node_id = graph.add_node(
                     "blueprint_node",
@@ -476,6 +479,11 @@ def _data_assets(
                 "source_kind": item.get("source_kind"),
                 "source_object_path": source_object_path,
                 "generated_class": item.get("generated_class"),
+                "baseline_kind": item.get("baseline_kind"),
+                "baseline_object_path": item.get("baseline_object_path"),
+                "baseline_class": item.get("baseline_class"),
+                "observed_property_count": item.get("observed_property_count"),
+                "property_count": item.get("property_count"),
             },
         )
         if item.get("asset_class"):
@@ -497,6 +505,11 @@ def _data_assets(
                 },
             )
         for property_item in item.get("properties", []):
+            if property_item.get("comparison") in {
+                "matches_default",
+                "baseline_unavailable",
+            }:
+                continue
             property_path = str(property_item["path"])
             property_key = f"{package}|{property_path}"
             property_id = graph.add_node(
@@ -508,6 +521,7 @@ def _data_assets(
                     "path": property_path,
                     "value_kind": property_item.get("value_kind"),
                     "value": property_item.get("value"),
+                    "comparison": property_item.get("comparison"),
                 },
             )
             graph.add_relation(
@@ -519,6 +533,9 @@ def _data_assets(
                     "asset": object_path,
                     "source_object": source_object_path,
                     "property": property_path,
+                    "comparison": property_item.get("comparison"),
+                    "baseline_kind": item.get("baseline_kind"),
+                    "baseline_object": item.get("baseline_object_path"),
                 },
             )
             for reference in property_item.get("references", []):

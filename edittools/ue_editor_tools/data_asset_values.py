@@ -48,6 +48,45 @@ def editor_properties(
     return properties, missing
 
 
+def serialize_property_differences(
+    properties: list[tuple[str, Any]],
+    baseline_by_name: dict[str, Any],
+    *,
+    baseline_available: bool,
+    max_depth: int,
+    max_items: int,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    observed: list[dict[str, Any]] = []
+    deltas: list[dict[str, Any]] = []
+    for name, value in properties:
+        serialized = serialize_value(value, max_depth=max_depth, max_items=max_items)
+        if not baseline_available:
+            comparison = "baseline_unavailable"
+        elif name not in baseline_by_name:
+            comparison = "baseline_property_missing"
+        else:
+            baseline = serialize_value(
+                baseline_by_name[name], max_depth=max_depth, max_items=max_items
+            )
+            comparison = (
+                "matches_default" if serialized == baseline else "differs_from_default"
+            )
+        row = {
+            "name": name,
+            "path": name,
+            "value_kind": str(serialized.get("kind", "unknown")),
+            "value": serialized,
+            "references": references_from_serialized(serialized),
+            "comparison": comparison,
+        }
+        observed.append(row)
+        if comparison in {"differs_from_default", "baseline_property_missing"}:
+            deltas.append(row)
+    observed.sort(key=lambda item: str(item["path"]).casefold())
+    deltas.sort(key=lambda item: str(item["path"]).casefold())
+    return observed, deltas
+
+
 def _object_reference(value: Any) -> dict[str, Any] | None:
     if not hasattr(value, "get_path_name"):
         return None

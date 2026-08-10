@@ -18,19 +18,20 @@
     },
     "property": {
       "type": "object",
-      "required": ["name", "path", "value_kind", "value", "references"],
+      "required": ["name", "path", "value_kind", "value", "references", "comparison"],
       "properties": {
         "name": {"type": "string"},
         "path": {"type": "string"},
         "value_kind": {"type": "string"},
         "value": {},
-        "references": {"type": "array", "items": {"$ref": "#/$defs/reference"}}
+        "references": {"type": "array", "items": {"$ref": "#/$defs/reference"}},
+        "comparison": {"enum": ["matches_default", "differs_from_default", "baseline_property_missing", "baseline_unavailable"]}
       },
       "additionalProperties": false
     },
     "dataAsset": {
       "type": "object",
-      "required": ["asset", "object_path", "source_kind", "source_object_path", "asset_class", "generated_class", "property_count", "properties"],
+      "required": ["asset", "object_path", "source_kind", "source_object_path", "asset_class", "generated_class", "baseline_kind", "baseline_object_path", "baseline_class", "observed_property_count", "observed_properties", "property_count", "properties"],
       "properties": {
         "asset": {"type": "string"},
         "object_path": {"type": "string"},
@@ -38,6 +39,11 @@
         "source_object_path": {"type": ["string", "null"]},
         "asset_class": {"type": ["string", "null"]},
         "generated_class": {"type": ["string", "null"]},
+        "baseline_kind": {"enum": ["class_cdo", "parent_cdo"]},
+        "baseline_object_path": {"type": ["string", "null"]},
+        "baseline_class": {"type": ["string", "null"]},
+        "observed_property_count": {"type": "integer", "minimum": 0},
+        "observed_properties": {"type": "array", "items": {"$ref": "#/$defs/property"}},
         "property_count": {"type": "integer", "minimum": 0},
         "properties": {"type": "array", "items": {"$ref": "#/$defs/property"}}
       },
