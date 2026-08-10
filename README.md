@@ -1,255 +1,129 @@
+<!-- generated-by: gsd-doc-writer -->
 # UE ITPS
 
-运行中 Unreal Editor 的 Gameplay Tag、资产引用、Blueprint Graph 和 Gameplay Message 关系读取工具位于 [`edittools/`](edittools/)。这些工具与具体项目解耦，通过明确的 `.uproject` 参数连接 UE 5.8 Editor，并输出确定性的只读 JSON 事实。
+UE ITPS 是面向 Unreal Engine 项目维护者与 AI Agent 的确定性、只读项目检查工具集，可从显式选择的项目、构建规则和 C++ 源文件生成带验证状态与能力边界的 JSON 事实。
 
-UE ITPS 是一组确定性、只读的 Unreal Engine 项目检查工具。它从调用方明确选择的 `.uproject`、`.uplugin`、`Build.cs`、`Target.cs` 或 C++ 文件出发，输出适合程序和 AI Agent 消费的 JSON 事实。
+仓库提供 21 个 Python CLI，覆盖 `.uproject`、Engine、Module、Target、Plugin、C++ 源码清单、类型关系、依赖关系和局部函数流分析。工具只读取静态证据，不替代 UnrealBuildTool、UnrealHeaderTool、Unreal Editor、编译器或运行时验证。
 
-当前正式接口包括：
+## 当前状态
 
-- 21 个聚焦的 Python CLI，统一组成项目工具池。
-- 21 份 CLI JSON Schema 和 1 份公共 Schema。
-- 65 项自动化测试。
-- 3 个与 Lyra 本地验证相关的辅助脚本；它们不属于 21 个正式只读 CLI。
+- 核心静态工具池已形成 21 个正式 CLI、21 份逐工具 Schema 与 1 份公共 Schema；核心测试当前共 66 项。
+- `edittools/` 已提供 6 个运行中 Editor 只读工具，覆盖 Gameplay Tag、资产引用、Blueprint、Gameplay Message 扫描以及消息关系图导出。
+- `information_pool/` 已能把静态探针结果构建为绑定 Git 提交的不可变 SQLite 快照；`show/` 可在本地浏览语义关系与最短路径；`mcp_connection_pool/` 负责被动发现并选择 UE 5.8 Editor MCP 连接。
+- 当前 Unreal 参考基座为 `LyraStarterGame` + UE 5.8.2。Editor 与多个 PIE Experience 已在本机观察到，但 5.8.2 权威文件指纹、完整 L0/L1 日志以及网络和 Travel 路径仍在重新核验。
+- UE 5.6.1 的架构与运行资料只保留为历史对照，不自动视为 UE 5.8.2 的当前事实。长期信任治理系统尚未进入实现阶段，当前重点仍是建立可复现的 Lyra 架构和最小运行边界。
 
-UE ITPS 提供静态文件与源码证据，不替代 UnrealBuildTool、UnrealHeaderTool、Editor、编译器或运行时验证。
+## 安装
 
-## 当前 Lyra 基座
+需要 Python 3.10 或更高版本。正式 CLI 不要求安装 Unreal Engine；仅 Engine 定位或针对真实工程执行检查时需要相应的 Engine 或项目目录。
 
-- 本地参考工程已切换到 `LyraStarterGame` + **UE 5.8.2**；版本以解析后的 `Engine/Build/Build.version` 和 Editor 运行日志为准。
-- 当前目标为 `LyraEditor / Win64 / Development`，构建回执使用 `BuildSettingsVersion V7`。
-- Editor 已启动并进入 PIE，日志已观察到默认、前端、Elimination 和 ControlPoints Experience 对应地图。
-- 工程显式启用 `AIAssistant`、`ToolsetRegistry` 与 `AllToolsets`，UE 5.8 MCP、Asset Registry、Blueprint 和 Blueprint Graph 能力作为当前基座工具能力使用。
-- `.planning/evidence/lyra-5.6.1/` 与现有 5.6.1 分析结论保留为历史证据；版本敏感结论不会自动继承到 5.8.2。
-
-绑定 Git 提交的工程信息池位于独立的 [`information_pool/`](information_pool/)
-目录。信息池复用现有探针，以不可变 SQLite 快照保存项目结构、C++ 符号、关系和
-原始证据；候选快照通过验证后才会原子激活。使用方式和当前边界见
-[`information_pool/README.md`](information_pool/README.md)。
-本地关系浏览器位于 [`show/`](show/)，默认以类级聚合语义关系和最短路径展示快照。
-
-## 环境要求
-
-- Python 3.10 或更高版本。
-- 正式 CLI 使用固定版本的 Tree-sitter、C++ 与 C# grammar，见 `requirements.txt`。
-- 运行测试需要 `requirements-dev.txt` 中的 `jsonschema`。
-- 只有解析已安装 Engine 或执行 Lyra 辅助流程时，才需要相应 Engine 或项目目录。
-
-安装运行依赖：
-
-```powershell
+```bash
+git clone https://github.com/qloveyzdd/UE_ITPS.git
+cd UE_ITPS
 python -m pip install -r requirements.txt
 ```
 
-安装测试依赖（会同时安装运行依赖）：
+如需运行测试，请安装开发依赖：
 
-```powershell
+```bash
 python -m pip install -r requirements-dev.txt
 ```
 
 ## 快速开始
 
-先查看项目工具池：
+1. 查看可用工具及其输入和能力：
 
-```powershell
-python tools/ue_list_tools.py
-```
+   ```bash
+   python tools/ue_list_tools.py
+   ```
 
-先发现项目：
+2. 在一个目录下查找 Unreal 项目：
 
-```powershell
-python tools/ue_find_projects.py --search-root D:/Projects/MyGame
-```
+   ```bash
+   python tools/ue_find_projects.py --search-root D:/Projects/MyGame
+   ```
 
-只有一个候选时，将返回的 `.uproject` 路径作为后续命令的明确输入：
+3. 从返回结果中明确选择一个 `.uproject`，再读取其声明：
 
-```powershell
-python tools/ue_read_project_descriptor.py --project D:/Projects/MyGame/MyGame.uproject
+   ```bash
+   python tools/ue_read_project_descriptor.py --project D:/Projects/MyGame/MyGame.uproject
+   ```
+
+每个正式 CLI 都将 JSON 写入标准输出，并使用统一的顶层结构：领域事实、`validation` 和 `limits`。当搜索范围内存在多个项目时，发现工具会返回歧义错误和候选列表，不会自行选择。
+
+## 使用示例
+
+### 检查项目结构
+
+```bash
 python tools/ue_resolve_engine.py --project D:/Projects/MyGame/MyGame.uproject
 python tools/ue_inspect_modules.py --project D:/Projects/MyGame/MyGame.uproject
 python tools/ue_inspect_targets.py --project D:/Projects/MyGame/MyGame.uproject
 python tools/ue_list_project_cxx_sources.py --project D:/Projects/MyGame/MyGame.uproject
 ```
 
-检查一个明确选择的 C++ 源码单元：
+结果分别提供 Engine 定位证据、Module 声明与规则对应关系、Target 清单以及按 Module 和可见性组织的项目 C++ 源文件清单。
 
-```powershell
+### 检查一个 C++ 源码单元
+
+```bash
 python tools/ue_list_cxx_includes.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp
 python tools/ue_list_cxx_types.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp
 python tools/ue_inspect_cxx_function.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp --function BeginPlay
 ```
 
-每个 CLI 都提供中英双语帮助：
+结果包含直接 include 来源、类型与成员锚点，以及指定同名函数定义中的外部符号候选。工具只检查显式选择的文件和唯一可推导的同名伴随文件，不递归读取 include 或被调用函数。
 
-```powershell
-python tools/ue_inspect_module_entry.py --help
+### 分析项目内 C++ 关系
+
+```bash
+python tools/ue_analyze_cxx_dependencies.py --project D:/Projects/MyGame/MyGame.uproject
+python tools/ue_query_cxx_hierarchy.py --project D:/Projects/MyGame/MyGame.uproject --class AMyActor
+python tools/ue_analyze_cxx_impact.py --project D:/Projects/MyGame/MyGame.uproject --symbol AMyActor
 ```
 
-## 正式 CLI
+结果可用于检查项目内类依赖与循环、查询继承关系，以及反向追踪某个类型的静态影响范围。这些关系是保守的静态证据，不是完整编译器符号表或运行时调用图。
 
-| 范围 | CLI | 明确入口 | 工具标识 | 职责 |
-|---|---|---|---|---|
-| 项目 | `ue_find_projects.py` | `--search-root` | `ue_find_projects` | 查找 `.uproject`，如实报告零个、一个或多个候选 |
-| 项目 | `ue_read_project_descriptor.py` | `--project` | `ue_read_project_descriptor` | 投影 `.uproject` 的显式声明 |
-| 项目 | `ue_resolve_engine.py` | `--project` | `ue_resolve_engine` | 定位 Engine 根目录并读取 `Build.version` |
-| 项目 | `ue_inspect_modules.py` | `--project` | `ue_inspect_modules` | 对账 Module 声明、Build.cs 和注册入口 |
-| 项目 | `ue_inspect_targets.py` | `--project` | `ue_inspect_targets` | 发现 Target.cs 并报告原生 Target 证据 |
-| 项目 | `ue_list_project_cxx_sources.py` | `--project` | `ue_list_project_cxx_sources` | 按 Module、Plugin 和可见性列出项目 C++ 源码 |
-| 项目 | `ue_resolve_plugins.py` | `--project` | `ue_resolve_plugins` | 在显式 Profile 下定位 Plugin 并静态跟踪依赖 |
-| 项目 | `ue_classify_project_paths.py` | `--project` | `ue_classify_project_paths` | 分类项目根路径及文件系统状态 |
-| 构建 | `ue_read_plugin_descriptor.py` | `--plugin` | `ue_read_plugin_descriptor` | 读取一个 `.uplugin` 并对账其 Module |
-| 构建 | `ue_inspect_module_rules.py` | `--rules` | `ue_inspect_module_rules` | 投影 ModuleRules 设置变更与条件 |
-| 构建 | `ue_inspect_target_rules.py` | `--target` | `ue_inspect_target_rules` | 索引 TargetRules 类、变量和函数 |
-| 构建 | `ue_inspect_cs_function.py` | `--source --function` | `ue_inspect_cs_function` | 检查同名 C# 成员及其外部引用 |
-| Module | `ue_inspect_module_entry.py` | `--rules` | `ue_inspect_module_entry` | 检查注册、回调绑定、清理和生命周期状态 |
-| C++ | `ue_list_cxx_includes.py` | `--source` | `ue_list_cxx_includes` | 列出直接 include、条件和物理来源 |
-| C++ | `ue_list_cxx_types.py` | `--source` | `ue_list_cxx_types` | 索引独立类型声明/定义、成员、全局变量和自由函数锚点 |
-| C++ | `ue_inspect_cxx_function.py` | `--source --function` | `ue_inspect_cxx_function` | 检查同名定义及其外部符号 |
-| 工具池 | `ue_list_tools.py` | 无 | `ue_list_tools` | 列出全部只读探针、入口与能力 |
-| 图谱 | `ue_analyze_cxx_dependencies.py` | `--project` | `ue_analyze_cxx_dependencies` | 构建项目本地 C++ 类型依赖并检测循环 |
-| 图谱 | `ue_query_cxx_hierarchy.py` | `--project --class` | `ue_query_cxx_hierarchy` | 查询类型的继承链与派生类型 |
-| 图谱 | `ue_analyze_cxx_impact.py` | `--project --symbol` | `ue_analyze_cxx_impact` | 反向追踪类型的静态影响范围 |
-| 图谱 | `ue_trace_cxx_function_flow.py` | `--source --function` | `ue_trace_cxx_function_flow` | 提取函数局部控制流与直接调用 |
+## 相关组件
 
-`schema_version` 字段现在只保存工具名，不再携带任何版本后缀；Schema 文件名与工具名一一对应。
+- [`information_pool/`](information_pool/)：将确定性探针结果构建为绑定 Git 提交的不可变 SQLite 快照，并提供搜索、层级、影响、调用者、循环、最短路径和差异查询。
+- [`edittools/`](edittools/)：连接运行中的 Unreal Editor，读取 Gameplay Tag、资产引用、Blueprint 和 Gameplay Message 事实；其前置条件和命令见 [`edittools/README.md`](edittools/README.md)。
+- [`show/`](show/)：在本地浏览工程信息池 SQLite 快照中的语义关系，不上传或修改数据库。
+- [`schemas/`](schemas/)：21 个正式 CLI Schema 和 1 个公共 Schema，均采用 JSON Schema Draft 2020-12。
+- [`docs/PROGRAM-DESIGN.md`](docs/PROGRAM-DESIGN.md)：公共契约、内部边界、测试策略和扩展规则。
 
-语法分析前端借鉴 ast-outline：Tree-sitter 负责 C++/C# 语法树，项目原有逻辑继续负责 UE 路径、证据、声明/定义关系和保守语义分类。依赖图、循环检测和反向影响算法采用 gdep 思路并改写为确定性 JSON。来源和许可证见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
+## 文档导航
 
-`ue_resolve_plugins.py` 还支持：
-
-- `--operation`：`scan`、`open_editor`、`build_editor`、`run_game` 或 `cook_package`。
-- `--platform`：默认 `Win64`。
-- `--target-type`：默认 `Editor`。
-- `--plugin-name`：可重复指定，按名称筛选，大小写不敏感。
-
-## 显式导航
-
-工具不会自动遍历并解释整个项目。调用方先选择入口，再决定是否进入下一层：
-
-```text
-搜索根目录
-└─ 唯一 .uproject
-   ├─ 描述符 / Engine / Module / Target / 项目路径 / C++ 清单
-   ├─ 直接 Plugin 引用
-   │  └─ 明确选择一个 .uplugin
-   │     └─ 明确选择一个 Build.cs
-   │        ├─ ModuleRules
-   │        └─ Module 注册与生命周期
-   └─ 明确选择一个 Target.cs 或普通 .cs
-      └─ 明确选择一个函数名
-
-明确选择一个 .h/.hpp/.cpp/.cc
-├─ 直接 include
-├─ 类型与声明锚点
-└─ 明确选择一个函数名
-```
-
-项目发现遇到多个 `.uproject` 时返回歧义错误，不代替调用方选择。文件级工具也采用同一原则：没有伴随文件时只扫描选中文件，多个伴随候选时返回 warning，不猜测目标。
-
-## JSON 输出契约
-
-成功或已经开始领域扫描的结果：
-
-```text
-schema_version
-<领域事实>
-validation
-limits
-```
-
-参数、输入或读取失败：
-
-```text
-schema_version
-request
-validation
-limits
-```
-
-公共规则：
-
-- JSON 写入 stdout，stderr 保持为空。
-- `request.status` 固定为 `failed`。
-- `request.kind` 为 `argument` 或 `input`。
-- `validation.status` 为 `ok`、`warning` 或 `error`。
-- `validation.problem_count` 必须等于 `problems` 的实际数量。
-- `limits.responsibility` 说明当前结果负责回答的问题。
-- `limits.boundaries` 说明当前结果不能证明的内容。
-
-| 退出码 | 含义 |
-|---:|---|
-| `0` | 扫描完成，Validation 为 `ok` 或 `warning` |
-| `1` | 扫描完成，但出现领域阻断错误 |
-| `2` | 参数、输入或读取失败 |
-
-`.uproject` 和 `Build.version` 使用严格 JSON 读取，拒绝重复键、非标准常量和非对象根值。`.uplugin` 使用独立的 Unreal JSON 读取器，允许注释与尾随逗号，同时将重复字段作为可定位的验证问题报告。
+- [快速入门](docs/GETTING-STARTED.md)：安装依赖并执行第一次只读检查。
+- [架构说明](docs/ARCHITECTURE.md)：组件边界、数据流和关键抽象。
+- [配置参考](docs/CONFIGURATION.md)：命令行参数、配置文件和默认值。
+- [开发指南](docs/DEVELOPMENT.md)：本地环境、开发命令和协作约定。
+- [测试指南](docs/TESTING.md)：各子系统测试入口、夹具约定和当前门禁。
+- [程序设计](docs/PROGRAM-DESIGN.md)：公共输出契约、解析边界和扩展规则。
 
 ## 测试
 
-运行完整测试：
+运行正式 CLI 的完整测试套件：
 
-```powershell
+```bash
 python -m unittest discover -s tests -v
 ```
 
-当前测试共 64 项：
+当前测试套件共 66 项，覆盖 CLI 与 Schema 契约、项目导航、Module 与构建规则、C++ 分析、图关系和端到端只读性。测试使用临时工程夹具，不依赖本地 Unreal Engine、`LyraStarterGame/` 或 `ExternalProjects/`。
 
-| 测试模块 | 数量 | 覆盖重点 |
-|---|---:|---|
-| `test_cli_contracts.py` | 15 | CLI/Schema 清单、双语帮助、错误信封、退出码、严格 JSON 和公共结果契约 |
-| `test_project_navigation.py` | 14 | 项目发现、描述符、Engine、Module、Target、Plugin、源码清单和路径 |
-| `test_build_and_module.py` | 12 | `.uplugin`、ModuleRules、TargetRules、C# 函数和 Module 生命周期 |
-| `test_cxx_analysis.py` | 14 | 源码单元、include、独立类型声明、接口候选、函数身份和外部符号 |
-| `test_end_to_end_workflow.py` | 3 | 21 个 CLI 的完整导航、只读性和字节级确定性 |
-| `test_tool_pool_enrichment.py` | 6 | UE 宏 AST、C# 泛型/lambda、依赖循环、影响追踪、工具池和无版本 Schema 标识 |
-| **合计** | **64** | 当前公共行为、成功与失败边界、Schema、只读性和确定性 |
+Editor 工具拥有独立测试套件：
 
-测试在临时目录中构造最小 Engine、项目、Plugin、规则文件和 C++ 源码：
-
-- 不读取 `LyraStarterGame/` 或 `ExternalProjects/`。
-- 不依赖已安装 Unreal Engine。
-- 不运行 UBT、UHT 或 Editor。
-- 不修改真实项目。
-- 每个 CLI 结果都通过对应 JSON Schema 校验。
-
-## Lyra 辅助脚本
-
-以下脚本服务于仓库内的 Lyra 本地证据流程，不属于 21 个正式 CLI，也没有复用正式 CLI 的只读输入/输出契约：
-
-| 脚本 | 用途 |
-|---|---|
-| `tools/query_lyra_asset_registry.py` | 在 Unreal Python 环境内读取指定 Lyra 资产和直接依赖切片 |
-| `tools/new_lyra_baseline_fingerprint.ps1` | 为 Lyra 权威文件生成 SHA-256 基线 |
-| `tools/archive_lyra_run.ps1` | 将一次 Lyra 运行日志和上下文归档为不可覆盖的证据目录 |
-
-这些脚本可能写入 `.planning/evidence/`，应与正式只读检查器分开使用和评估。
-
-## 仓库结构
-
-```text
-.
-├─ tools/
-│  ├─ ue_*.py                 # 21 个正式 CLI（项目工具池）
-│  ├─ ue_project_tools/       # 领域服务、解析器与公共输出组件
-│  └─ *lyra*                  # Lyra 本地证据辅助脚本
-├─ schemas/                   # 21 个 CLI Schema + 1 个公共 Schema
-├─ tests/                     # 64 项临时夹具自动化测试
-├─ docs/PROGRAM-DESIGN.md     # 架构、契约和扩展规则
-├─ LyraStarterGame/           # 当前 UE 5.8.2 Lyra 本地参考基座
-├─ ExternalProjects/          # 可选外部参考项目
-├─ requirements.txt           # 固定版本的运行依赖
-├─ requirements-dev.txt       # 测试依赖
-└─ THIRD_PARTY_NOTICES.md     # ast-outline / gdep 来源与许可证
+```bash
+python -m unittest discover -s edittools/tests -t edittools -v
 ```
 
 ## 能力边界
 
-- 所有正式 CLI 结论都是静态证据，不是有效 UBT/UHT 配置。
-- Plugin 解析从 `.uproject` 的直接声明出发，静态跟踪可读 `.uplugin` 依赖；这不是有效构建 Profile 的完整闭包。
-- Build.cs 和 Target.cs 只解析受支持的 C# 子集，不执行规则代码。
-- include 的唯一物理候选不等于编译器实际选中。
-- 类型、成员与函数结果由 Tree-sitter AST 和项目原有词法/UE 语义层共同投影，不是编译器符号表或完整调用图。
-- Module 生命周期结果是保守静态模型，不证明实际加载顺序、线程或运行状态。
-- 路径分类不提供删除安全结论。
-- 编译、启动、资产、配置合并、网络和目标平台行为仍需 Unreal 权威工具验证。
+- Build.cs、Target.cs 和 C++ 结果是受支持语法范围内的静态投影，不执行源码或推断最终 UBT 配置。
+- 唯一物理 include 候选不等于编译器实际选择；Plugin 静态依赖也不等于完整有效的构建 Profile。
+- Module 生命周期、函数流和依赖图是保守模型，不证明加载顺序、线程、回调时机或运行时状态。
+- 编译、启动、资产状态、配置合并、网络行为和目标平台行为仍须使用 Unreal 官方工具验证。
 
-维护规则和内部设计见 [程序设计文档](docs/PROGRAM-DESIGN.md)。
+## 许可证
+
+本仓库尚未声明项目级许可证；所采用第三方源码思路及其 Apache License 2.0 许可信息见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) 和 [`LICENSES/`](LICENSES/)。
