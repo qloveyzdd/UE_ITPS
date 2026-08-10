@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:edittools:common",
+  "$defs": {
+    "problem": {
+      "type": "object",
+      "required": ["severity", "code", "message"],
+      "properties": {
+        "severity": {"enum": ["warning", "error"]},
+        "code": {"type": "string"},
+        "message": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "validation": {
+      "type": "object",
+      "required": ["status", "problem_count", "problems"],
+      "properties": {
+        "status": {"enum": ["ok", "warning", "error"]},
+        "problem_count": {"type": "integer", "minimum": 0},
+        "problems": {"type": "array", "items": {"$ref": "#/$defs/problem"}}
+      },
+      "additionalProperties": false
+    },
+    "limits": {
+      "type": "object",
+      "required": ["responsibility", "boundaries"],
+      "properties": {
+        "responsibility": {"type": "string"},
+        "boundaries": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": false
+    },
+    "editor": {
+      "type": "object",
+      "required": ["project", "project_root", "project_name", "engine_root", "engine_version", "node_id", "user", "machine"],
+      "properties": {
+        "project": {"type": "string"},
+        "project_root": {"type": "string"},
+        "project_name": {"type": "string"},
+        "engine_root": {"type": "string"},
+        "engine_version": {"type": "string"},
+        "node_id": {"type": "string"},
+        "user": {"type": "string"},
+        "machine": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "errorDocument": {
+      "type": "object",
+      "required": ["schema_version", "request", "validation", "limits"],
+      "properties": {
+        "schema_version": {"type": "string"},
+        "request": {
+          "type": "object",
+          "required": ["status", "kind"],
+          "properties": {
+            "status": {"const": "failed"},
+            "kind": {"enum": ["argument", "input"]}
+          },
+          "additionalProperties": false
+        },
+        "validation": {"$ref": "#/$defs/validation"},
+        "limits": {"$ref": "#/$defs/limits"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:edittools:ue_editor_export_message_graph",
+  "oneOf": [
+    {"$ref": "#/$defs/success"},
+    {"allOf": [{"$ref": "urn:ue-itps:edittools:common#/$defs/errorDocument"}, {"properties": {"schema_version": {"const": "ue_editor_export_message_graph"}}}]}
+  ],
+  "$defs": {
+    "success": {
+      "type": "object",
+      "required": ["schema_version", "source_schema", "graph", "validation", "limits"],
+      "properties": {
+        "schema_version": {"const": "ue_editor_export_message_graph"},
+        "source_schema": {"const": "ue_editor_scan_gameplay_messages"},
+        "graph": {
+          "type": "object",
+          "required": ["project", "nodes", "relations", "evidence", "counts"],
+          "properties": {
+            "project": {"type": "string"},
+            "nodes": {"type": "array", "items": {"type": "object"}},
+            "relations": {"type": "array", "items": {"type": "object"}},
+            "evidence": {"type": "array", "items": {"type": "object"}},
+            "counts": {"type": "object"}
+          },
+          "additionalProperties": false
+        },
+        "validation": {"$ref": "urn:ue-itps:edittools:common#/$defs/validation"},
+        "limits": {"$ref": "urn:ue-itps:edittools:common#/$defs/limits"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

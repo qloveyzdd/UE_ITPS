@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:edittools:ue_editor_scan_gameplay_messages",
+  "oneOf": [
+    {"$ref": "#/$defs/success"},
+    {"allOf": [{"$ref": "urn:ue-itps:edittools:common#/$defs/errorDocument"}, {"properties": {"schema_version": {"const": "ue_editor_scan_gameplay_messages"}}}]}
+  ],
+  "$defs": {
+    "success": {
+      "type": "object",
+      "required": ["schema_version", "editor", "editor_state", "roots", "requested_asset_count", "scanned_asset_count", "message_operation_count", "static_channel_count", "requested_tags", "referencer_query_tag_count", "operations", "tag_referencers", "validation", "limits"],
+      "properties": {
+        "schema_version": {"const": "ue_editor_scan_gameplay_messages"},
+        "editor": {"$ref": "urn:ue-itps:edittools:common#/$defs/editor"},
+        "editor_state": {"type": "object"},
+        "roots": {"type": "array", "items": {"type": "string"}},
+        "requested_asset_count": {"type": "integer", "minimum": 0},
+        "scanned_asset_count": {"type": "integer", "minimum": 0},
+        "message_operation_count": {"type": "integer", "minimum": 0},
+        "static_channel_count": {"type": "integer", "minimum": 0},
+        "requested_tags": {"type": "array", "items": {"type": "string"}},
+        "referencer_query_tag_count": {"type": "integer", "minimum": 0},
+        "operations": {"type": "array", "items": {"type": "object"}},
+        "tag_referencers": {"type": "array", "items": {"type": "object"}},
+        "validation": {"$ref": "urn:ue-itps:edittools:common#/$defs/validation"},
+        "limits": {"$ref": "urn:ue-itps:edittools:common#/$defs/limits"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

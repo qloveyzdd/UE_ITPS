@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:edittools:ue_editor_find_tag_referencers",
+  "oneOf": [
+    {"$ref": "#/$defs/success"},
+    {"allOf": [{"$ref": "urn:ue-itps:edittools:common#/$defs/errorDocument"}, {"properties": {"schema_version": {"const": "ue_editor_find_tag_referencers"}}}]}
+  ],
+  "$defs": {
+    "success": {
+      "type": "object",
+      "required": ["schema_version", "editor", "tag", "referencers", "validation", "limits"],
+      "properties": {
+        "schema_version": {"const": "ue_editor_find_tag_referencers"},
+        "editor": {"$ref": "urn:ue-itps:edittools:common#/$defs/editor"},
+        "tag": {"type": "string"},
+        "referencers": {"type": "array", "items": {"type": "string"}},
+        "validation": {"$ref": "urn:ue-itps:edittools:common#/$defs/validation"},
+        "limits": {"$ref": "urn:ue-itps:edittools:common#/$defs/limits"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

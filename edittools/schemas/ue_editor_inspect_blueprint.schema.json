@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:edittools:ue_editor_inspect_blueprint",
+  "oneOf": [
+    {"$ref": "#/$defs/success"},
+    {"allOf": [{"$ref": "urn:ue-itps:edittools:common#/$defs/errorDocument"}, {"properties": {"schema_version": {"const": "ue_editor_inspect_blueprint"}}}]}
+  ],
+  "$defs": {
+    "success": {
+      "type": "object",
+      "required": ["schema_version", "editor", "asset", "asset_object_path", "asset_class", "graphs", "validation", "limits"],
+      "properties": {
+        "schema_version": {"const": "ue_editor_inspect_blueprint"},
+        "editor": {"$ref": "urn:ue-itps:edittools:common#/$defs/editor"},
+        "asset": {"type": "string"},
+        "asset_object_path": {"type": "string"},
+        "asset_class": {"type": "string"},
+        "graphs": {"type": "array", "items": {"type": "object"}},
+        "validation": {"$ref": "urn:ue-itps:edittools:common#/$defs/validation"},
+        "limits": {"$ref": "urn:ue-itps:edittools:common#/$defs/limits"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

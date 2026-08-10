@@ -1,5 +1,7 @@
 # UE ITPS
 
+运行中 Unreal Editor 的 Gameplay Tag、资产引用、Blueprint Graph 和 Gameplay Message 关系读取工具位于 [`edittools/`](edittools/)。这些工具与具体项目解耦，通过明确的 `.uproject` 参数连接 UE 5.8 Editor，并输出确定性的只读 JSON 事实。
+
 UE ITPS 是一组确定性、只读的 Unreal Engine 项目检查工具。它从调用方明确选择的 `.uproject`、`.uplugin`、`Build.cs`、`Target.cs` 或 C++ 文件出发，输出适合程序和 AI Agent 消费的 JSON 事实。
 
 当前正式接口包括：
