@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from ue_editor_tools.cli import READ_ONLY_BOUNDARIES, add_connection_arguments
 from ue_editor_tools.contracts import parser, result_document, write_json
-from ue_editor_tools.remote_client import EditorSession, editor_identity
+from ue_editor_tools.remote_client import EditorSession
 
 
 SCHEMA_VERSION = "ue_editor_find_tag_referencers"
@@ -23,13 +23,12 @@ def main() -> int:
     try:
         with EditorSession(args.node_id, discovery_timeout=args.timeout) as session:
             facts = session.invoke("find_tag_referencers", {"tag": args.tag})
-            editor = editor_identity(session.node or {})
     except (OSError, RuntimeError, ValueError) as exc:
         cli.error(str(exc))
     write_json(
         result_document(
             SCHEMA_VERSION,
-            {"editor": editor, **facts},
+            facts,
             [],
             responsibility=RESPONSIBILITY,
             boundaries=READ_ONLY_BOUNDARIES

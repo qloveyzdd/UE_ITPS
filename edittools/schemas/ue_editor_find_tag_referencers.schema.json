@@ -8,10 +8,9 @@
   "$defs": {
     "success": {
       "type": "object",
-      "required": ["schema_version", "editor", "tag", "referencers", "validation", "limits"],
+      "required": ["schema_version", "tag", "referencers", "validation", "limits"],
       "properties": {
         "schema_version": {"const": "ue_editor_find_tag_referencers"},
-        "editor": {"$ref": "urn:ue-itps:edittools:common#/$defs/editor"},
         "tag": {"type": "string"},
         "referencers": {"type": "array", "items": {"type": "string"}},
         "validation": {"$ref": "urn:ue-itps:edittools:common#/$defs/validation"},
