@@ -4,6 +4,30 @@ from tests.support import CliTestCase, write_text
 
 
 class CxxAnalysisTests(CliTestCase):
+    def test_clang_backend_is_reported_and_compile_database_is_required(self) -> None:
+        result = self.cli(
+            "ue_list_cxx_types.py",
+            "--source",
+            str(self.fixture.source_cpp),
+        )
+        self.assertEqual(
+            result["analysis"]["syntax_trees"][0]["engine"],
+            "clang/libclang",
+        )
+        self.assertIn("clang version", result["context"]["clang"]["version"])
+
+        self.fixture.compilation_database.unlink()
+        failure = self.cli(
+            "ue_list_cxx_types.py",
+            "--source",
+            str(self.fixture.source_cpp),
+            expected_code=2,
+        )
+        self.assertIn(
+            "compilation database",
+            failure["validation"]["problems"][0]["message"].lower(),
+        )
+
     def _write_delegate_fixture(self):
         header = write_text(
             self.fixture.project_root

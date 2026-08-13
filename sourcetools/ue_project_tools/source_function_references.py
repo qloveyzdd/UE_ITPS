@@ -7,8 +7,6 @@ from .source_context import load_source_context, source_result
 from .source_function_context import (
     _confirmed_type_names,
     _function_symbol_context,
-    _qualified_type_facts,
-    _visible_free_functions,
 )
 from .source_function_index import (
     _callable_parts,
@@ -16,15 +14,7 @@ from .source_function_index import (
     _public_relation,
     _relations,
 )
-from .source_function_symbols import (
-    _bare_call_facts,
-    _delegate_operations,
-    _function_address_facts,
-    _global_variable_facts,
-    _member_call_facts,
-    _public_external_symbols,
-)
-from .source_namespaces import observed_namespace_names
+from .source_function_symbols import _delegate_operations
 
 
 _RESPONSIBILITY = (
@@ -42,10 +32,9 @@ _BOUNDARIES = [
     "project-level stable ID.",
     "External means outside the selected function semantic unit, "
     "including symbols declared in the selected file or its companion.",
-    "Symbol kinds are lexical candidate categories, not call, read, "
-    "write, or ownership relations.",
-    "Type names and receiver types are derived from locally visible "
-    "declaration syntax; wrapped template types remain one expression.",
+    "Symbol identities, call targets, and receiver owners come from the "
+    "active Clang translation unit; kinds remain navigation categories, "
+    "not read, write, or ownership relations.",
     "A bare call is a member_call only for a matching current-class "
     "method, or a free_function only for a matching visible declaration "
     "in the selected source pair; otherwise it remains unknown.",
@@ -71,13 +60,62 @@ _BOUNDARIES = [
 ]
 
 
+def _clang_definition(
+    candidate: dict[str, Any],
+    loaded: dict[str, Any],
+) -> dict[str, Any] | None:
+    path = str(candidate["_path"].resolve()).replace("\\", "/").casefold()
+    return next(
+        (
+            item
+            for item in loaded["clang_model"]["functions"]
+            if item["role"] == "definition"
+            and item["file"] == path
+            and item["name"] == candidate["name"]
+            and item["qualified_name"] == candidate["qualified_name"]
+            and item["line"] == int(candidate["evidence"]["line"])
+        ),
+        None,
+    )
+
+
+def _clang_external_symbols(
+    candidate: dict[str, Any],
+    loaded: dict[str, Any],
+) -> list[dict[str, Any]]:
+    definition = _clang_definition(candidate, loaded)
+    if definition is None:
+        return []
+    unit = (
+        "header"
+        if candidate["_path"].suffix.casefold() in {".h", ".hpp"}
+        else "cpp"
+    )
+    return [
+        {
+            **{
+                key: value
+                for key, value in item.items()
+                if key in {"kind", "spelling", "owner_type"}
+            },
+            "evidence": {"unit": unit, "line": int(item["line"])},
+        }
+        for item in loaded["clang_model"]["references"]
+        .get(definition["usr"], {})
+        .get("external_symbols", [])
+    ]
+
+
 def inspect_source_function(
     source_file: Path,
     function_name: str,
     *,
     engine_override: Path | None = None,
+    compilation_database: Path | None = None,
 ) -> dict[str, Any]:
-    loaded = load_source_context(source_file, engine_override)
+    loaded = load_source_context(
+        source_file, engine_override, compilation_database
+    )
     loaded["parts"] = _callable_parts(
         loaded["parsed_files"],
         loaded["project_root"],
@@ -88,6 +126,7 @@ def inspect_source_function(
         for part in loaded["parts"]
         if part["role"] == "definition"
         and part["name"] == function_name
+        and _clang_definition(part, loaded) is not None
     ]
     if not candidates:
         return source_result(
@@ -127,78 +166,14 @@ def inspect_source_function(
     }
     matches: list[dict[str, Any]] = []
     for candidate in candidates:
-        symbol_types, type_facts, local_names = (
+        symbol_types, type_facts, _local_names = (
             _function_symbol_context(candidate, loaded)
         )
         confirmed_type_names = _confirmed_type_names(
             loaded,
             type_facts,
         )
-        observed_namespaces = {
-            namespace
-            for _, parsed in loaded["parsed_files"]
-            for namespace in observed_namespace_names(
-                parsed.get("namespace_scopes", [])
-            )
-        }
-        callable_names = {
-            item["name"] for item in loaded["parts"]
-        }
-        callable_qualified_names = {
-            item["qualified_name"] for item in loaded["parts"]
-        }
-        free_function_names = {
-            item["qualified_name"]
-            for item in loaded["parts"]
-            if item["kind"] == "free_function"
-        }
-        visible_free_functions = _visible_free_functions(
-            candidate,
-            loaded["parts"],
-        )
-        member_calls, member_call_indices = _member_call_facts(
-            candidate,
-            loaded,
-            symbol_types,
-            confirmed_type_names,
-            observed_namespaces,
-            free_function_names,
-        )
-        external_symbols = _public_external_symbols(
-            [
-                *type_facts,
-                *_qualified_type_facts(
-                    candidate,
-                    loaded,
-                    confirmed_type_names,
-                ),
-                *_global_variable_facts(
-                    candidate,
-                    loaded,
-                    local_names,
-                    confirmed_type_names,
-                    observed_namespaces,
-                ),
-                *_bare_call_facts(
-                    candidate,
-                    loaded,
-                    member_call_indices,
-                    confirmed_type_names,
-                    local_names,
-                    visible_free_functions,
-                ),
-                *member_calls,
-                *_function_address_facts(
-                    candidate,
-                    loaded,
-                    callable_names,
-                    callable_qualified_names,
-                    local_names,
-                    confirmed_type_names,
-                    observed_namespaces,
-                ),
-            ]
-        )
+        external_symbols = _clang_external_symbols(candidate, loaded)
         matches.append(
             {
                 "function_id": candidate["function_id"],

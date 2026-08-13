@@ -201,6 +201,29 @@ def _member_anchors(
     variables: list[dict[str, Any]],
     rooted_class_evidence: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[str], list[str]]:
+    path_key = str(path.resolve()).replace("\\", "/").casefold()
+    clang_type = next(
+        (
+            item
+            for item in loaded["clang_model"]["types"]
+            if item["file"] == path_key
+            and item["role"] == "definition"
+            and item["name"] == class_item["name"]
+            and item["line"] == int(class_item["location"]["line"])
+        ),
+        None,
+    )
+    clang_fields = {
+        (item["name"], int(item["line"]))
+        for item in (clang_type or {}).get("fields", [])
+    }
+    clang_methods = {
+        (item["name"], int(item["line"]))
+        for item in loaded["clang_model"]["functions"]
+        if item["file"] == path_key
+        and item["owner"]
+        and item["owner"].rsplit("::", 1)[-1] == class_item["name"]
+    }
     variable_anchors = [
         {
             "kind": "variable",
@@ -224,6 +247,7 @@ def _member_anchors(
             "end_line",
             rooted_class_evidence["line"],
         )
+        and (item["name"], int(item["evidence"]["line"])) in clang_fields
     ]
     function_anchors = [
         {
@@ -242,6 +266,11 @@ def _member_anchors(
         }
         for member in class_item["members"]
         if member["name"] not in _SOURCE_MACROS
+        and (
+            _callable_name(member["name"], member["signature"]),
+            int(member["location"]["line"]),
+        )
+        in clang_methods
     ]
     anchors = sorted(
         [*variable_anchors, *function_anchors],
@@ -458,6 +487,20 @@ def _type_anchor_facts(
     problems: list[dict[str, Any]] = []
     for path, parsed in loaded["parsed_files"]:
         for class_item in parsed["classes"]:
+            path_key = str(path.resolve()).replace("\\", "/").casefold()
+            clang_type = next(
+                (
+                    item
+                    for item in loaded["clang_model"]["types"]
+                    if item["file"] == path_key
+                    and item["role"] == "definition"
+                    and item["name"] == class_item["name"]
+                    and item["line"] == int(class_item["location"]["line"])
+                ),
+                None,
+            )
+            if clang_type is None:
+                continue
             public_item, interface_source, problem = _type_definition_fact(
                 loaded,
                 path,
@@ -499,6 +542,15 @@ def _type_anchor_facts(
                 }
             )
         for declaration in parsed.get("forward_declarations", []):
+            path_key = str(path.resolve()).replace("\\", "/").casefold()
+            if not any(
+                item["file"] == path_key
+                and item["role"] == "declaration"
+                and item["name"] == declaration["name"]
+                and item["line"] == int(declaration["location"]["line"])
+                for item in loaded["clang_model"]["types"]
+            ):
+                continue
             bucket, public_item = _forward_type_fact(
                 loaded,
                 path,
@@ -579,6 +631,32 @@ def _free_function_facts(
                         ),
                     }
                 )
+    clang_functions = {
+        (
+            item["file"],
+            item["name"],
+            item["role"],
+            int(item["line"]),
+        )
+        for item in loaded["clang_model"]["functions"]
+        if item["kind"] == "free_function"
+    }
+    path_by_unit = {
+        ("header" if path.suffix.casefold() in {".h", ".hpp"} else "cpp"):
+        str(path.resolve()).replace("\\", "/").casefold()
+        for path, _parsed in loaded["parsed_files"]
+    }
+    results = [
+        item
+        for item in results
+        if (
+            path_by_unit.get(item["evidence"]["unit"], ""),
+            item["name"],
+            item["role"],
+            int(item["evidence"]["line"]),
+        )
+        in clang_functions
+    ]
     unique = {
         (
             item["qualified_name"],
@@ -630,8 +708,11 @@ def _unresolved_facts(
 def list_source_types(
     source_file: Path,
     engine_override: Path | None = None,
+    compilation_database: Path | None = None,
 ) -> dict[str, Any]:
-    loaded = load_source_context(source_file, engine_override)
+    loaded = load_source_context(
+        source_file, engine_override, compilation_database
+    )
     loaded["macros"] = [
         macro
         for path, parsed in loaded["parsed_files"]
@@ -655,15 +736,34 @@ def list_source_types(
         variables,
     )
     unresolved_facts = _unresolved_facts(loaded, unresolved)
+    global_variables = _global_variable_facts(
+        loaded,
+        variables,
+    )
+    clang_variables = {
+        (
+            item["qualified_name"],
+            item["role"],
+            int(item["line"]),
+        )
+        for item in loaded["clang_model"]["variables"]
+    }
+    global_variables = [
+        item
+        for item in global_variables
+        if (
+            item["qualified_name"],
+            item["role"],
+            int(item["evidence"]["line"]),
+        )
+        in clang_variables
+    ]
     return source_result(
         "ue_list_cxx_types",
         loaded,
         {
             **type_anchors,
-            "global_variables": _global_variable_facts(
-                loaded,
-                variables,
-            ),
+            "global_variables": global_variables,
             "free_functions": _free_function_facts(loaded),
             "unresolved_declarations": unresolved_facts,
         },
@@ -672,17 +772,14 @@ def list_source_types(
             "free-function, and class/struct member anchors."
         ),
         boundaries=[
-            "All anchors are lexical navigation facts and are not semantic summaries.",
-            "Class, struct, and enum anchors distinguish declarations from definitions; qualified names include locally observed named or anonymous namespace scopes.",
-            "Nested type owners remain lexical class/struct owners; namespace qualification is carried separately.",
+            "Clang is authoritative for emitted declarations, definitions, qualified identities, bases, fields, functions, variables, linkage, and source locations.",
+            "Class, struct, and enum anchors distinguish declarations from definitions in the active translation unit.",
+            "Nested type owners and Namespace qualification retain Clang semantic-parent identity.",
             "Interface candidates are reported only from local UINTERFACE, UInterface inheritance, generated-body I-prefix, or paired U/I naming evidence.",
             "Type and member macros are attached by lexical declaration adjacency, not UHT semantic analysis.",
-            "Global variables include file- and namespace-scope declarations; roles and linkage use only declaration-local syntax, and function locals and class/struct members are excluded.",
-            "A scope-qualified variable or function definition is classified as a namespace symbol only when its qualifier resolves to a namespace observed in the selected source pair; other qualified definitions remain member-shaped.",
-            "Macro-like declarations are excluded from free functions, and call-shaped variable initializers are classified only when a value expression is lexically evident.",
-            "Free functions include declarations and definitions with locally observed linkage but are not overload-resolved.",
+            "Global variables exclude function locals and class/struct members; free-function and variable roles are checked against Clang facts.",
             "The selected source and its uniquely derived companion are reported independently; declarations and definitions are not merged across files.",
-            "The result does not create project-level IDs and is not a complete C++ symbol table, type system, inheritance graph, or reflection result.",
+            "The result does not create project-level IDs and is not a complete linker symbol table, UHT reflection result, or runtime type graph.",
         ],
         additional_problems=[
             *type_problems,

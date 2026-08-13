@@ -20,6 +20,11 @@ if str(TOOLS_ROOT) not in sys.path:
     sys.path.insert(0, str(TOOLS_ROOT))
 
 from ue_project_tools.common import read_json  # noqa: E402
+from ue_project_tools.clang_frontend import (  # noqa: E402
+    clang_version,
+    compilation_database_fingerprint,
+    resolve_compilation_database,
+)
 from ue_project_tools.engine import resolve_engine  # noqa: E402
 from ue_project_tools.project_cxx_sources import (  # noqa: E402
     list_project_cxx_sources,
@@ -50,6 +55,7 @@ class SourceJob:
     environment_hash: str
     cache_project_root: str
     engine_override: str | None
+    compilation_database: str
 
 
 @dataclass
@@ -305,6 +311,7 @@ def _run_source_job(job: SourceJob) -> dict[str, Any]:
             if job.engine_override is not None
             else None
         ),
+        compilation_database=Path(job.compilation_database),
     )
     actual_paths = tuple(
         sorted(
@@ -409,6 +416,7 @@ def _source_jobs(
     environment_hash: str,
     cache_project_root: Path,
     engine_override: Path | None,
+    compilation_database: Path,
 ) -> list[SourceJob]:
     project_root = project_file.parent
     covered: set[str] = set()
@@ -453,6 +461,7 @@ def _source_jobs(
                     if engine_override is not None
                     else None
                 ),
+                compilation_database=str(compilation_database.resolve()),
             )
         )
     return jobs
@@ -520,6 +529,7 @@ def scan_project(
     project_file: Path,
     *,
     engine_override: Path | None = None,
+    compilation_database: Path | None = None,
     cache_dir: Path,
     workers: int | None = None,
     progress: ProgressCallback | None = None,
@@ -541,6 +551,10 @@ def scan_project(
     )
 
     selected_workers = workers or default_worker_count()
+    selected_compilation_database = resolve_compilation_database(
+        project_file.parent,
+        compilation_database,
+    )
     engine_result = resolve_engine(
         project_file,
         str(descriptor.get("EngineAssociation") or ""),
@@ -587,6 +601,17 @@ def scan_project(
                 "build": engine_result.get("build"),
             },
             "analyzer_version": ANALYZER_VERSION,
+            "clang": {
+                "version": clang_version(),
+                "compilation_database": str(
+                    selected_compilation_database.resolve()
+                ),
+                "compilation_database_sha256": (
+                    compilation_database_fingerprint(
+                        selected_compilation_database
+                    )
+                ),
+            },
         }
     )
     jobs = _source_jobs(
@@ -597,6 +622,7 @@ def scan_project(
         environment_hash=environment_hash,
         cache_project_root=cache_project_root,
         engine_override=engine_override,
+        compilation_database=selected_compilation_database,
     )
 
     wires: list[dict[str, Any]] = []

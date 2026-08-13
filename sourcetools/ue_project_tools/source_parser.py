@@ -33,7 +33,7 @@ from .source_tokens import (
     lex_source,
     token_pairs,
 )
-from .syntax_tree import parse_cpp_syntax, parse_csharp_syntax
+from .syntax_tree import parse_csharp_syntax
 
 
 _MODULE_RULE_KINDS = {
@@ -322,7 +322,6 @@ def registration_macros(text: str, tokens: list[Token]) -> list[dict[str, Any]]:
 def parse_cpp_file(path: Path) -> dict[str, Any]:
     resolved = path.resolve()
     text = resolved.read_text(encoding="utf-8-sig", errors="replace")
-    syntax_tree = parse_cpp_syntax(text)
     tokens = lex_source(text)
     classes, forward, reverse = parse_classes(text, tokens)
     external = parse_external_definitions(text, tokens, forward)
@@ -332,15 +331,6 @@ def parse_cpp_file(path: Path) -> dict[str, Any]:
         classes,
     )
     problems = delimiter_problems(tokens)
-    if syntax_tree["parse_error_count"]:
-        problems.append(
-            {
-                "severity": "warning",
-                "code": "cxx-syntax-tree-errors",
-                "count": syntax_tree["parse_error_count"],
-                "message": "Tree-sitter reported incomplete C++ syntax regions after UE macro normalization",
-            }
-        )
     return {
         "path": normalized(resolved),
         "text": text,
@@ -353,7 +343,6 @@ def parse_cpp_file(path: Path) -> dict[str, Any]:
         "free_functions": free_functions,
         "forward_declarations": forward_declarations,
         "registration_macros": registration_macros(text, tokens),
-        "syntax_tree": syntax_tree,
         "problems": problems,
     }
 

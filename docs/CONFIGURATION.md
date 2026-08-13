@@ -10,12 +10,14 @@ UE ITPS 没有统一的全局配置文件。核心 Python CLI 通过每次调用
 | 变量 | 必需 | 默认值 | 说明 |
 |---|---|---|---|
 | `PYTHONUTF8` | 否 | 普通 CLI 不设置；测试子进程固定为 `1` | `tests/support.py` 为 CLI 测试子进程启用 Python UTF-8 模式，保证中英文帮助和 JSON 不受 Windows 本地代码页影响。 |
+| `UE_ITPS_COMPILE_DATABASE` | 否 | 自动检查项目根目录、`.clang/` 和 `Intermediate/Build/` | C++ Source 工具的编译数据库路径；命令行 `--compile-database` 优先。 |
+| `UE_ITPS_LIBCLANG` | 否 | `libclang` Python 包自带的动态库 | 显式选择 libclang 动态库。目标编译数据库包含特定 Clang `resource-dir` 时，应选择匹配版本。 |
 | `CODEX_SANDBOX` | 否 | 未设置 | 仅由 `show/vite.config.ts` 读取。值为 `seatbelt` 时，Vite 开发服务器禁用 FSEvents 并改用轮询监听。 |
 | `WRANGLER_WRITE_LOGS` | 否 | `false` | `show/vite.config.ts` 在变量尚未设置时关闭 Wrangler 日志写入。调用方预先设置的值不会被覆盖。 |
 | `WRANGLER_LOG_PATH` | 否 | `.wrangler/logs` | Wrangler 日志目录；相对路径以启动 `show/` 时的工作目录为基准。 |
 | `MINIFLARE_REGISTRY_PATH` | 否 | `.wrangler/registry` | Miniflare 本地注册表目录；相对路径以启动 `show/` 时的工作目录为基准。 |
 
-核心 Python CLI、工程信息池和 Editor 工具没有读取业务环境变量。它们所需的项目路径、Engine 覆盖路径和操作选项均由命令行参数提供。
+除上述 Clang 定位变量外，核心 Python CLI、工程信息池和 Editor 工具没有读取业务环境变量。项目路径、Engine 覆盖路径和操作选项仍优先由命令行参数提供。
 
 ## 配置文件格式
 
@@ -74,10 +76,11 @@ python edittools/ue_editor_list_sessions.py --help
 - `.uplugin`、`Build.cs`、`Target.cs` 和 C++ 源码检查器分别要求显式的 `--plugin`、`--rules`、`--target` 或 `--source`。
 - 函数级检查器还要求 `--function NAME`；图查询按操作要求 `--class`、`--symbol`、`--selector` 或其他选择器。
 - `--engine-root` 是可选覆盖。未提供时，工具依据所选 `.uproject` 的 `EngineAssociation` 和支持的平台机制解析 Engine。
+- C++ Source、C++ 项目图和信息池构建需要编译数据库。可用 `--compile-database FILE_OR_DIRECTORY` 显式选择；未提供时按固定项目内路径发现。缺失或无法取得 Module 编译命令时不会回退旧解析器。
 
 ### 工程信息池
 
-构建命令要求 `--project` 和 `--pool`。查询命令要求 `--pool` 和 `--operation`；`lookup`、`search`、`hierarchy`、`impact`、`callers`、`path` 和 `test-scope` 等操作还会检查各自所需的选择器。
+构建命令要求 `--project`、`--pool` 以及可发现或显式提供的编译数据库。查询命令要求 `--pool` 和 `--operation`；`lookup`、`search`、`hierarchy`、`impact`、`callers`、`path` 和 `test-scope` 等操作还会检查各自所需的选择器。
 
 ### Editor 工具
 

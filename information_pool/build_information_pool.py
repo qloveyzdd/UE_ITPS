@@ -18,6 +18,7 @@ def main() -> int:
     parser.add_argument("--pool", required=True, metavar="DIRECTORY")
     parser.add_argument("--source-commit", metavar="REVISION")
     parser.add_argument("--engine-root", metavar="PATH")
+    parser.add_argument("--compile-database", metavar="PATH")
     parser.add_argument("--cache-dir", metavar="PATH")
     parser.add_argument("--workers", type=int)
     parser.add_argument(
@@ -52,6 +53,11 @@ def main() -> int:
             Path(args.pool),
             source_commit=args.source_commit,
             engine_override=Path(args.engine_root) if args.engine_root else None,
+            compilation_database=(
+                Path(args.compile_database)
+                if args.compile_database
+                else None
+            ),
             cache_dir=Path(args.cache_dir) if args.cache_dir else None,
             workers=args.workers,
             progress=report_progress,

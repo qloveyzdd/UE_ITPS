@@ -440,8 +440,11 @@ def _function_facts(parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def list_source_functions(
     source_file: Path,
     engine_override: Path | None = None,
+    compilation_database: Path | None = None,
 ) -> dict[str, Any]:
-    loaded = load_source_context(source_file, engine_override)
+    loaded = load_source_context(
+        source_file, engine_override, compilation_database
+    )
     loaded["parts"] = _callable_parts(
         loaded["parsed_files"],
         loaded["project_root"],

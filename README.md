@@ -7,7 +7,7 @@ UE ITPS 是面向 Unreal Engine 项目维护者与 AI Agent 的确定性、只�
 
 ## 当前状态
 
-- 核心静态工具池已形成 21 个正式 CLI、21 份逐工具 Schema 与 1 份公共 Schema；核心测试当前共 66 项。
+- 核心静态工具池已形成 21 个正式 CLI、21 份逐工具 Schema 与 1 份公共 Schema；C++ Source 检索正式以 Clang 编译语义为基座。
 - `edittools/` 已提供 16 个只读工具，覆盖 Gameplay Tag、资产依赖、Blueprint 结构、DataTable、按需 DataAsset 属性、Primary Asset、配置、C++/Blueprint Gameplay Message，以及统一逻辑图谱的构建、校验和差异。
 - `information_pool/` 已能把静态探针结果构建为绑定 Git 提交的不可变 SQLite 快照；`show/` 可在本地浏览语义关系与最短路径；`mcp_connection_pool/` 负责被动发现并选择 UE 5.8 Editor MCP 连接。
 - 当前 Unreal 参考基座为 `LyraStarterGame` + UE 5.8.2。Editor 与多个 PIE Experience 已在本机观察到，但 5.8.2 权威文件指纹、完整 L0/L1 日志以及网络和 Travel 路径仍在重新核验。
@@ -15,7 +15,7 @@ UE ITPS 是面向 Unreal Engine 项目维护者与 AI Agent 的确定性、只�
 
 ## 安装
 
-需要 Python 3.10 或更高版本。正式 CLI 不要求安装 Unreal Engine；仅 Engine 定位或针对真实工程执行检查时需要相应的 Engine 或项目目录。
+需要 Python 3.10 或更高版本。描述符、规则和清单工具不要求安装 Unreal Engine；C++ Source 检索还要求与目标构建 Profile 对应的 `compile_commands.json`。依赖清单自带 libclang 运行时；当编译数据库指定了其他 Clang 资源目录时，应通过 `UE_ITPS_LIBCLANG` 选择匹配版本的动态库。
 
 ```bash
 git clone https://github.com/qloveyzdd/UE_ITPS.git
@@ -66,13 +66,15 @@ python sourcetools/ue_list_project_cxx_sources.py --project D:/Projects/MyGame/M
 
 ### 检查一个 C++ 源码单元
 
+以下命令从项目根目录自动发现 `compile_commands.json`，也可用 `--compile-database FILE_OR_DIRECTORY` 显式选择。缺少编译数据库或编译命令时会明确失败，不会回退到词法符号猜测。
+
 ```bash
 python sourcetools/ue_list_cxx_includes.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp
-python sourcetools/ue_list_cxx_types.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp
-python sourcetools/ue_inspect_cxx_function.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp --function BeginPlay
+python sourcetools/ue_list_cxx_types.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp --compile-database D:/Projects/MyGame/compile_commands.json
+python sourcetools/ue_inspect_cxx_function.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp --function BeginPlay --compile-database D:/Projects/MyGame/compile_commands.json
 ```
 
-结果包含直接 include 来源、类型与成员锚点，以及指定同名函数定义中的外部符号候选。工具只检查显式选择的文件和唯一可推导的同名伴随文件，不递归读取 include 或被调用函数。
+结果包含 Clang 翻译单元实际观察到的 include、类型、函数、继承和调用目标，并保留 UE 宏与委托的领域投影。工具只输出显式选择的文件和唯一可推导的同名伴随文件中的事实，不递归输出 include 或被调用函数的内容。
 
 ### 分析项目内 C++ 关系
 
@@ -109,7 +111,7 @@ python sourcetools/ue_analyze_cxx_impact.py --project D:/Projects/MyGame/MyGame.
 python -m unittest discover -s tests -v
 ```
 
-当前测试套件共 66 项，覆盖 CLI 与 Schema 契约、项目导航、Module 与构建规则、C++ 分析、图关系和端到端只读性。测试使用临时工程夹具，不依赖本地 Unreal Engine、`LyraStarterGame/` 或 `ExternalProjects/`。
+当前测试套件共 67 项，覆盖 CLI 与 Schema 契约、项目导航、Module 与构建规则、Clang C++ 分析、图关系和端到端只读性。测试使用临时工程夹具，不依赖本地 Unreal Engine、`LyraStarterGame/` 或 `ExternalProjects/`。
 
 Editor 工具拥有独立测试套件：
 

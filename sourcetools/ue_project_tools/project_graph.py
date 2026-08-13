@@ -4,9 +4,10 @@ from pathlib import Path
 import re
 from typing import Any
 
+from .clang_frontend import ClangFrontendError, load_clang_unit
 from .common import iter_files, normalized, result_document
 from .dependency_graph import DependencyGraph, type_names
-from .syntax_tree import parse_cpp_syntax
+from .source_context import load_source_context
 
 
 _SUFFIXES = (".h", ".hpp", ".cpp", ".cc")
@@ -75,27 +76,83 @@ def _selected_node_name(
 
 def build_project_graph(
     project_root: Path,
+    compilation_database: Path | None = None,
 ) -> tuple[DependencyGraph, list[dict[str, Any]], list[dict[str, Any]]]:
     graph = DependencyGraph()
     parsed_files: list[dict[str, Any]] = []
     problems: list[dict[str, Any]] = []
-    for path in project_cpp_files(project_root):
-        text = path.read_text(encoding="utf-8-sig", errors="replace")
-        syntax = parse_cpp_syntax(text)
+    project_files = project_cpp_files(project_root)
+    anchors = [
+        path for path in project_files
+        if path.suffix.casefold() in {".cpp", ".cc"}
+    ]
+    seen_types: set[tuple[str, str, int]] = set()
+    for path in anchors:
         relative = path.relative_to(project_root).as_posix()
-        parsed_files.append({"path": relative, "syntax": syntax})
-        if syntax["parse_error_count"]:
+        try:
+            model = load_clang_unit(
+                path,
+                project_files,
+                project_root,
+                compilation_database,
+            )
+        except ClangFrontendError as exc:
             problems.append(
                 {
-                    "severity": "warning",
-                    "code": "project-cxx-syntax-tree-errors",
+                    "severity": "error",
+                    "code": "project-clang-translation-unit-failure",
                     "path": relative,
-                    "count": syntax["parse_error_count"],
-                    "message": "Tree-sitter reported incomplete C++ syntax regions",
+                    "message": str(exc),
                 }
             )
+            continue
+        syntax_types = []
+        for item in model["types"]:
+            if item["role"] != "definition":
+                continue
+            key = (item["qualified_name"], item["file"], int(item["line"]))
+            if key in seen_types:
+                continue
+            seen_types.add(key)
+            syntax_types.append(
+                {
+                    "kind": item["kind"],
+                    "name": item["name"],
+                    "qualified_name": item["qualified_name"],
+                    "base_types": item["base_types"],
+                    "type_references": [
+                        {
+                            "kind": "field",
+                            "name": field["name"],
+                            "type_expression": field["type_expression"],
+                            "location": {"line": field["line"]},
+                        }
+                        for field in item["fields"]
+                    ],
+                    "location": {"line": item["line"]},
+                    "_path": (
+                        Path(item["file"]).resolve()
+                        .relative_to(project_root)
+                        .as_posix()
+                    ),
+                }
+            )
+        parsed_files.append(
+            {"path": relative, "syntax": {"types": syntax_types}}
+        )
+        for diagnostic in model["diagnostics"]:
+            if diagnostic["severity"] >= 3:
+                problems.append(
+                    {
+                        "severity": "error",
+                        "code": "project-clang-diagnostic-error",
+                        "path": relative,
+                        "line": diagnostic["line"],
+                        "message": diagnostic["message"],
+                    }
+                )
     all_types = [
-        (parsed["path"], item)
+        (item.get("_path", parsed["path"]), item)
         for parsed in parsed_files
         for item in parsed["syntax"]["types"]
     ]
@@ -118,8 +175,8 @@ def build_project_graph(
         )
 
     for parsed in parsed_files:
-        path = parsed["path"]
         for item in parsed["syntax"]["types"]:
+            path = item.get("_path", parsed["path"])
             source = item["qualified_name"]
             for base in item["base_types"]:
                 for target in _resolved_type_names(base, source, known, short_index):
@@ -145,8 +202,13 @@ def build_project_graph(
     return graph, parsed_files, problems
 
 
-def dependency_result(project_root: Path) -> dict[str, Any]:
-    graph, parsed_files, problems = build_project_graph(project_root)
+def dependency_result(
+    project_root: Path,
+    compilation_database: Path | None = None,
+) -> dict[str, Any]:
+    graph, parsed_files, problems = build_project_graph(
+        project_root, compilation_database
+    )
     return result_document(
         "ue_analyze_cxx_dependencies",
         {
@@ -164,8 +226,14 @@ def dependency_result(project_root: Path) -> dict[str, Any]:
     )
 
 
-def hierarchy_result(project_root: Path, class_name: str) -> dict[str, Any]:
-    graph, parsed_files, problems = build_project_graph(project_root)
+def hierarchy_result(
+    project_root: Path,
+    class_name: str,
+    compilation_database: Path | None = None,
+) -> dict[str, Any]:
+    graph, parsed_files, problems = build_project_graph(
+        project_root, compilation_database
+    )
     selected_name, ambiguous = _selected_node_name(graph, class_name)
     node = graph.nodes.get(selected_name) if selected_name else None
     if node is None:
@@ -209,8 +277,15 @@ def hierarchy_result(project_root: Path, class_name: str) -> dict[str, Any]:
     )
 
 
-def impact_result(project_root: Path, symbol: str, max_depth: int) -> dict[str, Any]:
-    graph, parsed_files, problems = build_project_graph(project_root)
+def impact_result(
+    project_root: Path,
+    symbol: str,
+    max_depth: int,
+    compilation_database: Path | None = None,
+) -> dict[str, Any]:
+    graph, parsed_files, problems = build_project_graph(
+        project_root, compilation_database
+    )
     selected_name, ambiguous = _selected_node_name(graph, symbol)
     if selected_name is None:
         problems.append(
@@ -244,9 +319,16 @@ def impact_result(project_root: Path, symbol: str, max_depth: int) -> dict[str, 
     )
 
 
-def function_flow_result(source: Path, function_name: str) -> dict[str, Any]:
-    text = source.read_text(encoding="utf-8-sig", errors="replace")
-    syntax = parse_cpp_syntax(text)
+def function_flow_result(
+    source: Path,
+    function_name: str,
+    compilation_database: Path | None = None,
+) -> dict[str, Any]:
+    loaded = load_source_context(
+        source,
+        compilation_database=compilation_database,
+    )
+    syntax = loaded["parsed_by_path"][source.resolve()]["syntax_tree"]
     matches = [
         item
         for item in syntax["functions"]
@@ -254,15 +336,7 @@ def function_flow_result(source: Path, function_name: str) -> dict[str, Any]:
         or item["name"].split("::")[-1] == function_name
     ]
     problems: list[dict[str, Any]] = []
-    if syntax["parse_error_count"]:
-        problems.append(
-            {
-                "severity": "warning",
-                "code": "cxx-syntax-tree-errors",
-                "count": syntax["parse_error_count"],
-                "message": "Tree-sitter reported incomplete C++ syntax regions after UE macro normalization",
-            }
-        )
+    problems.extend(loaded["problems"])
     if not matches:
         problems.append(
             {
@@ -311,7 +385,7 @@ def function_flow_result(source: Path, function_name: str) -> dict[str, Any]:
         problems,
         responsibility="Report local control-flow constructs and direct calls for selected C++ function definitions.",
         boundaries=[
-            "Calls are syntax-level spellings and are not overload-resolved.",
+            "Calls and function identities come from the active Clang translation unit.",
             "The flow is local to the selected file and does not recursively follow callees.",
         ],
     )

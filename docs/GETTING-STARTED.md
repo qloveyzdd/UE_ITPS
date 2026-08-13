@@ -7,7 +7,7 @@
 
 - `Python >= 3.10`。
 - Git，用于克隆仓库。
-- 核心静态检查不要求安装 Unreal Engine。只有 Engine 定位、真实工程检查或 Editor 工具需要可访问的 Unreal Engine 或目标工程目录。
+- 描述符和规则检查不要求安装 Unreal Engine。C++ Source 检索需要目标工程、对应 Engine 头文件以及 UBT/IDE 生成的 `compile_commands.json`。
 - 可选：运行 `show/` 本地关系浏览器时需要 `Node.js >= 22.13.0` 和 npm；它们不是核心 CLI 的依赖。
 
 Windows PowerShell 中可先检查版本：
@@ -90,6 +90,7 @@ python sourcetools/ue_read_project_descriptor.py --project D:/Projects/MyGame/My
 ```powershell
 python -m pip install -r requirements.txt
 python -c "import tree_sitter; print('tree-sitter ready')"
+python -c "from clang import cindex; print(cindex.Config.library_path or 'external libclang')"
 ```
 
 用 `Get-Command python` 可确认 PowerShell 当前调用的是哪个解释器。
@@ -113,6 +114,18 @@ python sourcetools/ue_resolve_engine.py `
 ```
 
 Engine 定位成功只证明工具找到了版本证据，不代表工程能够编译或启动；构建与运行仍需使用 Unreal 官方工具验证。
+
+### 缺少 Clang 编译数据库
+
+C++ Source 工具不会脱离实际构建 Profile 猜测 include、宏和符号。请先用 UnrealBuildTool 或 IDE 工程生成流程得到 `compile_commands.json`，再将文件放在项目根目录或显式传入：
+
+```powershell
+python sourcetools/ue_list_cxx_types.py `
+  --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp `
+  --compile-database D:/Projects/MyGame/compile_commands.json
+```
+
+若数据库的参数包含特定版本的 Clang `resource-dir`，还需把 `UE_ITPS_LIBCLANG` 指向匹配版本的 `libclang.dll`。
 
 ## 下一步
 

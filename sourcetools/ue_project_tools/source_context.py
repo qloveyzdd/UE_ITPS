@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from .common import normalized, read_json, result_document
+from .clang_frontend import load_clang_unit, syntax_projection
 from .descriptor import resolve_internal_directories
 from .discovery import find_nearest_uproject
 from .engine import resolve_engine
@@ -22,7 +23,6 @@ from .source_namespaces import (
     resolve_observed_namespace,
 )
 from .source_tokens import delimiter_problems, lex_source
-from .syntax_tree import parse_cpp_syntax
 
 
 _CPP_SUFFIXES = {".cpp", ".cc"}
@@ -93,22 +93,11 @@ def _automatic_companions(
 def _lightweight_source(path: Path) -> dict[str, Any]:
     text = path.read_text(encoding="utf-8-sig", errors="replace")
     tokens = lex_source(text)
-    syntax_tree = parse_cpp_syntax(text)
     problems = delimiter_problems(tokens)
-    if syntax_tree["parse_error_count"]:
-        problems.append(
-            {
-                "severity": "warning",
-                "code": "cxx-syntax-tree-errors",
-                "count": syntax_tree["parse_error_count"],
-                "message": "Tree-sitter reported incomplete C++ syntax regions after UE macro normalization",
-            }
-        )
     return {
         "path": normalized(path),
         "text": text,
         "tokens": tokens,
-        "syntax_tree": syntax_tree,
         "problems": problems,
     }
 
@@ -321,6 +310,7 @@ def _source_context_problems(
 def load_source_context(
     source_file: Path,
     engine_override: Path | None = None,
+    compilation_database: Path | None = None,
     *,
     load_includes: bool = False,
     load_cpp_analysis: bool = True,
@@ -380,6 +370,18 @@ def load_source_context(
         selected_header,
         load_cpp_analysis=load_cpp_analysis,
     )
+    unit_files = [path for path in (selected_source, selected_header) if path]
+    anchor = selected_source or selected_header
+    if anchor is None:
+        raise ValueError(f"No C++ source unit could be selected for: {source}")
+    clang_model = load_clang_unit(
+        anchor,
+        unit_files,
+        project_root,
+        compilation_database,
+    )
+    for path, parsed in parsed_files:
+        parsed["syntax_tree"] = syntax_projection(clang_model, path)
     includes, include_problems = (
         _collect_include_facts(
             parsed_files,
@@ -401,6 +403,70 @@ def load_source_context(
         project_root,
         engine_root,
     )
+    if clang_model["command_source"] != "direct":
+        problems.append(
+            {
+                "severity": "warning",
+                "code": "clang-compile-command-borrowed",
+                "source": rooted_path(anchor, project_root, engine_root),
+                "command_file": clang_model["command_file"],
+                "message": "Clang used another source file's compile command from the same Module profile",
+            }
+        )
+    for diagnostic in clang_model["diagnostics"]:
+        if diagnostic["severity"] < 3:
+            continue
+        problems.append(
+            {
+                "severity": "error",
+                "code": "clang-diagnostic-error",
+                "source": {
+                    "path": diagnostic["file"],
+                    "line": diagnostic["line"],
+                },
+                "message": diagnostic["message"],
+            }
+        )
+    if load_includes:
+        unit_paths = {
+            "cpp": (
+                str(selected_source.resolve()).replace("\\", "/").casefold()
+                if selected_source is not None
+                else None
+            ),
+            "header": (
+                str(selected_header.resolve()).replace("\\", "/").casefold()
+                if selected_header is not None
+                else None
+            ),
+        }
+        observed_includes = {
+            (item["source_file"], int(item["line"]))
+            for item in clang_model["includes"]
+        }
+        for include in includes:
+            resolution = include.get("resolution", {})
+            if resolution.get("status") in {
+                "generated_header",
+                "generated_source",
+                "system_or_sdk_unresolved",
+            }:
+                continue
+            evidence = include["evidence"]
+            source_key = unit_paths.get(str(evidence["unit"]))
+            if source_key and (
+                source_key,
+                int(evidence["line"]),
+            ) not in observed_includes:
+                problems.append(
+                    {
+                        "severity": "warning",
+                        "code": "clang-direct-include-not-observed",
+                        "spelling": include["spelling"],
+                        "evidence": evidence,
+                        "message": "The lexical include was not observed in the active Clang translation unit",
+                    }
+                )
 
     source_fact = (
         rooted_path(selected_source, project_root, engine_root)
@@ -425,6 +491,16 @@ def load_source_context(
                 "version": engine_result.get("version"),
             },
             "source_owner": public_owner(source_owner),
+            "clang": {
+                "engine": clang_model["engine"],
+                "version": clang_model["version"],
+                "compilation_database": clang_model["compilation_database"],
+                "compilation_database_sha256": clang_model[
+                    "compilation_database_sha256"
+                ],
+                "command_source": clang_model["command_source"],
+                "command_file": clang_model["command_file"],
+            },
         },
         "source_unit": {
             "source": source_fact,
@@ -436,6 +512,7 @@ def load_source_context(
         "parsed_by_path": {path: parsed for path, parsed in parsed_files},
         "project_root": project_root,
         "engine_root": engine_root,
+        "clang_model": clang_model,
         "problems": problems,
     }
 

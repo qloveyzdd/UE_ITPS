@@ -18,7 +18,7 @@ from ue_project_tools import source_type_facts  # noqa: E402
 from ue_project_tools.source_context import load_source_context  # noqa: E402
 
 
-ANALYZER_VERSION = "ue-itps.information-pool.batch-analyzer.v2"
+ANALYZER_VERSION = "ue-itps.information-pool.batch-analyzer.v3-clang"
 
 
 @dataclass
@@ -34,10 +34,12 @@ def analyze_source_unit(
     source_file: Path,
     *,
     engine_override: Path | None = None,
+    compilation_database: Path | None = None,
 ) -> BatchDocuments:
     loaded = load_source_context(
         source_file,
         engine_override,
+        compilation_database,
         load_includes=True,
         load_cpp_analysis=True,
     )
@@ -62,14 +64,17 @@ def analyze_source_unit(
         types_document = source_type_facts.list_source_types(
             source_file,
             engine_override,
+            compilation_database,
         )
         includes_document = source_include_facts.list_source_includes(
             source_file,
             engine_override,
+            compilation_database,
         )
         functions_document = source_function_index.list_source_functions(
             source_file,
             engine_override,
+            compilation_database,
         )
 
         cached_parts = loaded["parts"]
@@ -94,6 +99,7 @@ def analyze_source_unit(
                 source_file,
                 function_name,
                 engine_override=engine_override,
+                compilation_database=compilation_database,
             )
             for function_name in function_names
         ]

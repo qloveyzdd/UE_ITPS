@@ -31,9 +31,13 @@ def main() -> int:
         metavar="PATH",
         help=".uproject 文件或项目根目录 / .uproject file or project root",
     )
+    parser.add_argument("--compile-database", metavar="PATH", help="compile_commands.json 或其目录 / compile_commands.json or its directory")
     args = parser.parse_args()
     try:
-        result = dependency_result(_root(args.project))
+        result = dependency_result(
+            _root(args.project),
+            Path(args.compile_database) if args.compile_database else None,
+        )
     except (OSError, ValueError) as exc:
         result = cli_error_document(
             SCHEMA_VERSION,

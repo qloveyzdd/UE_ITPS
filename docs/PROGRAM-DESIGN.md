@@ -79,7 +79,8 @@ schemas/
 | `source_context.py`、`source_includes.py` | C++ 源码单元和 include 来源 |
 | `source_type_facts.py` | 类型、成员、接口候选、全局变量和自由函数 |
 | `source_function_*.py` | 函数身份、声明关系和外部符号 |
-| `syntax_tree.py` | 基于 Tree-sitter 的 UE C++ / C# 语法前端与宏归一化 |
+| `clang_frontend.py` | 基于编译数据库的 Clang C++ 翻译单元与语义事实 |
+| `syntax_tree.py` | Build.cs、Target.cs 和普通 C# 的 Tree-sitter 前端；保留文本级 C++ 兼容入口但不进入正式 Source 链路 |
 | `dependency_graph.py`、`project_graph.py` | 类型依赖、循环、继承、反向影响和局部函数流程 |
 | `tool_pool.py` | 项目工具池注册表与能力发现 |
 
@@ -91,7 +92,7 @@ schemas/
 
 - 严格 JSON 和 Unreal 描述符 JSON 读取。
 - 路径规范化及生成目录过滤。
-- C#、C++ 的 Tree-sitter AST，以及词法 Token、声明、条件和操作投影。
+- C++ 的 Clang AST、C# 的 Tree-sitter AST，以及 UE 专用的词法 Token、宏、条件和操作投影。
 - gdep 思路改写的确定性依赖图、循环检测和反向影响遍历。
 - 源码单元伴随文件推导。
 - 统一 Validation、Limits 和请求失败信封。
