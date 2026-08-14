@@ -69,18 +69,18 @@
     "dependencies": {
       "type": "object",
       "required": [
-        "public",
-        "private",
-        "dynamic"
+        "public_dependency_modules",
+        "private_dependency_modules",
+        "dynamically_loaded_modules"
       ],
       "properties": {
-        "public": {
+        "public_dependency_modules": {
           "$ref": "#/$defs/moduleNames"
         },
-        "private": {
+        "private_dependency_modules": {
           "$ref": "#/$defs/moduleNames"
         },
-        "dynamic": {
+        "dynamically_loaded_modules": {
           "$ref": "#/$defs/moduleNames"
         }
       },

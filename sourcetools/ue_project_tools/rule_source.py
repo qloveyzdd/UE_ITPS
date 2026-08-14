@@ -9,9 +9,9 @@ from .source_parser import parse_rule_file
 
 
 _MODULE_DEPENDENCY_SETTINGS = {
-    "PublicDependencyModuleNames": "public",
-    "PrivateDependencyModuleNames": "private",
-    "DynamicallyLoadedModuleNames": "dynamic",
+    "PublicDependencyModuleNames": "public_dependency_modules",
+    "PrivateDependencyModuleNames": "private_dependency_modules",
+    "DynamicallyLoadedModuleNames": "dynamically_loaded_modules",
 }
 
 
@@ -171,9 +171,9 @@ def _project_module_rules_class(
         method for method in rules_class["methods"] if method["name"] in reachable
     ]
     dependencies: dict[str, list[str]] = {
-        "public": [],
-        "private": [],
-        "dynamic": [],
+        "public_dependency_modules": [],
+        "private_dependency_modules": [],
+        "dynamically_loaded_modules": [],
     }
     seen = {kind: set() for kind in dependencies}
     problems: list[dict[str, Any]] = []

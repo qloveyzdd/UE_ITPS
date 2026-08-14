@@ -109,9 +109,9 @@ class BuildAndModuleTests(CliTestCase):
             {
                 "name": "SampleGame",
                 "dependencies": {
-                    "public": ["Core", "GameplayTags"],
-                    "private": ["UnrealEd"],
-                    "dynamic": [],
+                    "public_dependency_modules": ["Core", "GameplayTags"],
+                    "private_dependency_modules": ["UnrealEd"],
+                    "dynamically_loaded_modules": [],
                 },
             },
         )
@@ -152,9 +152,9 @@ class BuildAndModuleTests(CliTestCase):
         self.assertEqual(
             result["rules_classes"][0]["dependencies"],
             {
-                "public": ["Core", "Engine"],
-                "private": ["Slate", "InputCore"],
-                "dynamic": ["AssetTools"],
+                "public_dependency_modules": ["Core", "Engine"],
+                "private_dependency_modules": ["Slate", "InputCore"],
+                "dynamically_loaded_modules": ["AssetTools"],
             },
         )
 
@@ -182,9 +182,9 @@ class BuildAndModuleTests(CliTestCase):
         self.assertEqual(
             result["rules_classes"][0]["dependencies"],
             {
-                "public": ["Core"],
-                "private": [],
-                "dynamic": [],
+                "public_dependency_modules": ["Core"],
+                "private_dependency_modules": [],
+                "dynamically_loaded_modules": [],
             },
         )
         self.assertEqual(result["validation"]["status"], "warning")
@@ -217,7 +217,12 @@ class BuildAndModuleTests(CliTestCase):
             "--rules",
             str(path),
         )
-        self.assertEqual(result["rules_classes"][0]["dependencies"]["dynamic"], [])
+        self.assertEqual(
+            result["rules_classes"][0]["dependencies"][
+                "dynamically_loaded_modules"
+            ],
+            [],
+        )
         self.assertEqual(result["validation"]["status"], "ok")
         self.assertEqual(result["validation"]["problems"], [])
 
