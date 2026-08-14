@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read only the explicit facts declared by one .uproject file."""
+"""Read and validate project Module and direct Plugin declarations."""
 
 from pathlib import Path
 
@@ -8,13 +8,16 @@ from ue_project_tools.descriptor import descriptor_result
 
 
 SCHEMA_VERSION = "ue_read_project_descriptor"
-RESPONSIBILITY = "Read explicit facts declared by one .uproject file."
+RESPONSIBILITY = (
+    "Read project Module names and direct Plugin declarations, then validate "
+    "matching Build.cs and .uplugin files."
+)
 
 
 def main() -> int:
     parser = cli_parser(
-        "只读取一个 .uproject 文件明确声明的事实。",
-        "Read only the explicit facts declared by one .uproject file.",
+        "读取一个 .uproject 的工程模块和插件声明，并检查同名 Build.cs 与 .uplugin。",
+        "Read Module and Plugin declarations and validate matching descriptor files.",
         schema_version=SCHEMA_VERSION,
         responsibility=RESPONSIBILITY,
     )

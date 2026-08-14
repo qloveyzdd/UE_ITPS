@@ -26,24 +26,14 @@
       "type": "object",
       "required": [
         "schema_version",
-        "project",
         "declared_modules",
         "plugin_declarations",
-        "additional_root_directories",
-        "additional_plugin_directories",
-        "descriptor_options",
-        "descriptor_top_level_fields",
-        "unmodeled_top_level_fields",
-        "declaration_graph",
         "validation",
         "limits"
       ],
       "properties": {
         "schema_version": {
           "const": "ue_read_project_descriptor"
-        },
-        "project": {
-          "type": "object"
         },
         "declared_modules": {
           "type": "array",
@@ -53,28 +43,44 @@
         },
         "plugin_declarations": {
           "type": "object",
-          "required": ["enabled", "disabled", "extended"]
-        },
-        "additional_root_directories": {
-          "type": "array"
-        },
-        "additional_plugin_directories": {
-          "type": "array"
-        },
-        "descriptor_options": {
-          "type": "object"
-        },
-        "descriptor_top_level_fields": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "unmodeled_top_level_fields": {
-          "type": "object"
-        },
-        "declaration_graph": {
-          "type": "object"
+          "required": ["enabled", "disabled", "target_allow_list"],
+          "properties": {
+            "enabled": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "disabled": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "target_allow_list": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["name", "targets"],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "targets": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
         },
         "validation": {
           "$ref": "urn:ue-itps:schema:common#/$defs/validation"

@@ -44,7 +44,6 @@ _CLANG_TOOLS = {
 _GRAPH_TOOLS = {
     "ue_inspect_modules",
     "ue_read_plugin_descriptor",
-    "ue_read_project_descriptor",
     "ue_resolve_plugins",
     "ue_query_cxx_hierarchy",
     "ue_analyze_cxx_dependencies",

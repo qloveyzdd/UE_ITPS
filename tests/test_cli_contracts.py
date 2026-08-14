@@ -153,6 +153,11 @@ class CliContractTests(CliTestCase):
                     )
 
     def test_validation_status_uses_highest_severity(self) -> None:
+        info = {
+            "severity": "info",
+            "code": "info",
+            "message": "info",
+        }
         warning = {
             "severity": "warning",
             "code": "warning",
@@ -164,6 +169,7 @@ class CliContractTests(CliTestCase):
             "message": "error",
         }
         self.assertEqual(validation_result([])["status"], "ok")
+        self.assertEqual(validation_result([info])["status"], "ok")
         self.assertEqual(validation_result([warning])["status"], "warning")
         self.assertEqual(
             validation_result([warning, error])["status"],

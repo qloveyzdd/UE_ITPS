@@ -8,7 +8,7 @@
       "required": ["severity", "code", "message"],
       "properties": {
         "severity": {
-          "enum": ["warning", "error"]
+          "enum": ["info", "warning", "error"]
         },
         "code": {
           "type": "string",

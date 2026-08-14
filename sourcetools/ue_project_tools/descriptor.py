@@ -4,30 +4,6 @@ from pathlib import Path
 from typing import Any
 
 from .common import normalized, read_json, result_document
-from .dependency_graph import DependencyGraph
-
-
-KNOWN_TOP_LEVEL_FIELDS = {
-    "FileVersion",
-    "ProjectFileVersion",
-    "EngineAssociation",
-    "Category",
-    "Description",
-    "Modules",
-    "Plugins",
-    "AdditionalRootDirectories",
-    "AdditionalPluginDirectories",
-    "TargetPlatforms",
-    "DisableEnginePluginsByDefault",
-    "Enterprise",
-    "InitSteps",
-    "PreBuildSteps",
-    "PostBuildSteps",
-    "EpicSampleNameHash",
-}
-
-PLUGIN_CORE_FIELDS = {"Name", "Enabled"}
-OPTIONAL_STRING_FIELDS = ("EngineAssociation", "Category", "Description")
 
 
 def resolve_internal_directories(
@@ -132,7 +108,7 @@ def classify_plugin_declarations(
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     enabled: list[str] = []
     disabled: list[str] = []
-    extended: list[dict[str, Any]] = []
+    target_allow_list: list[dict[str, Any]] = []
     problems: list[dict[str, Any]] = []
     first_pointer_by_name: dict[str, str] = {}
 
@@ -186,26 +162,42 @@ def classify_plugin_declarations(
         else:
             first_pointer_by_name[folded_name] = pointer
         declared_enabled = raw["Enabled"]
-        additional_fields = sorted(set(raw) - PLUGIN_CORE_FIELDS)
-        if additional_fields:
-            extended.append(
-                {
-                    "name": name,
-                    "declared_enabled": declared_enabled,
-                    "descriptor_pointer": pointer,
-                    "additional_fields": additional_fields,
-                }
-            )
-        elif declared_enabled:
+        if declared_enabled:
             enabled.append(name)
         else:
             disabled.append(name)
+
+        if "TargetAllowList" not in raw:
+            continue
+        targets = raw["TargetAllowList"]
+        if not isinstance(targets, list) or any(
+            not isinstance(target, str) or not target for target in targets
+        ):
+            problems.append(
+                {
+                    "severity": "error",
+                    "code": "invalid-plugin-target-allow-list",
+                    "descriptor_pointer": f"{pointer}/TargetAllowList",
+                    "message": (
+                        f"Plugin TargetAllowList at {pointer} must be an array "
+                        "of non-empty strings"
+                    ),
+                }
+            )
+            continue
+        if targets:
+            target_allow_list.append(
+                {
+                    "name": name,
+                    "targets": list(targets),
+                }
+            )
 
     return (
         {
             "enabled": enabled,
             "disabled": disabled,
-            "extended": extended,
+            "target_allow_list": target_allow_list,
         },
         problems,
     )
@@ -270,35 +262,187 @@ def classify_module_declarations(
     return names, problems
 
 
-def validate_core_field_types(descriptor: dict[str, Any]) -> list[dict[str, Any]]:
+def declared_module_file_problems(
+    project_file: Path,
+    descriptor: dict[str, Any],
+) -> list[dict[str, Any]]:
+    from .code_inventory import discover_module_build_rules
+
+    declarations = descriptor.get("Modules", [])
+    if not isinstance(declarations, list):
+        return []
+
+    additional_roots, _ = resolve_internal_directories(
+        project_file,
+        descriptor,
+        "AdditionalRootDirectories",
+    )
+    search_roots = [
+        project_file.parent / "Source",
+        project_file.parent / "Platforms",
+        *additional_roots,
+    ]
+    rules_by_module, _ = discover_module_build_rules(search_roots)
+    declared_names: dict[str, str] = {}
+    for raw in declarations:
+        if (
+            isinstance(raw, dict)
+            and isinstance(raw.get("Name"), str)
+            and raw["Name"]
+        ):
+            declared_names.setdefault(raw["Name"].casefold(), raw["Name"])
+
     problems: list[dict[str, Any]] = []
-    for field in OPTIONAL_STRING_FIELDS:
-        if field in descriptor and not isinstance(descriptor[field], str):
+    for module_key, name in declared_names.items():
+        candidates = rules_by_module.get(module_key, [])
+        if len(candidates) == 1:
+            continue
+        problems.append(
+            {
+                "severity": "error",
+                "code": (
+                    "project-module-build-rules-missing"
+                    if not candidates
+                    else "project-module-build-rules-ambiguous"
+                ),
+                "module_name": name,
+                "candidates": [normalized(path) for path in candidates],
+                "message": (
+                    f"Declared project module {name} has {len(candidates)} "
+                    "matching Build.cs files"
+                ),
+            }
+        )
+    return problems
+
+
+def declared_plugin_file_problems(
+    project_file: Path,
+    descriptor: dict[str, Any],
+) -> list[dict[str, Any]]:
+    from .engine import resolve_engine
+    from .plugins import descriptor_index
+
+    declarations = descriptor.get("Plugins", [])
+    if not isinstance(declarations, list):
+        return []
+
+    declared_plugins: dict[str, dict[str, Any]] = {}
+    for raw in declarations:
+        if (
+            isinstance(raw, dict)
+            and isinstance(raw.get("Name"), str)
+            and raw["Name"]
+            and type(raw.get("Enabled")) is bool
+        ):
+            declared_plugins.setdefault(raw["Name"].casefold(), raw)
+    if not declared_plugins:
+        return []
+
+    additional_roots, additional_findings = resolve_internal_directories(
+        project_file,
+        descriptor,
+        "AdditionalPluginDirectories",
+    )
+    problems = directory_finding_problems(
+        "AdditionalPluginDirectories",
+        additional_findings,
+        warn_external=True,
+    )
+    project_roots = [
+        ("project", project_file.parent / "Plugins"),
+        ("project-platform", project_file.parent / "Platforms"),
+        ("project-mods", project_file.parent / "Mods"),
+        *(
+            (f"additional-project-{index}", root)
+            for index, root in enumerate(additional_roots)
+        ),
+    ]
+    matches = descriptor_index(
+        project_roots,
+        {raw["Name"] for raw in declared_plugins.values()},
+    )
+    unresolved = {
+        plugin_key
+        for plugin_key in declared_plugins
+        if not matches.get(plugin_key)
+    }
+
+    if unresolved:
+        association = descriptor.get("EngineAssociation")
+        engine_info = resolve_engine(
+            project_file,
+            association if isinstance(association, str) else "",
+        )
+        if engine_info["status"] == "resolved":
+            engine_root = Path(str(engine_info["engine_root"]))
+            engine_matches = descriptor_index(
+                [
+                    ("engine", engine_root / "Engine" / "Plugins"),
+                    ("engine-platform", engine_root / "Engine" / "Platforms"),
+                ],
+                {
+                    declared_plugins[plugin_key]["Name"]
+                    for plugin_key in unresolved
+                },
+            )
+            for plugin_key, candidates in engine_matches.items():
+                matches.setdefault(plugin_key, []).extend(candidates)
+        else:
+            unresolved_plugins = [
+                declared_plugins[plugin_key]
+                for plugin_key in sorted(unresolved)
+            ]
+            has_enabled_plugin = any(
+                raw["Enabled"] for raw in unresolved_plugins
+            )
             problems.append(
                 {
-                    "severity": "error",
-                    "code": "invalid-project-field-type",
-                    "descriptor_pointer": f"/{field}",
-                    "message": f".uproject {field} must be a string",
+                    "severity": "error" if has_enabled_plugin else "info",
+                    "code": "plugin-descriptor-search-incomplete",
+                    "plugin_names": [raw["Name"] for raw in unresolved_plugins],
+                    "message": (
+                        "Engine could not be resolved, so declared Plugin "
+                        "descriptors could not be checked in Engine roots"
+                        + (
+                            ""
+                            if has_enabled_plugin
+                            else "; these Plugins are not enabled, so this "
+                            "does not affect the current project"
+                        )
+                    ),
                 }
             )
+            return problems
+
+    for plugin_key, raw in declared_plugins.items():
+        if matches.get(plugin_key):
+            continue
+        declared_enabled = raw["Enabled"]
+        problems.append(
+            {
+                "severity": "error" if declared_enabled else "info",
+                "code": "declared-plugin-descriptor-missing",
+                "plugin_name": raw["Name"],
+                "declared_enabled": declared_enabled,
+                "message": (
+                    f"Declared Plugin {raw['Name']} has no matching .uplugin file"
+                    + (
+                        ""
+                        if declared_enabled
+                        else "; the Plugin is not enabled, so this does not "
+                        "affect the current project"
+                    )
+                ),
+            }
+        )
     return problems
 
 
 def descriptor_result(project_file: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     project_file = project_file.resolve()
     descriptor = read_json(project_file)
-    file_version = descriptor.get("FileVersion", descriptor.get("ProjectFileVersion"))
     problems: list[dict[str, Any]] = []
-    if type(file_version) is not int or file_version not in {1, 2, 3}:
-        problems.append(
-            {
-                "severity": "error",
-                "code": "unsupported-project-file-version",
-                "message": f"Unsupported .uproject FileVersion: {file_version!r}",
-            }
-        )
-
     plugin_declarations, plugin_problems = classify_plugin_declarations(
         descriptor.get("Plugins", [])
     )
@@ -308,100 +452,25 @@ def descriptor_result(project_file: Path) -> tuple[dict[str, Any], dict[str, Any
         module_declarations
     )
     problems.extend(module_problems)
-    problems.extend(validate_core_field_types(descriptor))
-
-    _, additional_roots = resolve_internal_directories(
-        project_file, descriptor, "AdditionalRootDirectories"
-    )
-    _, additional_plugins = resolve_internal_directories(
-        project_file, descriptor, "AdditionalPluginDirectories"
-    )
-    problems.extend(
-        directory_finding_problems("AdditionalRootDirectories", additional_roots)
-    )
-    problems.extend(
-        directory_finding_problems(
-            "AdditionalPluginDirectories",
-            additional_plugins,
-            warn_external=True,
-        )
-    )
-    declaration_graph = DependencyGraph()
-    declaration_graph.add_node(
-        project_file.stem,
-        kind="project",
-        file=normalized(project_file),
-    )
-    for raw_module in module_declarations if isinstance(module_declarations, list) else []:
-        if not isinstance(raw_module, dict) or not isinstance(raw_module.get("Name"), str):
-            continue
-        module_name = raw_module["Name"]
-        declaration_graph.add_node(module_name, kind="module", file=normalized(project_file))
-        declaration_graph.add_edge(
-            project_file.stem, module_name, kind="declares_module", file=normalized(project_file)
-        )
-        for dependency in raw_module.get("AdditionalDependencies", []):
-            if isinstance(dependency, str) and dependency:
-                declaration_graph.add_node(dependency, kind="module", file="")
-                declaration_graph.add_edge(
-                    module_name, dependency, kind="additional_dependency", file=normalized(project_file)
-                )
-    raw_plugins = descriptor.get("Plugins", [])
-    for raw_plugin in raw_plugins if isinstance(raw_plugins, list) else []:
-        if not isinstance(raw_plugin, dict) or not isinstance(raw_plugin.get("Name"), str):
-            continue
-        plugin_name = raw_plugin["Name"]
-        declaration_graph.add_node(plugin_name, kind="plugin", file=normalized(project_file))
-        declaration_graph.add_edge(
-            project_file.stem,
-            plugin_name,
-            kind="enables_plugin" if raw_plugin.get("Enabled") is True else "declares_plugin",
-            file=normalized(project_file),
-        )
+    problems.extend(declared_module_file_problems(project_file, descriptor))
+    problems.extend(declared_plugin_file_problems(project_file, descriptor))
 
     result = result_document(
         "ue_read_project_descriptor",
         {
-            "project": {
-                "name": project_file.stem,
-                "root": normalized(project_file.parent),
-                "descriptor": normalized(project_file),
-                "file_version": file_version,
-                "engine_association": descriptor.get("EngineAssociation"),
-                "category": descriptor.get("Category"),
-                "description": descriptor.get("Description"),
-            },
             "declared_modules": declared_modules,
             "plugin_declarations": plugin_declarations,
-            "additional_root_directories": additional_roots,
-            "additional_plugin_directories": additional_plugins,
-            "descriptor_options": {
-                key: descriptor[key]
-                for key in (
-                    "TargetPlatforms",
-                    "DisableEnginePluginsByDefault",
-                    "Enterprise",
-                    "InitSteps",
-                    "PreBuildSteps",
-                    "PostBuildSteps",
-                    "EpicSampleNameHash",
-                )
-                if key in descriptor
-            },
-            "descriptor_top_level_fields": sorted(descriptor.keys()),
-            "unmodeled_top_level_fields": {
-                key: value
-                for key, value in descriptor.items()
-                if key not in KNOWN_TOP_LEVEL_FIELDS
-            },
-            "declaration_graph": declaration_graph.document(),
         },
         problems,
-        responsibility="Read explicit facts declared by one .uproject file.",
+        responsibility=(
+            "Read project Module names and direct Plugin declarations, then "
+            "validate matching Build.cs and .uplugin files."
+        ),
         boundaries=[
-            "The result does not locate Engine, Module, Target, or Plugin files.",
-            "Module and Plugin declarations are projected into a static one-file graph; effective dependencies require the focused probes.",
-            "Unmodeled top-level fields are preserved without being judged invalid.",
+            "Only Module names, Plugin enabled states, and explicit non-empty Plugin TargetAllowList values are reported.",
+            "Other .uproject fields and Plugin reference fields are outside this tool's responsibility.",
+            "Module existence requires one same-named Build.cs; Plugin existence requires at least one same-named .uplugin in supported project or resolved Engine roots.",
+            "Filesystem validation does not prove that modules or plugins compile, load, or apply to an effective build profile.",
         ],
     )
     return descriptor, result

@@ -77,11 +77,34 @@ class ProjectNavigationTests(CliTestCase):
             ["DisabledPlugin"],
         )
         self.assertEqual(
-            result["unmodeled_top_level_fields"],
-            {"CustomFixtureField": {"kept": True}},
+            result["plugin_declarations"]["target_allow_list"],
+            [],
+        )
+        self.assertEqual(result["validation"]["status"], "ok")
+        self.assertEqual(
+            result["validation"]["problems"][0]["code"],
+            "declared-plugin-descriptor-missing",
+        )
+        self.assertEqual(
+            result["validation"]["problems"][0]["severity"],
+            "info",
+        )
+        self.assertIn(
+            "not enabled",
+            result["validation"]["problems"][0]["message"],
+        )
+        self.assertEqual(
+            list(result),
+            [
+                "schema_version",
+                "declared_modules",
+                "plugin_declarations",
+                "validation",
+                "limits",
+            ],
         )
 
-    def test_project_descriptor_preserves_extended_plugin_declaration(self) -> None:
+    def test_project_descriptor_reports_only_non_empty_target_allow_lists(self) -> None:
         descriptor = {
             "FileVersion": 3,
             "Plugins": [
@@ -89,22 +112,212 @@ class ProjectNavigationTests(CliTestCase):
                     "Name": "ConditionalPlugin",
                     "Enabled": True,
                     "TargetAllowList": ["Editor"],
-                }
+                    "TargetDenyList": ["Server"],
+                },
+                {
+                    "Name": "DisabledConditionalPlugin",
+                    "Enabled": False,
+                    "TargetAllowList": ["Server", "Program"],
+                },
+                {
+                    "Name": "EmptyAllowListPlugin",
+                    "Enabled": True,
+                    "TargetAllowList": [],
+                },
+                {"Name": "NoAllowListPlugin", "Enabled": True},
             ],
+            "CustomField": {"ignored": True},
         }
         project = write_json(
             self.fixture.root / "Extended.uproject",
             descriptor,
+        )
+        for plugin_name in (
+            "ConditionalPlugin",
+            "DisabledConditionalPlugin",
+            "EmptyAllowListPlugin",
+            "NoAllowListPlugin",
+        ):
+            write_json(
+                self.fixture.root
+                / "Plugins"
+                / plugin_name
+                / f"{plugin_name}.uplugin",
+                {"FileVersion": 3},
+            )
+        result = self.cli(
+            "ue_read_project_descriptor.py",
+            "--project",
+            str(project),
+        )
+        declarations = result["plugin_declarations"]
+        self.assertEqual(
+            declarations["enabled"],
+            ["ConditionalPlugin", "EmptyAllowListPlugin", "NoAllowListPlugin"],
+        )
+        self.assertEqual(
+            declarations["disabled"],
+            ["DisabledConditionalPlugin"],
+        )
+        self.assertEqual(
+            declarations["target_allow_list"],
+            [
+                {"name": "ConditionalPlugin", "targets": ["Editor"]},
+                {
+                    "name": "DisabledConditionalPlugin",
+                    "targets": ["Server", "Program"],
+                },
+            ],
+        )
+
+    def test_project_descriptor_rejects_invalid_target_allow_list(self) -> None:
+        project = write_json(
+            self.fixture.root / "InvalidTargetAllowList.uproject",
+            {
+                "Plugins": [
+                    {
+                        "Name": "InvalidPlugin",
+                        "Enabled": True,
+                        "TargetAllowList": ["Editor", ""],
+                    }
+                ]
+            },
+        )
+        write_json(
+            self.fixture.root
+            / "Plugins"
+            / "InvalidPlugin"
+            / "InvalidPlugin.uplugin",
+            {"FileVersion": 3},
+        )
+        result = self.cli(
+            "ue_read_project_descriptor.py",
+            "--project",
+            str(project),
+            expected_code=1,
+        )
+        self.assertEqual(result["validation"]["status"], "error")
+        self.assertEqual(
+            result["validation"]["problems"][0]["code"],
+            "invalid-plugin-target-allow-list",
+        )
+        self.assertEqual(
+            result["plugin_declarations"]["target_allow_list"],
+            [],
+        )
+
+    def test_project_descriptor_rejects_missing_module_build_rules(self) -> None:
+        project = write_json(
+            self.fixture.root / "MissingModule.uproject",
+            {"Modules": [{"Name": "MissingModule"}]},
+        )
+        result = self.cli(
+            "ue_read_project_descriptor.py",
+            "--project",
+            str(project),
+            expected_code=1,
+        )
+        self.assertEqual(
+            result["validation"]["problems"][0]["code"],
+            "project-module-build-rules-missing",
+        )
+
+    def test_project_descriptor_rejects_ambiguous_module_build_rules(self) -> None:
+        project = write_json(
+            self.fixture.root / "AmbiguousModule.uproject",
+            {"Modules": [{"Name": "AmbiguousModule"}]},
+        )
+        write_text(
+            self.fixture.root
+            / "Source"
+            / "AmbiguousModule"
+            / "AmbiguousModule.Build.cs",
+            "public class AmbiguousModule {}",
+        )
+        write_text(
+            self.fixture.root
+            / "Platforms"
+            / "Win64"
+            / "Source"
+            / "AmbiguousModule"
+            / "AmbiguousModule.Build.cs",
+            "public class AmbiguousModule {}",
+        )
+        result = self.cli(
+            "ue_read_project_descriptor.py",
+            "--project",
+            str(project),
+            expected_code=1,
+        )
+        self.assertEqual(
+            result["validation"]["problems"][0]["code"],
+            "project-module-build-rules-ambiguous",
+        )
+
+    def test_project_descriptor_rejects_missing_enabled_plugin(self) -> None:
+        project = write_json(
+            self.fixture.root / "MissingPlugin.uproject",
+            {
+                "Plugins": [
+                    {
+                        "Name": "DefinitelyMissingFixturePlugin",
+                        "Enabled": True,
+                    }
+                ]
+            },
+        )
+        result = self.cli(
+            "ue_read_project_descriptor.py",
+            "--project",
+            str(project),
+            expected_code=1,
+        )
+        self.assertEqual(
+            result["validation"]["problems"][0]["code"],
+            "declared-plugin-descriptor-missing",
+        )
+
+    def test_project_descriptor_accepts_plugin_from_resolved_engine(self) -> None:
+        plugin_name = "EngineFixturePlugin"
+        write_json(
+            self.fixture.engine_root
+            / "Engine"
+            / "Plugins"
+            / plugin_name
+            / f"{plugin_name}.uplugin",
+            {"FileVersion": 3},
+        )
+        project = write_json(
+            self.fixture.root / "EnginePlugin.uproject",
+            {"Plugins": [{"Name": plugin_name, "Enabled": True}]},
         )
         result = self.cli(
             "ue_read_project_descriptor.py",
             "--project",
             str(project),
         )
-        extended = result["plugin_declarations"]["extended"]
-        self.assertEqual(len(extended), 1)
-        self.assertEqual(extended[0]["name"], "ConditionalPlugin")
-        self.assertEqual(extended[0]["additional_fields"], ["TargetAllowList"])
+        self.assertEqual(result["validation"]["status"], "ok")
+
+    def test_project_descriptor_reports_incomplete_engine_plugin_search(self) -> None:
+        project = write_json(
+            self.fixture.root / "UnresolvedEnginePlugin.uproject",
+            {
+                "EngineAssociation": "../NoSuchFixtureEngine",
+                "Plugins": [
+                    {"Name": "UnresolvedEnginePlugin", "Enabled": True}
+                ],
+            },
+        )
+        result = self.cli(
+            "ue_read_project_descriptor.py",
+            "--project",
+            str(project),
+            expected_code=1,
+        )
+        self.assertEqual(
+            result["validation"]["problems"][0]["code"],
+            "plugin-descriptor-search-incomplete",
+        )
 
     def test_engine_resolution_reads_build_version(self) -> None:
         result = self.cli(
