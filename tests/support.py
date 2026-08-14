@@ -253,7 +253,7 @@ def create_fixture(root: Path) -> Fixture:
             public SampleGameEditorTarget(TargetInfo Target) : base(Target)
             {
                 Type = TargetType.Editor;
-                ExtraModuleNames.Add("SampleGame");
+                ExtraModuleNames.AddRange(new string[] { "SampleGame" });
             }
         }
         """,

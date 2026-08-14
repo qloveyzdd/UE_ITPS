@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Discover project Target.cs files and native-project evidence."""
+"""Discover project Target.cs classes, types, modules, and inheritance."""
 
 from pathlib import Path
 
@@ -9,15 +9,15 @@ from ue_project_tools.common import cli_parser, json_text
 
 SCHEMA_VERSION = "ue_inspect_targets"
 RESPONSIBILITY = (
-    "Discover project Target.cs files, validate their placement, and classify native "
-    "Target evidence."
+    "Discover project Target.cs classes and report directly declared or inherited "
+    "Target types and extra modules."
 )
 
 
 def main() -> int:
     parser = cli_parser(
         "发现项目 Target.cs 文件和原生 Target 证据。",
-        "Discover project Target.cs files and native Target evidence.",
+        "Discover project Target.cs classes, types, modules, and inheritance.",
         schema_version=SCHEMA_VERSION,
         responsibility=RESPONSIBILITY,
     )

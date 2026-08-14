@@ -55,7 +55,7 @@ _GRAPH_TOOLS = {
 def analysis_engines(tool_name: str) -> list[str]:
     engines = ["ue-itps"]
     if tool_name in _TREE_SITTER_TOOLS:
-        engines.append("ast-outline-adapted")
+        engines.append("tree-sitter/ast-outline+gdep")
     if tool_name in _CLANG_TOOLS:
         engines.append("clang/libclang")
     if tool_name == "ue_inspect_module_entry":

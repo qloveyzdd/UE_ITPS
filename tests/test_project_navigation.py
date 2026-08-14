@@ -437,11 +437,243 @@ class ProjectNavigationTests(CliTestCase):
             "--project",
             str(self.fixture.project),
         )
+        by_name = {item["name"]: item for item in result["items"]}
         self.assertEqual(
-            {item["name"] for item in result["items"]},
-            {"SampleGame", "SampleGameEditor"},
+            set(by_name),
+            {"SampleGameTarget", "SampleGameEditorTarget"},
         )
-        self.assertEqual(result["classification"], "native-project")
+        self.assertEqual(by_name["SampleGameTarget"]["target_type"], "Game")
+        self.assertEqual(
+            by_name["SampleGameTarget"]["extra_module_names"],
+            ["SampleGame"],
+        )
+        self.assertEqual(
+            by_name["SampleGameEditorTarget"]["target_type"],
+            "Editor",
+        )
+        self.assertEqual(
+            by_name["SampleGameEditorTarget"]["extra_module_names"],
+            ["SampleGame"],
+        )
+        self.assertNotIn("classification", result)
+        self.assertNotIn("is_root_target", by_name["SampleGameTarget"])
+        self.assertNotIn("rules_classes", by_name["SampleGameTarget"])
+        self.assertNotIn("syntax", by_name["SampleGameTarget"])
+        self.assertEqual(
+            result["limits"]["analysis_engines"],
+            ["ue-itps", "tree-sitter/ast-outline+gdep"],
+        )
+
+    def test_target_inventory_reads_nested_client_and_server_declarations(
+        self,
+    ) -> None:
+        write_text(
+            self.fixture.project_root / "Source" / "Targets" / "Client.Target.cs",
+            """
+            using UnrealBuildTool;
+
+            public class ClientTarget : TargetRules
+            {
+                public ClientTarget(TargetInfo Target) : base(Target)
+                {
+                    Type = TargetType.Client;
+                    ExtraModuleNames.AddRange(new[] { "ClientCore", "Shared" });
+                }
+            }
+            """,
+        )
+        write_text(
+            self.fixture.project_root / "Source" / "Targets" / "Server.Target.cs",
+            """
+            using UnrealBuildTool;
+
+            public class ServerTarget : TargetRules
+            {
+                public ServerTarget(TargetInfo Target) : base(Target)
+                {
+                    Configure();
+                }
+
+                private void Configure()
+                {
+                    Type = TargetType.Server;
+                    ExtraModuleNames.Add("ServerCore");
+                }
+            }
+            """,
+        )
+        result = self.cli(
+            "ue_inspect_targets.py",
+            "--project",
+            str(self.fixture.project),
+        )
+        by_name = {item["name"]: item for item in result["items"]}
+        self.assertEqual(by_name["ClientTarget"]["target_type"], "Client")
+        self.assertEqual(
+            by_name["ClientTarget"]["extra_module_names"],
+            ["ClientCore", "Shared"],
+        )
+        self.assertEqual(by_name["ServerTarget"]["target_type"], "Server")
+        self.assertEqual(
+            by_name["ServerTarget"]["extra_module_names"],
+            ["ServerCore"],
+        )
+        problem_codes = {
+            problem["code"] for problem in result["validation"]["problems"]
+        }
+        self.assertNotIn("project-target-root-missing", problem_codes)
+        self.assertNotIn("project-target-nested", problem_codes)
+
+    def test_target_inventory_infers_inherited_values_as_info(self) -> None:
+        write_text(
+            self.fixture.project_root
+            / "Source"
+            / "SampleGameVariant.Target.cs",
+            """
+            using UnrealBuildTool;
+
+            public class SampleGameVariantTarget : SampleGameTarget
+            {
+                public SampleGameVariantTarget(TargetInfo Target) : base(Target)
+                {
+                    ExtraModuleNames.Add("VariantModule");
+                }
+            }
+            """,
+        )
+        write_text(
+            self.fixture.project_root
+            / "Source"
+            / "SampleGameDeepVariant.Target.cs",
+            """
+            using UnrealBuildTool;
+
+            public class SampleGameDeepVariantTarget : SampleGameVariantTarget
+            {
+                public SampleGameDeepVariantTarget(TargetInfo Target) : base(Target)
+                {
+                }
+            }
+            """,
+        )
+        result = self.cli(
+            "ue_inspect_targets.py",
+            "--project",
+            str(self.fixture.project),
+        )
+        by_name = {item["name"]: item for item in result["items"]}
+        variant = by_name["SampleGameVariantTarget"]
+        self.assertEqual(variant["target_type"], "Game")
+        self.assertEqual(
+            variant["extra_module_names"],
+            ["SampleGame", "VariantModule"],
+        )
+        deep_variant = by_name["SampleGameDeepVariantTarget"]
+        self.assertEqual(deep_variant["target_type"], "Game")
+        self.assertEqual(
+            deep_variant["extra_module_names"],
+            ["SampleGame", "VariantModule"],
+        )
+        inheritance_info = {
+            problem["inheritance_chain"][0]: problem
+            for problem in result["validation"]["problems"]
+            if problem["code"] == "target-values-inherited"
+        }
+        variant_info = inheritance_info["SampleGameVariantTarget"]
+        self.assertEqual(variant_info["severity"], "info")
+        self.assertEqual(
+            variant_info["inheritance_chain"],
+            ["SampleGameVariantTarget", "SampleGameTarget"],
+        )
+        self.assertEqual(
+            variant_info["inferred_fields"],
+            ["target_type", "extra_module_names"],
+        )
+        deep_info = inheritance_info["SampleGameDeepVariantTarget"]
+        self.assertEqual(
+            deep_info["inheritance_chain"],
+            [
+                "SampleGameDeepVariantTarget",
+                "SampleGameVariantTarget",
+                "SampleGameTarget",
+            ],
+        )
+        self.assertNotIn("target_name", variant_info)
+        self.assertNotIn("base_class", variant_info)
+        self.assertEqual(result["validation"]["status"], "ok")
+
+    def test_target_inventory_warns_for_dynamic_declarations(self) -> None:
+        write_text(
+            self.fixture.project_root / "Source" / "Dynamic.Target.cs",
+            """
+            using UnrealBuildTool;
+
+            public class DynamicTarget : TargetRules
+            {
+                public DynamicTarget(TargetInfo Target) : base(Target)
+                {
+                    Type = ResolveType();
+                    ExtraModuleNames.Add(GetModuleName());
+                    ExtraModuleNames.AddRange(
+                        new string[] { "Known", GetModuleName() }
+                    );
+                }
+
+                private TargetType ResolveType() => TargetType.Program;
+                private string GetModuleName() => "DynamicModule";
+            }
+            """,
+        )
+        result = self.cli(
+            "ue_inspect_targets.py",
+            "--project",
+            str(self.fixture.project),
+        )
+        dynamic = next(
+            item for item in result["items"] if item["name"] == "DynamicTarget"
+        )
+        self.assertIsNone(dynamic["target_type"])
+        self.assertEqual(dynamic["extra_module_names"], [])
+        problem_codes = [
+            problem["code"]
+            for problem in result["validation"]["problems"]
+            if problem.get("path") == dynamic["path"]
+        ]
+        self.assertEqual(
+            problem_codes,
+            [
+                "target-type-unresolved",
+                "target-extra-modules-unresolved",
+                "target-extra-modules-unresolved",
+            ],
+        )
+
+    def test_target_inventory_reports_syntax_errors_with_path(self) -> None:
+        broken = write_text(
+            self.fixture.project_root / "Source" / "Broken.Target.cs",
+            """
+            using UnrealBuildTool;
+
+            public class BrokenTarget : TargetRules
+            {
+            """,
+        )
+        result = self.cli(
+            "ue_inspect_targets.py",
+            "--project",
+            str(self.fixture.project),
+            expected_code=1,
+        )
+        syntax_problem = next(
+            problem
+            for problem in result["validation"]["problems"]
+            if problem["code"] == "csharp-syntax-tree-errors"
+        )
+        self.assertEqual(
+            syntax_problem["path"],
+            str(broken.resolve()).replace("\\", "/"),
+        )
+        self.assertGreater(syntax_problem["count"], 0)
 
     def test_project_source_inventory_groups_project_and_plugin_modules(self) -> None:
         result = self.cli(

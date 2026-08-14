@@ -27,7 +27,6 @@
       "required": [
         "schema_version",
         "items",
-        "classification",
         "validation",
         "limits"
       ],
@@ -36,16 +35,46 @@
           "const": "ue_inspect_targets"
         },
         "items": {
-          "type": "array"
-        },
-        "classification": {
-          "type": "string"
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/target"
+          }
         },
         "validation": {
           "$ref": "urn:ue-itps:schema:common#/$defs/validation"
         },
         "limits": {
           "$ref": "urn:ue-itps:schema:common#/$defs/limits"
+        }
+      },
+      "additionalProperties": false
+    },
+    "target": {
+      "type": "object",
+      "required": [
+        "name",
+        "path",
+        "target_type",
+        "extra_module_names"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "target_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "extra_module_names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false

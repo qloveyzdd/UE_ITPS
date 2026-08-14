@@ -62,7 +62,7 @@ python sourcetools/ue_inspect_targets.py --project D:/Projects/MyGame/MyGame.upr
 python sourcetools/ue_list_project_cxx_sources.py --project D:/Projects/MyGame/MyGame.uproject
 ```
 
-结果分别提供 Engine 定位证据、Module 声明与规则对应关系、Target 清单以及按 Module 和可见性组织的项目 C++ 源文件清单。
+结果分别提供 Engine 定位证据、Module 声明与规则对应关系、Target 类型及其直接声明或从项目内基类继承的 `ExtraModuleNames`，以及按 Module 和可见性组织的项目 C++ 源文件清单。
 
 ### 检查一个 C++ 源码单元
 

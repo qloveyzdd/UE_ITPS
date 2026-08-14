@@ -182,6 +182,7 @@ def parse_csharp_file(
             {
                 "severity": "warning",
                 "code": "csharp-syntax-tree-errors",
+                "path": normalized(resolved),
                 "count": syntax_tree["parse_error_count"],
                 "message": "Tree-sitter reported incomplete C# syntax regions",
             }
@@ -197,7 +198,7 @@ def parse_csharp_file(
 def parse_rule_file(path: Path, required_base_type: str) -> dict[str, Any]:
     parsed = parse_csharp_file(
         path,
-        include_operations=required_base_type == "ModuleRules",
+        include_operations=True,
     )
     resolved = Path(parsed["path"])
     classes = parsed["classes"]
