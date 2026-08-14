@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inspect callback bindings and state transitions in one module entry source."""
+"""Locate one module's registration source and matching header."""
 
 from pathlib import Path
 
@@ -9,15 +9,15 @@ from ue_project_tools.module_entry import inspect_module_entry
 
 SCHEMA_VERSION = "ue_inspect_module_entry"
 RESPONSIBILITY = (
-    "Report callback binding facts and non-callback state transitions caused by one "
-    "module's lifecycle."
+    "Locate one module's .cpp registration entry and its uniquely matched "
+    "same-named .h file."
 )
 
 
 def main() -> int:
     parser = cli_parser(
-        "读取单个模块入口的回调绑定和生命周期状态变化。",
-        "Read callback bindings and lifecycle state transitions for one module entry.",
+        "定位单个模块的注册入口 .cpp 及其同名 .h 文件。",
+        "Locate one module registration .cpp and its same-named .h file.",
         schema_version=SCHEMA_VERSION,
         responsibility=RESPONSIBILITY,
     )

@@ -1,6 +1,6 @@
 ---
 name: ue-project-inspector
-description: Inspect Unreal Engine projects and explicitly selected source entry files through the repository's deterministic, read-only tools. Use when Codex needs to find or read .uproject files; resolve Engine identity; list project-local C++ sources; locate direct Plugin references; inspect one .uplugin; navigate one plugin's declared modules; read one Build.cs or Target.cs; inspect one selected C# or C++ function name; inspect one module's lifecycle entry source; list includes or types from one selected .h/.hpp/.cpp/.cc; classify project directories; or summarize focused results. Do not use for runtime behavior, asset reachability, general class/call graphs, code generation, builds, tests, or project modification.
+description: Inspect Unreal Engine projects and explicitly selected source entry files through the repository's deterministic, read-only tools. Use when Codex needs to find or read .uproject files; resolve Engine identity; list project-local C++ sources; locate direct Plugin references; inspect one .uplugin; navigate one plugin's declared modules; read one Build.cs or Target.cs; inspect one selected C# or C++ function name; locate one module's registration source and matching header; list includes or types from one selected .h/.hpp/.cpp/.cc; classify project directories; or summarize focused results. Do not use for runtime behavior, asset reachability, general class/call graphs, code generation, builds, tests, or project modification.
 ---
 
 # UE Project Inspector
@@ -29,7 +29,7 @@ If the scripts are missing, report that this repository does not contain the exp
 | Read direct public, private, and dynamic dependencies from one Build.cs | `ue_inspect_module_rules.py` |
 | Index TargetRules classes, member variables, and functions from one Target.cs | `ue_inspect_target_rules.py` |
 | Inspect all class members matching one function name in one `.cs` | `ue_inspect_cs_function.py` |
-| Inspect one module's registration and lifecycle state transitions | `ue_inspect_module_entry.py` |
+| Locate one module's registration source and matching header | `ue_inspect_module_entry.py` |
 | List direct include provenance from one selected `.cpp` | `ue_list_cxx_includes.py` |
 | List declaration anchors from one selected `.h/.hpp/.cpp/.cc` | `ue_list_cxx_types.py` |
 | Inspect external symbols referenced by all definitions matching one function name | `ue_inspect_cxx_function.py` |
@@ -54,7 +54,7 @@ When the user needs to modify or understand one plugin, drill down instead of me
 1. Read the `.uproject` declaration with `ue_read_project_descriptor.py`.
 2. Locate its direct plugin descriptors with `ue_resolve_plugins.py`.
 3. Select one resolved `.uplugin` and read it with `ue_read_plugin_descriptor.py`.
-4. Select one resolved Build.cs path from the descriptor result and run only the source tool needed next: `ue_inspect_module_rules.py` for direct module dependencies or `ue_inspect_module_entry.py` for C++ module registration and lifecycle evidence.
+4. Select one resolved Build.cs path from the descriptor result and run only the source tool needed next: `ue_inspect_module_rules.py` for direct module dependencies or `ue_inspect_module_entry.py` for registration source and header evidence.
 
 When the user or model explicitly selects one `.h/.hpp/.cpp/.cc`, run only the smallest source fact tool that answers the request. Pass only that file; every source tool discovers the nearest unique `.uproject` from the selected file's ancestor directories. C++ Source tools require the active build Profile's `compile_commands.json`; pass `--compile-database` when it is not in a supported project-local discovery path. Missing databases, missing Module commands, and Clang diagnostic errors are blocking evidence and never trigger a lexical fallback. Report missing or ambiguous project discovery instead of choosing for the model. Source tools derive an opposite-kind, same-name companion from the selected file's directory and conventional module `Private` to `Public` or `Classes` mappings in either direction. A source entry searches `.h/.hpp`; a header entry searches `.cpp/.cc`. One candidate is scanned with the selected file; zero candidates leave the corresponding `source_unit` field null; multiple candidates leave it null and produce a validation warning.
 
@@ -167,28 +167,14 @@ Treat `ue-itps.cs-function.v1` as a lexical projection of one explicitly selecte
 - A missing function returns `validation: error` with `function-not-found` and CLI exit 1. Input/read failure returns schema-shaped JSON and exit 2.
 - Called functions, inherited members, other files, runtime effects, and compiler semantics are not followed or inferred.
 
-## Interpret module entry state v12
+## Interpret module entry v1
 
-- `callback_bindings` reports one source binding statement per item: delegate source, callback kind and target, binding and unbind APIs, containing callable names, propagated conditions, and source lines. A source declaration is included only when the selected module proves one.
-- `registration.module_class` preserves the class named by the registration macro, including built-in defaults. `module.class` is null when no local class body is available for lifecycle analysis.
-- Supported callback kinds are `function`, `lambda`, and `ufunction`. Function callbacks may enter the same-module callback graph; Lambda and UFunction bodies are not followed.
-- A callback binding requires a recognized binding API and a supported callback target. Address-of expressions alone are not classified as bindings.
-- Nested factories such as `CreateStatic` and `CreateLambda` are reported as `bind.factory` on their owning binding instead of producing duplicate items.
-- Each item owns one default `path`; callback or unbind entries include a path only when their source file differs. An empty `unbind` array means no supported cleanup could be matched by delegate source plus object, callback, or handle identity.
-- `unmatched_cleanups` reports reachable supported cleanup statements that could not be paired with any callback binding. It is cleanup evidence, not proof that the source is invalid at runtime.
-- Bound top-level `static` callback bodies are not followed. Their declarations are embedded in the corresponding callback binding; directly invoked static helpers remain analyzable.
-- A bind or unbind inside a non-virtual helper owns `virtual_targets`. Each item names a virtual root and reports the line of the call made inside that virtual function, not its declaration line. Distinct paths are not deduplicated, cross-file targets override `path`, and no reachable virtual root is an empty array.
-- `virtual_targets` is omitted when the bind or unbind is already inside a `virtual`, `override`, or `final` method. Callback registration is not treated as an ordinary call edge, so entering a callback resets virtual-target tracing.
-- `state_models` contains only non-callback lifecycle conclusions. It intentionally omits full methods, parameters, calls, assignment operands, and changed values.
-- A state model owns `path` when all transition evidence uses one source file. A transition uses `line` for one common-path location, `lines` for several, and falls back to explicit `evidence` for cross-file locations.
-- `transitions[].state` is the resulting semantic state and `on` is its lifecycle or callback trigger. `via` is present only for additional internal callables after that trigger.
-- State-model `when` is always present. Each string is one AND branch and multiple strings are OR branches; an empty array means no source condition was observed.
-- Module-entry guards propagate through reachable local calls for `if/else`, preprocessors, `for/foreach/while`, `switch/case/default`, short-circuit operators, and ternary branches. A `do-while` tail condition is not a body guard because the body executes once before it is evaluated. Switch fallthrough is not inferred.
-- Confirmed transitions omit `certainty`; non-default certainty such as `inferred` remains explicit.
-- `closure.status` is `closed`, `conditional`, `open`, or `unresolved`. It is a conservative static pairing conclusion, not runtime proof.
-- `closure` exposes only `status` and `reason`; transition summaries and pairing mechanisms are omitted because they duplicate other facts.
-- `conditional_overrides` reports when an observable result or output stops using its source default; the default and replacement values are deliberately absent.
-- `unresolved_effects` retains state-looking external calls whose callee bodies are outside the selected module evidence boundary. Explicit conservative matches currently include `UGameplayTagsManager::Get().AddTagIniSearchPath`, `PreLoadingScreen->Init`, and `PreLoadingScreen.Reset`; these report possible effects without inferring concrete state, and same-named methods on other receivers are not included by this whitelist.
+- `entrypoints` reports only registrations whose Module name matches the selected Build.cs basename and whose macro is exactly `IMPLEMENT_PRIMARY_GAME_MODULE` or `IMPLEMENT_MODULE`.
+- Each item retains the absolute `source`, one uniquely matched absolute `header` or null, and the registration macro, Module class, Module name, and integer `source_line`. No top-level Module metadata object is emitted.
+- Only `.cpp` files are read. Header contents are never scanned; `.h` companions are matched by basename in the same directory or through conventional `Private` to `Public` or `Classes` mirrors.
+- Zero header candidates is a normal null result. Multiple candidates leave `header` null and produce a validation warning.
+- No matching registration is an error. Registrations for other Module names and other `IMPLEMENT_*_MODULE` macros are outside the result.
+- The result does not inspect classes, functions, callbacks, lifecycle state, includes, or runtime behavior.
 
 ## Interpret source fact v1 schemas
 
@@ -207,9 +193,7 @@ Treat `ue-itps.cs-function.v1` as a lexical projection of one explicitly selecte
 - Direct Plugin resolution is not the effective `.uplugin` dependency closure.
 - The single-plugin descriptor tool reports direct Plugin dependency declarations without locating or traversing their descriptors; it recursively reconciles declared Modules with Build.cs files under the selected plugin's Source and Platforms directories.
 - Build.cs dependency arrays report direct literal declarations only. The generic C# function tool reports lexical external references, while the TargetRules index omits function bodies; none is an effective UBT result.
-- Module entry v12 reports flat callback binding facts, unmatched cleanup evidence, compact non-callback state models, conditional default overrides, and unresolved stateful calls. Changed values, RHS expressions, full methods, and general call graphs are intentionally omitted.
-- Module entry conditions are propagated through reachable local helpers and actually bound same-module member callbacks. Virtual targets follow only ordinary same-module calls; callback registration is not reinterpreted as a synchronous caller. Bound top-level `static` callbacks report declarations without body traversal. A conditional override's `default` means the value before the selected module's first observed override, not a proven UE constructor value.
-- Unbalanced, unexpected, or mismatched `()[]{}` in module source is an error-level validation problem. Partial facts may still be returned for recovery, and the module-entry CLI exits with status 1.
+- Module entry scans only the two supported registration macros in `.cpp` files and derives an optional same-named `.h` companion from filesystem conventions.
 - Path v1 derives the project root from the selected `.uproject` and reports conventional path roles, filesystem state (`missing | file | directory | other`), and unclassified root directories.
 - Path v1 records the absolute `project_root` once; path items and validation problems use only `project_relative_path`.
 - Path v1 reads explicit descriptor fields only to emit validation problems: declared Modules without AdditionalRootDirectories require the conventional Source directory. It does not add requiredness fields to path items.

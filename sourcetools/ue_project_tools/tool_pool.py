@@ -108,7 +108,7 @@ _TOOLS: tuple[dict[str, Any], ...] = (
         "category": "module",
         "entrypoint": "sourcetools/ue_inspect_module_entry.py",
         "inputs": ["rules"],
-        "capabilities": ["module_lifecycle", "cxx_ast", "callback_flow"],
+        "capabilities": ["module_entrypoint", "registration_macros"],
     },
     {
         "name": "ue_list_cxx_includes",

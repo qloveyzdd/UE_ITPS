@@ -317,34 +317,128 @@ class BuildAndModuleTests(CliTestCase):
             "function-not-found",
         )
 
-    def test_module_entry_reports_registration_binding_and_cleanup(self) -> None:
+    def test_module_entry_reports_registration_source_without_header(self) -> None:
         result = self.cli(
             "ue_inspect_module_entry.py",
             "--rules",
             str(self.fixture.plugin_rules),
         )
-        self.assertEqual(result["module"]["name"], "SamplePlugin")
+        self.assertNotIn("module", result)
+        self.assertNotIn("registration", result)
+        self.assertNotIn("callback_bindings", result)
+        self.assertEqual(len(result["entrypoints"]), 1)
+        entrypoint = result["entrypoints"][0]
+        self.assertIsNone(entrypoint["header"])
         self.assertEqual(
-            result["registration"]["module_class"],
+            entrypoint["source"],
+            self.fixture.plugin_source.resolve().as_posix(),
+        )
+        self.assertEqual(
+            entrypoint["registration"]["module_class"],
             "FSamplePluginModule",
         )
-        self.assertEqual(len(result["callback_bindings"]), 1)
-        binding = result["callback_bindings"][0]
-        self.assertEqual(binding["bind"]["api"], "AddRaw")
-        self.assertEqual(binding["callback"]["kind"], "function")
-        self.assertEqual(binding["unbind"][0]["api"], "RemoveAll")
-        self.assertEqual(result["unmatched_cleanups"], [])
+        self.assertEqual(
+            entrypoint["registration"]["macro"],
+            "IMPLEMENT_MODULE",
+        )
+        self.assertIsInstance(
+            entrypoint["registration"]["source_line"],
+            int,
+        )
+        self.assertNotIn("line", entrypoint["registration"])
 
-    def test_default_game_module_registration_does_not_invent_local_class(self) -> None:
+    def test_primary_game_module_reports_registration_source(self) -> None:
         result = self.cli(
             "ue_inspect_module_entry.py",
             "--rules",
             str(self.fixture.module_rules),
         )
-        self.assertEqual(result["module"]["name"], "SampleGame")
-        self.assertIsNone(result["module"]["class"])
+        self.assertNotIn("module", result)
+        self.assertEqual(len(result["entrypoints"]), 1)
         self.assertEqual(
-            result["registration"]["module_class"],
+            result["entrypoints"][0]["registration"]["module_class"],
             "FDefaultGameModuleImpl",
         )
-        self.assertEqual(result["callback_bindings"], [])
+        self.assertEqual(
+            result["entrypoints"][0]["registration"]["macro"],
+            "IMPLEMENT_PRIMARY_GAME_MODULE",
+        )
+
+    def test_module_entry_matches_public_header(self) -> None:
+        module_root = self.fixture.root / "HeaderModule"
+        rules = write_text(module_root / "HeaderModule.Build.cs", "// rules")
+        write_text(
+            module_root / "Private" / "HeaderModule.cpp",
+            "IMPLEMENT_MODULE(FHeaderModule, HeaderModule)",
+        )
+        write_text(module_root / "Public" / "HeaderModule.h", "#pragma once")
+
+        result = self.cli(
+            "ue_inspect_module_entry.py",
+            "--rules",
+            str(rules),
+        )
+
+        self.assertEqual(result["validation"]["status"], "ok")
+        self.assertEqual(
+            result["entrypoints"][0]["header"],
+            (module_root / "Public" / "HeaderModule.h").resolve().as_posix(),
+        )
+        self.assertEqual(
+            result["entrypoints"][0]["source"],
+            (module_root / "Private" / "HeaderModule.cpp").resolve().as_posix(),
+        )
+
+    def test_module_entry_rejects_unsupported_registration_macro(self) -> None:
+        module_root = self.fixture.root / "Unsupported"
+        rules = write_text(module_root / "Unsupported.Build.cs", "// rules")
+        write_text(
+            module_root / "Private" / "Unsupported.cpp",
+            "IMPLEMENT_GAME_MODULE(FUnsupportedModule, Unsupported)",
+        )
+
+        result = self.cli(
+            "ue_inspect_module_entry.py",
+            "--rules",
+            str(rules),
+            expected_code=1,
+        )
+
+        self.assertEqual(result["entrypoints"], [])
+        self.assertEqual(result["validation"]["status"], "error")
+        self.assertEqual(
+            result["validation"]["problems"][0]["code"],
+            "module-entry-registration-not-found",
+        )
+
+    def test_module_entry_warns_for_ambiguous_headers(self) -> None:
+        module_root = self.fixture.root / "AmbiguousHeader"
+        rules = write_text(
+            module_root / "AmbiguousHeader.Build.cs",
+            "// rules",
+        )
+        write_text(
+            module_root / "Private" / "AmbiguousHeader.cpp",
+            "IMPLEMENT_MODULE(FAmbiguousHeaderModule, AmbiguousHeader)",
+        )
+        write_text(
+            module_root / "Private" / "AmbiguousHeader.h",
+            "#pragma once",
+        )
+        write_text(
+            module_root / "Public" / "AmbiguousHeader.h",
+            "#pragma once",
+        )
+
+        result = self.cli(
+            "ue_inspect_module_entry.py",
+            "--rules",
+            str(rules),
+        )
+
+        self.assertIsNone(result["entrypoints"][0]["header"])
+        self.assertEqual(result["validation"]["status"], "warning")
+        self.assertEqual(
+            result["validation"]["problems"][0]["code"],
+            "module-entry-header-ambiguous",
+        )

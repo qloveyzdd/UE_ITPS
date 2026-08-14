@@ -26,13 +26,7 @@
       "type": "object",
       "required": [
         "schema_version",
-        "module",
-        "registration",
-        "callback_bindings",
-        "unmatched_cleanups",
-        "state_models",
-        "conditional_overrides",
-        "unresolved_effects",
+        "entrypoints",
         "validation",
         "limits"
       ],
@@ -40,26 +34,38 @@
         "schema_version": {
           "const": "ue_inspect_module_entry"
         },
-        "module": {
-          "type": "object"
-        },
-        "registration": {
-          "type": ["object", "null"]
-        },
-        "callback_bindings": {
-          "type": "array"
-        },
-        "unmatched_cleanups": {
-          "type": "array"
-        },
-        "state_models": {
-          "type": "array"
-        },
-        "conditional_overrides": {
-          "type": "array"
-        },
-        "unresolved_effects": {
-          "type": "array"
+        "entrypoints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["header", "source", "registration"],
+            "properties": {
+              "header": {"type": ["string", "null"]},
+              "source": {"type": "string", "minLength": 1},
+              "registration": {
+                "type": "object",
+                "required": [
+                  "macro",
+                  "module_class",
+                  "module_name",
+                  "source_line"
+                ],
+                "properties": {
+                  "macro": {
+                    "enum": [
+                      "IMPLEMENT_PRIMARY_GAME_MODULE",
+                      "IMPLEMENT_MODULE"
+                    ]
+                  },
+                  "module_class": {"type": ["string", "null"]},
+                  "module_name": {"type": "string", "minLength": 1},
+                  "source_line": {"type": "integer", "minimum": 1}
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          }
         },
         "validation": {
           "$ref": "urn:ue-itps:schema:common#/$defs/validation"

@@ -59,7 +59,7 @@ def analysis_engines(tool_name: str) -> list[str]:
     if tool_name in _CLANG_TOOLS:
         engines.append("clang/libclang")
     if tool_name == "ue_inspect_module_entry":
-        engines.append("ue-domain-source-projection")
+        engines.append("ue-registration-macro-scan")
     if tool_name in _GRAPH_TOOLS:
         engines.append("gdep-adapted")
     return engines
