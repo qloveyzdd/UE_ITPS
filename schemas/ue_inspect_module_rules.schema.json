@@ -26,7 +26,6 @@
       "type": "object",
       "required": [
         "schema_version",
-        "path",
         "rules_classes",
         "validation",
         "limits"
@@ -35,11 +34,11 @@
         "schema_version": {
           "const": "ue_inspect_module_rules"
         },
-        "path": {
-          "type": "string"
-        },
         "rules_classes": {
-          "type": "array"
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/rulesClass"
+          }
         },
         "validation": {
           "$ref": "urn:ue-itps:schema:common#/$defs/validation"
@@ -49,6 +48,50 @@
         }
       },
       "additionalProperties": false
+    },
+    "rulesClass": {
+      "type": "object",
+      "required": [
+        "name",
+        "dependencies"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dependencies": {
+          "$ref": "#/$defs/dependencies"
+        }
+      },
+      "additionalProperties": false
+    },
+    "dependencies": {
+      "type": "object",
+      "required": [
+        "public",
+        "private",
+        "dynamic"
+      ],
+      "properties": {
+        "public": {
+          "$ref": "#/$defs/moduleNames"
+        },
+        "private": {
+          "$ref": "#/$defs/moduleNames"
+        },
+        "dynamic": {
+          "$ref": "#/$defs/moduleNames"
+        }
+      },
+      "additionalProperties": false
+    },
+    "moduleNames": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      }
     }
   }
 }

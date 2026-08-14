@@ -87,7 +87,7 @@ _TOOLS: tuple[dict[str, Any], ...] = (
         "category": "build",
         "entrypoint": "sourcetools/ue_inspect_module_rules.py",
         "inputs": ["rules"],
-        "capabilities": ["module_rules", "csharp_ast", "control_context"],
+        "capabilities": ["module_dependencies", "csharp_ast"],
     },
     {
         "name": "ue_inspect_target_rules",

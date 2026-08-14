@@ -26,7 +26,7 @@ If the scripts are missing, report that this repository does not contain the exp
 | Locate direct `.uproject` Plugin references | `ue_resolve_plugins.py` |
 | Classify project-root paths with explicit descriptor evidence | `ue_classify_project_paths.py` |
 | Read one explicitly selected `.uplugin` | `ue_read_plugin_descriptor.py` |
-| Read declared setting mutations and references from one Build.cs | `ue_inspect_module_rules.py` |
+| Read direct public, private, and dynamic dependencies from one Build.cs | `ue_inspect_module_rules.py` |
 | Index TargetRules classes, member variables, and functions from one Target.cs | `ue_inspect_target_rules.py` |
 | Inspect all class members matching one function name in one `.cs` | `ue_inspect_cs_function.py` |
 | Inspect one module's registration and lifecycle state transitions | `ue_inspect_module_entry.py` |
@@ -54,7 +54,7 @@ When the user needs to modify or understand one plugin, drill down instead of me
 1. Read the `.uproject` declaration with `ue_read_project_descriptor.py`.
 2. Locate its direct plugin descriptors with `ue_resolve_plugins.py`.
 3. Select one resolved `.uplugin` and read it with `ue_read_plugin_descriptor.py`.
-4. Select one resolved Build.cs path from the descriptor result and run only the source tool needed next: `ue_inspect_module_rules.py` for UBT declarations or `ue_inspect_module_entry.py` for C++ module registration and lifecycle evidence.
+4. Select one resolved Build.cs path from the descriptor result and run only the source tool needed next: `ue_inspect_module_rules.py` for direct module dependencies or `ue_inspect_module_entry.py` for C++ module registration and lifecycle evidence.
 
 When the user or model explicitly selects one `.h/.hpp/.cpp/.cc`, run only the smallest source fact tool that answers the request. Pass only that file; every source tool discovers the nearest unique `.uproject` from the selected file's ancestor directories. C++ Source tools require the active build Profile's `compile_commands.json`; pass `--compile-database` when it is not in a supported project-local discovery path. Missing databases, missing Module commands, and Clang diagnostic errors are blocking evidence and never trigger a lexical fallback. Report missing or ambiguous project discovery instead of choosing for the model. Source tools derive an opposite-kind, same-name companion from the selected file's directory and conventional module `Private` to `Public` or `Classes` mappings in either direction. A source entry searches `.h/.hpp`; a header entry searches `.cpp/.cc`. One candidate is scanned with the selected file; zero candidates leave the corresponding `source_unit` field null; multiple candidates leave it null and produce a validation warning.
 
@@ -132,22 +132,16 @@ Treat `ue_read_project_descriptor` as a narrow projection of the original `.upro
 
 Stop after `ue_read_project_descriptor.py` for declared Module names, Plugin enabled states, or explicit non-empty Target allow lists. Resolve Engine and run `ue_resolve_plugins.py` only when the question also needs Plugin location, origin, `.uplugin` evidence, or Profile applicability.
 
-## Interpret Module rule relations v1
+## Interpret Module dependencies
 
-Treat `ue-itps.module-rule-relations.v1` as a relevance projection, not a C# syntax tree or effective UBT result:
+Treat `ue_inspect_module_rules` as a direct literal dependency projection, not an effective UBT result:
 
-- `declared_mutations` contains recognized ModuleRules setting mutations from constructors and statically reachable same-file helpers.
-- `operand.kind` is `literal`, `symbol`, or `expression`; an expression is preserved without recursively expanding nested code.
-- `unclassified_mutations` contains mutation-shaped source candidates that are not confirmed ModuleRules members.
-- `unresolved_effect_calls` records external or inherited calls that may change rules without inferring their effects.
-- Empty `AddRange` declarations are omitted because they do not add references.
-- Arrays are in deterministic source order, not runtime execution order.
-- `operation` uses normalized change semantics such as `set`, `add`, `remove`, `increment`, or `decrement`; source API distinctions such as `Add` versus `AddRange` are not exposed.
-- `applicability.kind` is `direct` or `conditional`; `direct` means no recognized enclosing control, not guaranteed runtime execution.
-- Conditional applicability owns its outer-to-inner `control_path` and referenced `related_symbols`; symbols are not classified as inputs versus constants, and condition expressions are not returned.
-- `line` is the source evidence within the selected Build.cs; the containing method is not exposed.
-- Explicit assignments, updates, and calls inside control expressions are also scanned. An `if`, `while`, or `switch` expression does not inherit its own body control; short-circuit/ternary branches, `for` iterators, and `catch when` filters remain conditional.
-- Control paths are local to each reported mutation; caller controls are not propagated into reachable helpers.
+- Each `rules_classes[]` item reports the class `name` and `dependencies.public`, `.private`, and `.dynamic` arrays.
+- The arrays correspond only to `PublicDependencyModuleNames`, `PrivateDependencyModuleNames`, and `DynamicallyLoadedModuleNames`.
+- Only string literals passed to `Add` or `AddRange` are returned. An empty literal `AddRange` is accepted as an empty dependency list; non-literal or partially literal expressions produce a validation warning and may make the result incomplete.
+- Constructors and statically reachable same-file helpers contribute dependencies, including declarations inside recognized conditional branches.
+- Conditions are not returned or evaluated. Duplicate names are removed within each dependency kind while preserving source order.
+- The input Build.cs path is not repeated in a successful result. Validation problems may retain a path as source evidence.
 
 ## Interpret Target rule relations v1
 
@@ -212,7 +206,7 @@ Treat `ue-itps.cs-function.v1` as a lexical projection of one explicitly selecte
 - `.uproject` declares Modules and direct Plugin references, but the project descriptor result intentionally reports only Module names, Plugin enabled states, and explicit non-empty Target allow lists. Filesystem checks use same-named Build.cs and .uplugin evidence without returning their paths, and the result does not declare `Target.cs` or a dependency graph.
 - Direct Plugin resolution is not the effective `.uplugin` dependency closure.
 - The single-plugin descriptor tool reports direct Plugin dependency declarations without locating or traversing their descriptors; it recursively reconciles declared Modules with Build.cs files under the selected plugin's Source and Platforms directories.
-- Build.cs setting mutations use flattened applicability facts. The generic C# function tool reports lexical external references, while the TargetRules index omits function bodies; none is an effective UBT result.
+- Build.cs dependency arrays report direct literal declarations only. The generic C# function tool reports lexical external references, while the TargetRules index omits function bodies; none is an effective UBT result.
 - Module entry v12 reports flat callback binding facts, unmatched cleanup evidence, compact non-callback state models, conditional default overrides, and unresolved stateful calls. Changed values, RHS expressions, full methods, and general call graphs are intentionally omitted.
 - Module entry conditions are propagated through reachable local helpers and actually bound same-module member callbacks. Virtual targets follow only ordinary same-module calls; callback registration is not reinterpreted as a synchronous caller. Bound top-level `static` callbacks report declarations without body traversal. A conditional override's `default` means the value before the selected module's first observed override, not a proven UE constructor value.
 - Unbalanced, unexpected, or mismatched `()[]{}` in module source is an error-level validation problem. Partial facts may still be returned for recovery, and the module-entry CLI exits with status 1.

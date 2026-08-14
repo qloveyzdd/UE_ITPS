@@ -96,27 +96,130 @@ class BuildAndModuleTests(CliTestCase):
         )
         self.assert_request_failure(result, kind="input")
 
-    def test_module_rules_follow_reachable_helper_and_keep_condition(self) -> None:
+    def test_module_rules_report_only_direct_dependency_names(self) -> None:
         result = self.cli(
             "ue_inspect_module_rules.py",
             "--rules",
             str(self.fixture.module_rules),
         )
+        self.assertNotIn("path", result)
         rules = result["rules_classes"][0]
-        by_setting = {
-            mutation["setting"]: mutation
-            for mutation in rules["declared_mutations"]
-        }
         self.assertEqual(
-            by_setting["PublicDependencyModuleNames"]["operand"]["references"],
-            ["Core", "GameplayTags"],
+            rules,
+            {
+                "name": "SampleGame",
+                "dependencies": {
+                    "public": ["Core", "GameplayTags"],
+                    "private": ["UnrealEd"],
+                    "dynamic": [],
+                },
+            },
         )
-        editor = by_setting["PrivateDependencyModuleNames"]
-        self.assertEqual(editor["applicability"]["kind"], "conditional")
+
+    def test_module_rules_group_and_deduplicate_all_dependency_kinds(self) -> None:
+        path = write_text(
+            self.fixture.root / "AllDependencies.Build.cs",
+            """
+            public class AllDependencies : ModuleRules
+            {
+                public AllDependencies(ReadOnlyTargetRules Target) : base(Target)
+                {
+                    PublicDependencyModuleNames.Add("Core");
+                    PublicDependencyModuleNames.AddRange(
+                        new string[] { "Engine", "Core" }
+                    );
+                    PrivateDependencyModuleNames.Add("Slate");
+                    if (Target.bBuildEditor)
+                    {
+                        DynamicallyLoadedModuleNames.Add("AssetTools");
+                    }
+                    Configure();
+                    PublicDefinitions.Add("WITH_SAMPLE=1");
+                }
+
+                private void Configure()
+                {
+                    PrivateDependencyModuleNames.Add("InputCore");
+                }
+            }
+            """,
+        )
+        result = self.cli(
+            "ue_inspect_module_rules.py",
+            "--rules",
+            str(path),
+        )
         self.assertEqual(
-            editor["applicability"]["related_symbols"],
-            ["Target.bBuildEditor"],
+            result["rules_classes"][0]["dependencies"],
+            {
+                "public": ["Core", "Engine"],
+                "private": ["Slate", "InputCore"],
+                "dynamic": ["AssetTools"],
+            },
         )
+
+    def test_module_rules_warn_when_dependency_expression_is_unresolved(self) -> None:
+        path = write_text(
+            self.fixture.root / "ComputedDependencies.Build.cs",
+            """
+            public class ComputedDependencies : ModuleRules
+            {
+                public ComputedDependencies(ReadOnlyTargetRules Target) : base(Target)
+                {
+                    PublicDependencyModuleNames.AddRange(
+                        new string[] { "Core", Target.Name }
+                    );
+                    DynamicallyLoadedModuleNames.Add(GetDynamicModule());
+                }
+            }
+            """,
+        )
+        result = self.cli(
+            "ue_inspect_module_rules.py",
+            "--rules",
+            str(path),
+        )
+        self.assertEqual(
+            result["rules_classes"][0]["dependencies"],
+            {
+                "public": ["Core"],
+                "private": [],
+                "dynamic": [],
+            },
+        )
+        self.assertEqual(result["validation"]["status"], "warning")
+        self.assertEqual(
+            [problem["code"] for problem in result["validation"]["problems"]],
+            [
+                "module-dependency-expression-unresolved",
+                "module-dependency-expression-unresolved",
+            ],
+        )
+
+    def test_module_rules_accept_empty_add_range_without_warning(self) -> None:
+        path = write_text(
+            self.fixture.root / "EmptyDependencies.Build.cs",
+            """
+            public class EmptyDependencies : ModuleRules
+            {
+                public EmptyDependencies(ReadOnlyTargetRules Target) : base(Target)
+                {
+                    DynamicallyLoadedModuleNames.AddRange(
+                        new string[] {
+                        }
+                    );
+                }
+            }
+            """,
+        )
+        result = self.cli(
+            "ue_inspect_module_rules.py",
+            "--rules",
+            str(path),
+        )
+        self.assertEqual(result["rules_classes"][0]["dependencies"]["dynamic"], [])
+        self.assertEqual(result["validation"]["status"], "ok")
+        self.assertEqual(result["validation"]["problems"], [])
 
     def test_non_module_rules_class_fails_closed(self) -> None:
         path = write_text(

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inspect declared setting mutations and references in one Build.cs file."""
+"""Read direct module dependency names from one Build.cs file."""
 
 from pathlib import Path
 
@@ -9,15 +9,15 @@ from ue_project_tools.rule_source import inspect_module_rules
 
 SCHEMA_VERSION = "ue_inspect_module_rules"
 RESPONSIBILITY = (
-    "Report declared ModuleRules mutations and referenced values from one Build.cs "
-    "file."
+    "Report public, private, and dynamically loaded module dependency names "
+    "from one Build.cs file."
 )
 
 
 def main() -> int:
     parser = cli_parser(
-        "提取单个 Build.cs 声明的设置变更和引用关系。",
-        "Extract declared setting mutations and references from one Build.cs file.",
+        "读取单个 Build.cs 声明的公共、私有和动态加载模块依赖。",
+        "Read public, private, and dynamically loaded module dependencies from one Build.cs file.",
         schema_version=SCHEMA_VERSION,
         responsibility=RESPONSIBILITY,
     )
