@@ -223,6 +223,7 @@ class BuildAndModuleTests(CliTestCase):
                 {
                     DynamicallyLoadedModuleNames.AddRange(
                         new string[] {
+                            // No dynamically loaded modules.
                         }
                     );
                 }

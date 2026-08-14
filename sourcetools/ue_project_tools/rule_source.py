@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-import re
 from typing import Any
 
 from .common import result_document
 from .source_parser import parse_rule_file
+from .source_tokens import lex_source
 
 
 _MODULE_DEPENDENCY_SETTINGS = {
@@ -14,14 +14,50 @@ _MODULE_DEPENDENCY_SETTINGS = {
     "DynamicallyLoadedModuleNames": "dynamically_loaded_modules",
 }
 
+_EMPTY_LITERAL_ARRAY_TOKENS = (
+    ("new", "[", "]", "{", "}"),
+    ("new", "string", "[", "]", "{", "}"),
+    ("new", "String", "[", "]", "{", "}"),
+)
 
-def _is_empty_literal_add_range(operation: dict[str, Any]) -> bool:
+
+def _add_range_argument_tokens(source: str) -> list[str]:
+    values = [token.value for token in lex_source(source)]
+    try:
+        callee_index = values.index("AddRange")
+        open_index = values.index("(", callee_index + 1)
+    except ValueError:
+        return []
+    depth = 0
+    for index in range(open_index, len(values)):
+        if values[index] == "(":
+            depth += 1
+        elif values[index] == ")":
+            depth -= 1
+            if depth == 0:
+                return values[open_index + 1 : index]
+    return []
+
+
+def _is_empty_literal_add_range(
+    operation: dict[str, Any],
+    source_lines: list[str],
+) -> bool:
     rule = operation.get("rule", {})
     arguments = operation.get("arguments", [])
     if rule.get("action") != "AddRange" or len(arguments) != 1:
         return False
-    expression = re.sub(r"\s+", "", str(arguments[0].get("expression", "")))
-    return bool(re.fullmatch(r"new(?:string|String)?\[\]\{\}", expression))
+    expression = str(arguments[0].get("expression", ""))
+    expression_tokens = tuple(token.value for token in lex_source(expression))
+    if expression_tokens in _EMPTY_LITERAL_ARRAY_TOKENS:
+        return True
+    location = operation["location"]
+    source = "\n".join(
+        source_lines[
+            int(location["line"]) - 1 : int(location["end_line"])
+        ]
+    )
+    return tuple(_add_range_argument_tokens(source)) in _EMPTY_LITERAL_ARRAY_TOKENS
 
 
 def _rules_class_problems(
@@ -165,6 +201,7 @@ def inspect_target_rules(path: Path) -> dict[str, Any]:
 def _project_module_rules_class(
     rules_class: dict[str, Any],
     path: str,
+    source_lines: list[str],
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     reachable = _reachable_method_names(rules_class)
     methods = [
@@ -197,7 +234,7 @@ def _project_module_rules_class(
                     dependencies[dependency_kind].append(module_name)
             if (
                 evaluation.get("status") != "literal"
-                and not _is_empty_literal_add_range(operation)
+                and not _is_empty_literal_add_range(operation, source_lines)
             ):
                 problems.append(
                     {
@@ -225,8 +262,12 @@ def _project_module_rules_class(
 
 def inspect_module_rules(path: Path) -> dict[str, Any]:
     facts = parse_rule_file(path, "ModuleRules")
+    source_lines = Path(facts["path"]).read_text(
+        encoding="utf-8-sig",
+        errors="replace",
+    ).splitlines()
     projected = [
-        _project_module_rules_class(rules_class, facts["path"])
+        _project_module_rules_class(rules_class, facts["path"], source_lines)
         for rules_class in facts["rules_classes"]
     ]
     content = {
@@ -251,7 +292,7 @@ def inspect_module_rules(path: Path) -> dict[str, Any]:
         boundaries=[
             "Only PublicDependencyModuleNames, PrivateDependencyModuleNames, and DynamicallyLoadedModuleNames are reported.",
             "Only string literals passed to Add or AddRange are returned.",
-            "An empty literal AddRange is treated as a resolved empty dependency list.",
+            "An empty literal AddRange is treated as a resolved empty dependency list even when its initializer contains comments.",
             "Constructors and statically reachable same-file helpers contribute dependency names.",
             "Dependencies found in recognized conditional branches are included without condition metadata.",
             "Duplicate dependency names are removed within each dependency kind while preserving source order.",

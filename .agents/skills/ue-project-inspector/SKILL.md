@@ -138,7 +138,7 @@ Treat `ue_inspect_module_rules` as a direct literal dependency projection, not a
 
 - Each `rules_classes[]` item reports the class `name` and `dependencies.public_dependency_modules`, `.private_dependency_modules`, and `.dynamically_loaded_modules` arrays.
 - The arrays correspond only to `PublicDependencyModuleNames`, `PrivateDependencyModuleNames`, and `DynamicallyLoadedModuleNames`.
-- Only string literals passed to `Add` or `AddRange` are returned. An empty literal `AddRange` is accepted as an empty dependency list; non-literal or partially literal expressions produce a validation warning and may make the result incomplete.
+- Only string literals passed to `Add` or `AddRange` are returned. An empty literal `AddRange` is accepted as an empty dependency list even when its initializer contains comments; non-literal or partially literal expressions produce a validation warning and may make the result incomplete.
 - Constructors and statically reachable same-file helpers contribute dependencies, including declarations inside recognized conditional branches.
 - Conditions are not returned or evaluated. Duplicate names are removed within each dependency kind while preserving source order.
 - The input Build.cs path is not repeated in a successful result. Validation problems may retain a path as source evidence.
