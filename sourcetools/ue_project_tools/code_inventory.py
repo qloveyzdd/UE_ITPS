@@ -6,7 +6,8 @@ from typing import Any, Iterable
 
 from .common import iter_files, normalized, result_document
 from .dependency_graph import DependencyGraph
-from .source_parser import parse_cpp_file, parse_rule_file
+from .module_entry import registration_macros_for_source
+from .source_parser import parse_rule_file
 
 
 def discover_module_build_rules(
@@ -30,17 +31,19 @@ def discover_module_build_rules(
     return rules_by_module, discovered_module_names
 
 
-def module_entrypoints(module_dir: Path) -> list[dict[str, str]]:
+def module_entrypoints(
+    module_dir: Path,
+    project_root: Path,
+    compilation_database: Path | None = None,
+) -> list[dict[str, str]]:
     results: list[dict[str, str]] = []
     if not module_dir.is_dir():
         return results
     for path in iter_files(module_dir, ".cpp"):
-        try:
-            parsed = parse_cpp_file(path)
-        except (OSError, ValueError):
-            continue
         path_text = normalized(path)
-        for macro in parsed["registration_macros"]:
+        for macro in registration_macros_for_source(
+            path, project_root, compilation_database
+        ):
             if not macro.get("module_class") or not macro.get("module_name"):
                 continue
             results.append(
@@ -66,6 +69,7 @@ def inspect_modules(
     project_root: Path,
     declarations: list[Any],
     additional_roots: list[Path],
+    compilation_database: Path | None = None,
 ) -> dict[str, Any]:
     modules: list[dict[str, Any]] = []
     dependency_graph = DependencyGraph()
@@ -153,7 +157,9 @@ def inspect_modules(
         entrypoint_candidates = [
             entrypoint
             for module_dir in module_dirs
-            for entrypoint in module_entrypoints(module_dir)
+            for entrypoint in module_entrypoints(
+                module_dir, project_root, compilation_database
+            )
         ]
         entrypoints = sorted(
             {

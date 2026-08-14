@@ -5,35 +5,7 @@ import re
 from typing import Any
 
 from .common import iter_files, normalized
-from .source_callable_declarations import (
-    parse_external_definitions,
-    parse_free_functions,
-)
-from .source_controls import _registration_preprocessor_contexts
-from .source_controls import control_expression_ranges
-from .source_declarations import (
-    _class_field_details,
-    _local_declaration_details,
-    parse_classes,
-    parse_type_forward_declarations,
-)
-from .source_flow import condition_spans, control_spans
-from .source_operations import parse_operations
-from .source_namespaces import namespace_scopes
-from .source_preprocessor import (
-    preprocessor_conditions,
-    preprocessor_control_contexts,
-)
-from .source_tokens import (
-    Token,
-    _location,
-    _raw,
-    _split_arguments,
-    delimiter_problems,
-    lex_source,
-    token_pairs,
-)
-from .syntax_tree import parse_csharp_syntax
+from .syntax_tree import parse_csharp_model, parse_csharp_syntax
 
 
 _MODULE_RULE_KINDS = {
@@ -88,99 +60,22 @@ def parse_csharp_file(
     if resolved.suffix.casefold() != ".cs":
         raise ValueError(f"Expected a .cs file: {resolved}")
     text = resolved.read_text(encoding="utf-8-sig", errors="replace")
-    syntax_tree = parse_csharp_syntax(text)
-    tokens = lex_source(text)
-    classes, forward, reverse = parse_classes(text, tokens)
-
-    parsed_classes: list[dict[str, Any]] = []
-    for item in classes:
-        methods: list[dict[str, Any]] = []
-        for member in item["members"]:
-            operation_items: list[dict[str, Any]] = []
-            declared_names: list[str] = []
-            local_variables: list[dict[str, Any]] = []
-            referenced_names: list[str] = []
-            qualified_references: list[str] = []
-            if member["body_range"] and include_operations:
-                body_start, body_end = member["body_range"]
-                referenced_names = list(
-                    dict.fromkeys(
-                        token.value
-                        for token in tokens[body_start:body_end]
-                        if token.kind == "identifier"
-                    )
-                )
-                qualified_references = list(
-                    dict.fromkeys(
-                        tokens[index].value
-                        for index in range(body_start, body_end - 2)
-                        if (
-                            tokens[index].kind == "identifier"
-                            and tokens[index + 1].value == "."
-                            and tokens[index + 2].kind == "identifier"
-                            and (
-                                index == body_start
-                                or tokens[index - 1].value not in {".", "::"}
-                            )
-                        )
-                    )
-                )
-                local_variables = _local_declaration_details(
-                    text,
-                    tokens,
-                    body_start,
-                    body_end,
-                )
-                declared_names = list(
-                    dict.fromkeys(
-                        str(item["name"])
-                        for item in local_variables
-                    )
-                )
-                operation_items = parse_operations(
-                    text,
-                    tokens,
-                    forward,
-                    reverse,
-                    member["body_range"][0],
-                    member["body_range"][1],
-                    include_control_metadata=True,
-                )
-            methods.append(
-                {
-                    "name": member["name"],
-                    "parameters": member["parameters"],
-                    "signature": member["signature"],
-                    "has_body": member["has_body"],
-                    "is_constructor": member["is_constructor"],
-                    "location": member["location"],
-                    "declared_names": declared_names,
-                    "local_variables": local_variables,
-                    "referenced_names": referenced_names,
-                    "qualified_references": qualified_references,
-                    "operations": operation_items,
-                }
-            )
-        parsed_classes.append(
+    model = parse_csharp_model(text)
+    classes = model["classes"]
+    if not include_operations:
+        classes = [
             {
-                "kind": item["kind"],
-                "name": item["name"],
-                "base_types": item["base_types"],
-                "location": item["location"],
-                "fields": _class_field_details(
-                    text,
-                    tokens,
-                    item["body_range"][0],
-                    item["body_range"][1],
-                ),
-                "methods": methods,
+                **item,
+                "methods": [{**method, "operations": []} for method in item["methods"]],
             }
-        )
-    problems = delimiter_problems(tokens)
+            for item in classes
+        ]
+    syntax_tree = parse_csharp_syntax(text)
+    problems: list[dict[str, Any]] = []
     if syntax_tree["parse_error_count"]:
         problems.append(
             {
-                "severity": "warning",
+                "severity": "error",
                 "code": "csharp-syntax-tree-errors",
                 "path": normalized(resolved),
                 "count": syntax_tree["parse_error_count"],
@@ -189,17 +84,14 @@ def parse_csharp_file(
         )
     return {
         "path": normalized(resolved),
-        "classes": parsed_classes,
+        "classes": classes,
         "syntax_tree": syntax_tree,
         "problems": problems,
     }
 
 
 def parse_rule_file(path: Path, required_base_type: str) -> dict[str, Any]:
-    parsed = parse_csharp_file(
-        path,
-        include_operations=True,
-    )
+    parsed = parse_csharp_file(path, include_operations=True)
     resolved = Path(parsed["path"])
     classes = parsed["classes"]
     known_bases = {required_base_type}
@@ -225,16 +117,21 @@ def parse_rule_file(path: Path, required_base_type: str) -> dict[str, Any]:
         for item in list(pending):
             has_target_constructor = any(
                 method["is_constructor"]
-                and re.search(r"\bTargetInfo\b", str(method["parameters"]))
+                and any(
+                    parameter["type_expression"] == "TargetInfo"
+                    for parameter in method.get("parameter_variables", [])
+                )
                 for method in item["methods"]
             )
-            if item["name"].casefold() == expected_name.casefold() and has_target_constructor:
+            if (
+                item["name"].casefold() == expected_name.casefold()
+                and has_target_constructor
+            ):
                 selected.append(item)
                 base_resolution[item["name"]] = "unresolved"
                 pending.remove(item)
 
     selected.sort(key=lambda item: int(item["location"]["line"]))
-
     rules_classes: list[dict[str, Any]] = []
     for item in selected:
         methods = item["methods"]
@@ -245,12 +142,12 @@ def parse_rule_file(path: Path, required_base_type: str) -> dict[str, Any]:
                     if annotation:
                         operation["rule"] = annotation
         method_names = {method["name"] for method in methods}
-        calls: list[dict[str, Any]] = []
+        calls = []
         for method in methods:
             for operation in method["operations"]:
                 if operation["kind"] != "invocation":
                     continue
-                callee = str(operation["callee"]).split(".")[-1].split("::")[-1]
+                callee = str(operation["callee"]).split(".")[-1]
                 if callee in method_names and callee != method["name"]:
                     calls.append(
                         {
@@ -265,16 +162,15 @@ def parse_rule_file(path: Path, required_base_type: str) -> dict[str, Any]:
         }
         rules_classes.append(
             {
-                "kind": item["kind"],
-                "name": item["name"],
-                "base_types": item["base_types"],
+                **item,
                 "base_resolution": base_resolution[item["name"]],
-                "location": item["location"],
-                "fields": item["fields"],
-                "methods": methods,
                 "same_file_calls": sorted(
                     unique_calls.values(),
-                    key=lambda value: (value["caller"], value["callee"], value["location"]["line"]),
+                    key=lambda value: (
+                        value["caller"],
+                        value["callee"],
+                        value["location"]["line"],
+                    ),
                 ),
             }
         )
@@ -286,74 +182,11 @@ def parse_rule_file(path: Path, required_base_type: str) -> dict[str, Any]:
     }
 
 
-def registration_macros(text: str, tokens: list[Token]) -> list[dict[str, Any]]:
-    forward, _ = token_pairs(tokens)
-    preprocessor = _registration_preprocessor_contexts(text)
-    results: list[dict[str, Any]] = []
-    for index, token in enumerate(tokens):
-        if not token.value.startswith("IMPLEMENT_") or not token.value.endswith("MODULE"):
-            continue
-        if index + 1 >= len(tokens) or tokens[index + 1].value != "(" or index + 1 not in forward:
-            continue
-        conditions = preprocessor.get(token.line, [])
-        if any(condition["active"] is False for condition in conditions):
-            continue
-        close = forward[index + 1]
-        ranges = _split_arguments(tokens, index + 2, close)
-        arguments = [_raw(text, tokens, start, end) for start, end in ranges]
-        item: dict[str, Any] = {
-            "macro": token.value,
-            "module_class": arguments[0] if arguments else None,
-            "module_name": arguments[1] if len(arguments) > 1 else None,
-            "arguments": arguments,
-            "location": _location(token, tokens[close]),
-        }
-        if conditions:
-            item["preprocessor_conditions"] = [
-                {
-                    key: condition[key]
-                    for key in ("group_line", "arm", "branch", "expression")
-                }
-                for condition in conditions
-            ]
-        results.append(item)
-    return results
-
-
-def parse_cpp_file(path: Path) -> dict[str, Any]:
-    resolved = path.resolve()
-    text = resolved.read_text(encoding="utf-8-sig", errors="replace")
-    tokens = lex_source(text)
-    classes, forward, reverse = parse_classes(text, tokens)
-    external = parse_external_definitions(text, tokens, forward)
-    free_functions = parse_free_functions(text, tokens, forward)
-    forward_declarations = parse_type_forward_declarations(
-        tokens,
-        classes,
-    )
-    problems = delimiter_problems(tokens)
-    return {
-        "path": normalized(resolved),
-        "text": text,
-        "tokens": tokens,
-        "forward": forward,
-        "reverse": reverse,
-        "namespace_scopes": namespace_scopes(tokens, forward),
-        "classes": classes,
-        "external_definitions": external,
-        "free_functions": free_functions,
-        "forward_declarations": forward_declarations,
-        "registration_macros": registration_macros(text, tokens),
-        "problems": problems,
-    }
-
-
 def source_files(module_dir: Path) -> list[Path]:
-    suffixes = (".h", ".hpp", ".cpp", ".cc")
     return sorted(
         {
             path.resolve()
-            for suffix in suffixes
+            for suffix in (".h", ".hpp", ".cpp", ".cc")
             for path in iter_files(module_dir, suffix)
         },
         key=lambda path: normalized(path).casefold(),

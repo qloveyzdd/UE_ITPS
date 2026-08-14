@@ -31,6 +31,7 @@ _TREE_SITTER_TOOLS = {
     "ue_inspect_module_rules",
     "ue_inspect_target_rules",
     "ue_inspect_targets",
+    "ue_inspect_modules",
 }
 _CLANG_TOOLS = {
     "ue_inspect_cxx_function",
@@ -40,6 +41,8 @@ _CLANG_TOOLS = {
     "ue_analyze_cxx_dependencies",
     "ue_analyze_cxx_impact",
     "ue_trace_cxx_function_flow",
+    "ue_inspect_module_entry",
+    "ue_inspect_modules",
 }
 _GRAPH_TOOLS = {
     "ue_inspect_modules",
@@ -58,8 +61,6 @@ def analysis_engines(tool_name: str) -> list[str]:
         engines.append("tree-sitter/ast-outline+gdep")
     if tool_name in _CLANG_TOOLS:
         engines.append("clang/libclang")
-    if tool_name == "ue_inspect_module_entry":
-        engines.append("ue-registration-macro-scan")
     if tool_name in _GRAPH_TOOLS:
         engines.append("gdep-adapted")
     return engines

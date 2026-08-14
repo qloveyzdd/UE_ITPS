@@ -47,7 +47,7 @@ sourcetools/ue_project_tools/
     │  项目、描述符、规则、Module、C++ 领域服务
     ▼
 共享解析与输出组件
-    │  严格 JSON、UE JSON、Token、源码上下文、Validation
+    │  严格 JSON、UE JSON、前端事实、源码上下文、Validation
     ▼
 schemas/
        公共 Schema 与每个 CLI 的正式 Schema
@@ -80,7 +80,7 @@ schemas/
 | `source_type_facts.py` | 类型、成员、接口候选、全局变量和自由函数 |
 | `source_function_*.py` | 函数身份、声明关系和外部符号 |
 | `clang_frontend.py` | 基于编译数据库的 Clang C++ 翻译单元与语义事实 |
-| `syntax_tree.py` | Build.cs、Target.cs 和普通 C# 的 Tree-sitter 前端；保留文本级 C++ 兼容入口但不进入正式 Source 链路 |
+| `syntax_tree.py` | Build.cs、Target.cs 和普通 C# 的唯一 Tree-sitter 前端 |
 | `dependency_graph.py`、`project_graph.py` | 类型依赖、循环、继承、反向影响和局部函数流程 |
 | `tool_pool.py` | 项目工具池注册表与能力发现 |
 
@@ -92,7 +92,7 @@ schemas/
 
 - 严格 JSON 和 Unreal 描述符 JSON 读取。
 - 路径规范化及生成目录过滤。
-- C++ 的 Clang AST、C# 的 Tree-sitter AST，以及 UE 专用的词法 Token、宏、条件和操作投影。
+- C++ 的 Clang AST 与预处理记录、C# 的 Tree-sitter AST，以及只消费这些前端事实的 UE 领域投影。
 - gdep 思路改写的确定性依赖图、循环检测和反向影响遍历。
 - 源码单元伴随文件推导。
 - 统一 Validation、Limits 和请求失败信封。
@@ -230,7 +230,7 @@ Engine 定位成功不证明项目能够构建或运行。
 - TargetRules 工具只索引类、继承、成员变量和成员函数。
 - C# 函数工具按函数名返回全部同名成员，并列出局部可观察的外部类型和方法。
 
-这些结果是词法投影，不执行 C#，不展开被调用函数，也不推断最终 UBT 值。
+这些结果是 Tree-sitter C# 语法投影，不执行 C#，不展开被调用函数，也不推断最终 UBT 值。
 
 ### 6.5 Module 生命周期
 
@@ -335,7 +335,7 @@ python -m unittest discover -s tests -v
 - 部分复杂 Schema 允许嵌套事实扩展属性，未锁定所有内部字段。
 - 没有为所有成功结果维护完整 golden 文件；测试以 Schema 和关键语义断言为主。
 - Engine、Plugin 和 Build.cs 树可能在不同 CLI 进程间重复扫描。
-- C++ 工具不跨进程复用源码上下文或 Token。
+- C++ 工具不跨进程复用 Clang 翻译单元或 AST 上下文。
 - 大型 Engine、Plugin 树或 Module 可能产生明显 I/O 与内存开销。
 - 当前没有覆盖率阈值、性能基准或持续集成配置。
 - junction、symlink、权限失败、注册表多版本歧义和完整 Plugin Profile 组合尚未形成系统矩阵。

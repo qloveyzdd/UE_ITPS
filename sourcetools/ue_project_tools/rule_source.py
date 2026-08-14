@@ -5,7 +5,6 @@ from typing import Any
 
 from .common import result_document
 from .source_parser import parse_rule_file
-from .source_tokens import lex_source
 
 
 _MODULE_DEPENDENCY_SETTINGS = {
@@ -13,31 +12,6 @@ _MODULE_DEPENDENCY_SETTINGS = {
     "PrivateDependencyModuleNames": "private_dependency_modules",
     "DynamicallyLoadedModuleNames": "dynamically_loaded_modules",
 }
-
-_EMPTY_LITERAL_ARRAY_TOKENS = (
-    ("new", "[", "]", "{", "}"),
-    ("new", "string", "[", "]", "{", "}"),
-    ("new", "String", "[", "]", "{", "}"),
-)
-
-
-def _add_range_argument_tokens(source: str) -> list[str]:
-    values = [token.value for token in lex_source(source)]
-    try:
-        callee_index = values.index("AddRange")
-        open_index = values.index("(", callee_index + 1)
-    except ValueError:
-        return []
-    depth = 0
-    for index in range(open_index, len(values)):
-        if values[index] == "(":
-            depth += 1
-        elif values[index] == ")":
-            depth -= 1
-            if depth == 0:
-                return values[open_index + 1 : index]
-    return []
-
 
 def _is_empty_literal_add_range(
     operation: dict[str, Any],
@@ -47,17 +21,11 @@ def _is_empty_literal_add_range(
     arguments = operation.get("arguments", [])
     if rule.get("action") != "AddRange" or len(arguments) != 1:
         return False
-    expression = str(arguments[0].get("expression", ""))
-    expression_tokens = tuple(token.value for token in lex_source(expression))
-    if expression_tokens in _EMPTY_LITERAL_ARRAY_TOKENS:
-        return True
-    location = operation["location"]
-    source = "\n".join(
-        source_lines[
-            int(location["line"]) - 1 : int(location["end_line"])
-        ]
+    evaluation = arguments[0].get("evaluation", {})
+    return (
+        evaluation.get("status") == "literal"
+        and not evaluation.get("literal_values")
     )
-    return tuple(_add_range_argument_tokens(source)) in _EMPTY_LITERAL_ARRAY_TOKENS
 
 
 def _rules_class_problems(
@@ -189,7 +157,7 @@ def inspect_target_rules(path: Path) -> dict[str, Any]:
             "Index TargetRules classes and their member variables and functions from one Target.cs file."
         ),
         boundaries=[
-            "Member variables and functions are a lexical index, not semantic summaries or effective UBT build results.",
+            "Member variables and functions are a Tree-sitter syntax index, not semantic summaries or effective UBT build results.",
             "Function bodies, mutations, calls, conditions, and referenced values are not included.",
             "Use the focused C# function inspector to inspect one explicitly selected function name.",
             "Filename-matching Target candidates with unresolved bases are local evidence, not inheritance proof.",

@@ -1,9 +1,25 @@
 from __future__ import annotations
 
-from tests.support import CliTestCase, write_text
+import json
+
+from tests.support import CliTestCase, write_json, write_text
 
 
 class BuildAndModuleTests(CliTestCase):
+    def _add_compile_command(self, source) -> None:
+        database = json.loads(
+            self.fixture.compilation_database.read_text(encoding="utf-8")
+        )
+        template = database[0]
+        database.append(
+            {
+                **template,
+                "file": str(source),
+                "arguments": [*template["arguments"][:-1], str(source)],
+            }
+        )
+        write_json(self.fixture.compilation_database, database)
+
     def test_plugin_descriptor_reports_only_modules_and_plugins(self) -> None:
         result = self.cli(
             "ue_read_plugin_descriptor.py",
@@ -383,12 +399,13 @@ class BuildAndModuleTests(CliTestCase):
         )
 
     def test_module_entry_matches_public_header(self) -> None:
-        module_root = self.fixture.root / "HeaderModule"
+        module_root = self.fixture.project_root / "Source" / "HeaderModule"
         rules = write_text(module_root / "HeaderModule.Build.cs", "// rules")
-        write_text(
+        source = write_text(
             module_root / "Private" / "HeaderModule.cpp",
             "IMPLEMENT_MODULE(FHeaderModule, HeaderModule)",
         )
+        self._add_compile_command(source)
         write_text(module_root / "Public" / "HeaderModule.h", "#pragma once")
 
         result = self.cli(
@@ -408,12 +425,13 @@ class BuildAndModuleTests(CliTestCase):
         )
 
     def test_module_entry_rejects_unsupported_registration_macro(self) -> None:
-        module_root = self.fixture.root / "Unsupported"
+        module_root = self.fixture.project_root / "Source" / "Unsupported"
         rules = write_text(module_root / "Unsupported.Build.cs", "// rules")
-        write_text(
+        source = write_text(
             module_root / "Private" / "Unsupported.cpp",
             "IMPLEMENT_GAME_MODULE(FUnsupportedModule, Unsupported)",
         )
+        self._add_compile_command(source)
 
         result = self.cli(
             "ue_inspect_module_entry.py",
@@ -430,15 +448,16 @@ class BuildAndModuleTests(CliTestCase):
         )
 
     def test_module_entry_warns_for_ambiguous_headers(self) -> None:
-        module_root = self.fixture.root / "AmbiguousHeader"
+        module_root = self.fixture.project_root / "Source" / "AmbiguousHeader"
         rules = write_text(
             module_root / "AmbiguousHeader.Build.cs",
             "// rules",
         )
-        write_text(
+        source = write_text(
             module_root / "Private" / "AmbiguousHeader.cpp",
             "IMPLEMENT_MODULE(FAmbiguousHeaderModule, AmbiguousHeader)",
         )
+        self._add_compile_command(source)
         write_text(
             module_root / "Private" / "AmbiguousHeader.h",
             "#pragma once",

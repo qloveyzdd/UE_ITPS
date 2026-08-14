@@ -5,9 +5,7 @@ import re
 from typing import Any
 
 from .common import result_document
-from .source_declarators import _classify_declaration
 from .source_parser import parse_csharp_file
-from .source_tokens import _raw, _split_arguments, lex_source, token_pairs
 
 
 SCHEMA_VERSION = "ue_inspect_cs_function"
@@ -16,15 +14,6 @@ RESPONSIBILITY = (
     "matching one selected name."
 )
 
-_PARAMETER_MODIFIERS = {
-    "in",
-    "out",
-    "params",
-    "ref",
-    "readonly",
-    "scoped",
-    "this",
-}
 _BUILTIN_TYPES = {
     "bool",
     "byte",
@@ -58,46 +47,6 @@ def _evidence(location: dict[str, Any]) -> dict[str, int]:
     if "end_line" in location:
         result["end_line"] = int(location["end_line"])
     return result
-
-
-def _parameter_variables(parameters: str) -> list[dict[str, str]]:
-    tokens = lex_source(parameters)
-    forward, _ = token_pairs(tokens)
-    variables: list[dict[str, str]] = []
-    for start, end in _split_arguments(tokens, 0, len(tokens)):
-        classification = _classify_declaration(
-            tokens,
-            forward,
-            start,
-            end,
-        )
-        if classification["kind"] != "variable":
-            continue
-        name_index = int(classification["name_index"])
-        type_start = start
-        while type_start < name_index:
-            if (
-                tokens[type_start].value == "["
-                and type_start in forward
-                and forward[type_start] < name_index
-            ):
-                type_start = forward[type_start] + 1
-                continue
-            if tokens[type_start].value in _PARAMETER_MODIFIERS:
-                type_start += 1
-                continue
-            break
-        type_expression = _compact(
-            _raw(parameters, tokens, type_start, name_index)
-        )
-        if type_expression:
-            variables.append(
-                {
-                    "name": str(classification["name"]),
-                    "type_expression": type_expression,
-                }
-            )
-    return variables
 
 
 def _primary_type_name(type_expression: str) -> str | None:
@@ -252,7 +201,7 @@ def _match(
 ) -> dict[str, Any]:
     owner = str(class_item["name"])
     signature = _compact(str(method["signature"]))
-    parameters = _parameter_variables(str(method["parameters"]))
+    parameters = list(method.get("parameter_variables", []))
     syntax_match = next(
         (
             item
@@ -338,7 +287,7 @@ def inspect_cs_function(path: Path, function_name: str) -> dict[str, Any]:
         problems,
         responsibility=RESPONSIBILITY,
         boundaries=[
-            "The result is a lexical C# projection, not a compiler semantic model.",
+            "The result is a Tree-sitter C# syntax projection, not a compiler semantic model.",
             "Only class and struct members declared in the selected file are matched.",
             "External types omit built-ins and types declared in the selected C# file.",
             "Type names are derived from declarations and unbound type-like qualifiers used in non-call member access.",

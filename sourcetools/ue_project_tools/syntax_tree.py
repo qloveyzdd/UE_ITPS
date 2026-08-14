@@ -1,98 +1,21 @@
-"""Tree-sitter syntax frontend adapted from ast-outline and gdep.
-
-Upstream provenance:
-- ast-outline e17982960cdf0893236eeb9f7002f9098459d8bc (Apache-2.0)
-- gdep 736979b30879d4c4442262aa951fdf6b53cd001c (Apache-2.0)
-
-This file is a UE ITPS-specific rewrite. It retains byte offsets while masking
-AST-breaking UE macros, then exposes a small language-neutral fact model.
-"""
+"""Tree-sitter C# frontend for UE build and target rule analysis."""
 
 from __future__ import annotations
 
 from functools import lru_cache
-import re
+import json
 from typing import Any, Iterable
 
 from tree_sitter import Language, Node, Parser
 import tree_sitter_c_sharp as tscsharp
-import tree_sitter_cpp as tscpp
 
 
 ENGINE = "tree-sitter/ast-outline+gdep"
 
-_BODY_MACROS = (
-    "GENERATED_UINTERFACE_BODY",
-    "GENERATED_IINTERFACE_BODY",
-    "GENERATED_USTRUCT_BODY",
-    "GENERATED_UCLASS_BODY",
-    "GENERATED_BODY_LEGACY",
-    "GENERATED_BODY",
-)
-_DECORATOR_MACROS = (
-    "UCLASS",
-    "USTRUCT",
-    "UENUM",
-    "UINTERFACE",
-    "UDELEGATE",
-    "UPROPERTY",
-    "UFUNCTION",
-    "UE_DEPRECATED",
-)
-_MACRO_CALL_RE = re.compile(
-    rb"\b(?:"
-    + b"|".join(name.encode("ascii") for name in (*_BODY_MACROS, *_DECORATOR_MACROS))
-    + rb")\s*\("
-)
-_TOKEN_MACRO_RE = re.compile(rb"\b(?:[A-Z][A-Z0-9_]*_API|FORCEINLINE)\b")
 
-
-def _blank(out: bytearray, start: int, end: int) -> None:
-    for index in range(start, end):
-        if out[index] not in {0x0A, 0x0D}:
-            out[index] = 0x20
-
-
-def clean_unreal_cpp(source: bytes) -> bytes:
-    """Mask UE syntax disruptors without changing byte positions or lines."""
-    out = bytearray(source)
-    for match in list(_TOKEN_MACRO_RE.finditer(source)):
-        _blank(out, match.start(), match.end())
-    position = 0
-    while True:
-        match = _MACRO_CALL_RE.search(source, position)
-        if match is None:
-            break
-        depth = 1
-        index = match.end()
-        in_string: int | None = None
-        escaped = False
-        while index < len(source) and depth:
-            byte = source[index]
-            if in_string is not None:
-                if escaped:
-                    escaped = False
-                elif byte == 0x5C:
-                    escaped = True
-                elif byte == in_string:
-                    in_string = None
-            elif byte in {0x22, 0x27}:
-                in_string = byte
-            elif byte == 0x28:
-                depth += 1
-            elif byte == 0x29:
-                depth -= 1
-            index += 1
-        if depth == 0:
-            _blank(out, match.start(), index)
-        position = max(index, match.end())
-    return bytes(out)
-
-
-@lru_cache(maxsize=2)
-def _parser(language_name: str) -> Parser:
-    handle = tscpp.language() if language_name == "cpp" else tscsharp.language()
-    return Parser(Language(handle))
+@lru_cache(maxsize=1)
+def _parser() -> Parser:
+    return Parser(Language(tscsharp.language()))
 
 
 def _walk(root: Node) -> Iterable[Node]:
@@ -100,13 +23,17 @@ def _walk(root: Node) -> Iterable[Node]:
     while stack:
         node = stack.pop()
         yield node
-        stack.extend(reversed(node.children))
+        stack.extend(reversed(node.named_children))
 
 
 def _text(source: bytes, node: Node | None) -> str:
     if node is None:
         return ""
     return source[node.start_byte : node.end_byte].decode("utf-8", errors="replace")
+
+
+def _compact(value: str) -> str:
+    return " ".join(value.split())
 
 
 def _location(node: Node) -> dict[str, int]:
@@ -123,311 +50,369 @@ def _errors(root: Node) -> int:
     return sum(1 for node in _walk(root) if node.type == "ERROR" or node.is_missing)
 
 
-def _declarator_name(node: Node | None, source: bytes) -> str:
-    if node is None:
-        return ""
-    if node.type in {
+def _string_value(source: bytes, node: Node) -> str | None:
+    raw = _text(source, node)
+    if node.type == "string_literal":
+        try:
+            return str(json.loads(raw))
+        except (json.JSONDecodeError, TypeError):
+            return raw[1:-1] if len(raw) >= 2 else ""
+    if node.type == "verbatim_string_literal" and raw.startswith('@"'):
+        return raw[2:-1].replace('""', '"')
+    if "raw_string_literal" in node.type:
+        return raw.strip('"')
+    return None
+
+
+def _evaluation(source: bytes, node: Node) -> dict[str, Any]:
+    literals = [
+        value
+        for descendant in _walk(node)
+        if (value := _string_value(source, descendant)) is not None
+    ]
+    unresolved_kinds = {
         "identifier",
-        "field_identifier",
-        "qualified_identifier",
-        "operator_name",
-        "destructor_name",
-    }:
-        return _text(source, node).strip()
-    preferred = node.child_by_field_name("declarator") or node.child_by_field_name(
-        "name"
+        "member_access_expression",
+        "invocation_expression",
+        "element_access_expression",
+        "interpolated_string_expression",
+    }
+    unresolved = any(
+        descendant.type in unresolved_kinds
+        for descendant in _walk(node)
+        if descendant is not node
     )
-    if preferred is not None:
-        found = _declarator_name(preferred, source)
-        if found:
-            return found
-    for child in reversed(node.named_children):
-        found = _declarator_name(child, source)
-        if found:
-            return found
-    return ""
-
-
-def _cpp_types(root: Node, source: bytes) -> list[dict[str, Any]]:
-    kinds = {
-        "class_specifier": "class",
-        "struct_specifier": "struct",
-        "union_specifier": "union",
-        "enum_specifier": "enum",
-    }
-    results: list[dict[str, Any]] = []
-    for node in _walk(root):
-        if node.type not in kinds:
-            continue
-        name_node = node.child_by_field_name("name")
-        name = _text(source, name_node).strip()
-        if not name:
-            continue
-        namespace_scopes: list[str] = []
-        owner_parts: list[str] = []
-        parent = node.parent
-        while parent is not None:
-            if parent.type == "namespace_definition":
-                namespace_name = _text(
-                    source, parent.child_by_field_name("name")
-                ).strip()
-                if namespace_name:
-                    namespace_scopes.append(namespace_name)
-            elif parent.type in {
-                "class_specifier",
-                "struct_specifier",
-                "union_specifier",
-            }:
-                owner_name = _text(source, parent.child_by_field_name("name")).strip()
-                if owner_name:
-                    owner_parts.append(owner_name)
-            parent = parent.parent
-        namespace_parts = [
-            part for scope in reversed(namespace_scopes) for part in scope.split("::")
-        ]
-        owner_parts.reverse()
-        namespace = "::".join(namespace_parts) or None
-        owner = "::".join(owner_parts) or None
-        qualified_name = "::".join([*namespace_parts, *owner_parts, name])
-        bases: list[str] = []
-        base_clause = node.child_by_field_name("base_class_clause")
-        if base_clause is None:
-            base_clause = next(
-                (
-                    child
-                    for child in node.named_children
-                    if child.type == "base_class_clause"
-                ),
-                None,
-            )
-        if base_clause is not None:
-            for child in base_clause.named_children:
-                value = re.sub(
-                    r"\b(public|protected|private|virtual)\b", "", _text(source, child)
-                ).strip()
-                if value:
-                    bases.append(value)
-        references: list[dict[str, Any]] = []
-        body = node.child_by_field_name("body")
-        if body is not None:
-            for member in body.named_children:
-                if member.type != "field_declaration":
-                    continue
-                declarator = member.child_by_field_name("declarator")
-                if declarator is None or any(
-                    descendant.type == "function_declarator"
-                    for descendant in _walk(declarator)
-                ):
-                    continue
-                type_node = member.child_by_field_name("type")
-                type_expression = _text(source, type_node).strip()
-                member_name = _declarator_name(declarator, source)
-                if type_expression and member_name:
-                    references.append(
-                        {
-                            "kind": "field",
-                            "name": member_name,
-                            "type_expression": type_expression,
-                            "location": _location(member),
-                        }
-                    )
-        results.append(
-            {
-                "kind": kinds[node.type],
-                "name": name,
-                "namespace": namespace,
-                "owner": owner,
-                "qualified_name": qualified_name,
-                "base_types": list(dict.fromkeys(bases)),
-                "type_references": references,
-                "location": _location(node),
-            }
-        )
-    return results
-
-
-def _cpp_functions(root: Node, source: bytes) -> list[dict[str, Any]]:
-    results: list[dict[str, Any]] = []
-    seen: set[tuple[str, int, bool]] = set()
-    for node in _walk(root):
-        if node.type not in {"function_definition", "declaration", "field_declaration"}:
-            continue
-        declarator = node.child_by_field_name("declarator")
-        candidates = (
-            [item for item in _walk(declarator)] if declarator is not None else []
-        )
-        function_declarator = next(
-            (item for item in candidates if item.type == "function_declarator"), None
-        )
-        if function_declarator is None:
-            continue
-        name = _declarator_name(
-            function_declarator.child_by_field_name("declarator"), source
-        )
-        if not name:
-            continue
-        has_body = node.type == "function_definition"
-        key = (name, node.start_point.row + 1, has_body)
-        if key in seen:
-            continue
-        seen.add(key)
-        calls: list[dict[str, Any]] = []
-        controls: list[dict[str, Any]] = []
-        body = node.child_by_field_name("body")
-        if body is not None:
-            for descendant in _walk(body):
-                if descendant.type == "call_expression":
-                    callee = _text(
-                        source, descendant.child_by_field_name("function")
-                    ).strip()
-                    if callee:
-                        calls.append(
-                            {"callee": callee, "location": _location(descendant)}
-                        )
-                elif descendant.type in {
-                    "if_statement",
-                    "switch_statement",
-                    "for_statement",
-                    "for_range_loop",
-                    "while_statement",
-                    "do_statement",
-                    "try_statement",
-                    "return_statement",
-                    "throw_expression",
-                }:
-                    controls.append(
-                        {"kind": descendant.type, "location": _location(descendant)}
-                    )
-        results.append(
-            {
-                "name": name,
-                "signature": " ".join(_text(source, function_declarator).split()),
-                "has_body": has_body,
-                "location": _location(node),
-                "calls": calls,
-                "controls": controls,
-            }
-        )
-    return results
-
-
-def parse_cpp_syntax(text: str) -> dict[str, Any]:
-    source = text.encode("utf-8")
-    tree = _parser("cpp").parse(clean_unreal_cpp(source))
-    includes = []
-    for node in _walk(tree.root_node):
-        if node.type == "preproc_include":
-            includes.append(
-                {"text": _text(source, node).strip(), "location": _location(node)}
-            )
     return {
-        "engine": ENGINE,
-        "language": "cpp",
-        "parse_error_count": _errors(tree.root_node),
-        "includes": includes,
-        "types": _cpp_types(tree.root_node, source),
-        "functions": _cpp_functions(tree.root_node, source),
+        "status": "unresolved" if unresolved else "literal",
+        "literal_values": list(dict.fromkeys(literals)),
     }
 
 
-def _csharp_types(root: Node, source: bytes) -> list[dict[str, Any]]:
-    kinds = {
-        "class_declaration": "class",
-        "struct_declaration": "struct",
-        "interface_declaration": "interface",
-        "record_declaration": "record",
-        "enum_declaration": "enum",
+def _argument_node(node: Node) -> Node:
+    expression = node.child_by_field_name("expression")
+    if expression is not None:
+        return expression
+    return node.named_children[-1] if node.named_children else node
+
+
+def _control_contexts(source: bytes, node: Node) -> list[dict[str, Any]]:
+    contexts: list[dict[str, Any]] = []
+    current = node.parent
+    while current is not None:
+        if current.type == "if_statement":
+            condition = current.child_by_field_name("condition")
+            consequence = current.child_by_field_name("consequence")
+            alternative = current.child_by_field_name("alternative")
+            branch = "then"
+            if (
+                alternative is not None
+                and alternative.start_byte <= node.start_byte < alternative.end_byte
+            ):
+                branch = "else"
+            elif consequence is None or not (
+                consequence.start_byte <= node.start_byte < consequence.end_byte
+            ):
+                current = current.parent
+                continue
+            expression = _compact(_text(source, condition))
+            contexts.append(
+                {
+                    "kind": "if",
+                    "expression": expression,
+                    "branch": branch,
+                    "start_line": current.start_point.row + 1,
+                    "span_width": current.end_point.row - current.start_point.row + 1,
+                }
+            )
+        current = current.parent
+    contexts.reverse()
+    return contexts
+
+
+def _operation(source: bytes, node: Node) -> dict[str, Any] | None:
+    conditions = _control_contexts(source, node)
+    common: dict[str, Any] = {
+        "expression": _compact(_text(source, node)),
+        "location": _location(node),
+        "conditions": conditions,
+        "applicability": "conditional" if conditions else "direct",
     }
-    results = []
-    for node in _walk(root):
-        if node.type not in kinds:
+    if conditions:
+        common["control_path"] = [item["kind"] for item in conditions]
+        common["control_details"] = [
+            {
+                **{
+                    key: item[key]
+                    for key in ("kind", "expression", "branch", "start_line")
+                },
+                "references": [item["expression"]] if item["expression"] else [],
+            }
+            for item in conditions
+        ]
+        common["related_symbols"] = list(
+            dict.fromkeys(
+                item["expression"] for item in conditions if item["expression"]
+            )
+        )
+    if node.type == "invocation_expression":
+        function = node.child_by_field_name("function")
+        arguments_node = node.child_by_field_name("arguments")
+        arguments = []
+        for raw_argument in (
+            arguments_node.named_children if arguments_node is not None else []
+        ):
+            argument = _argument_node(raw_argument)
+            arguments.append(
+                {
+                    "expression": _compact(_text(source, argument)),
+                    "evaluation": _evaluation(source, argument),
+                }
+            )
+        literal_values = [
+            value
+            for argument in arguments
+            for value in argument["evaluation"]["literal_values"]
+        ]
+        return {
+            "kind": "invocation",
+            "callee": _compact(_text(source, function)).replace("?.", "."),
+            "arguments": arguments,
+            "evaluation": {
+                "status": (
+                    "literal"
+                    if all(
+                        item["evaluation"]["status"] == "literal" for item in arguments
+                    )
+                    else "unresolved"
+                ),
+                "literal_values": list(dict.fromkeys(literal_values)),
+            },
+            **common,
+        }
+    if node.type == "assignment_expression":
+        left = node.child_by_field_name("left")
+        right = node.child_by_field_name("right")
+        operator = next(
+            (
+                _text(source, child)
+                for child in node.children
+                if not child.is_named and "=" in _text(source, child)
+            ),
+            "=",
+        )
+        return {
+            "kind": "assignment",
+            "target": _compact(_text(source, left)),
+            "operator": operator,
+            "value_expression": _compact(_text(source, right)),
+            "evaluation": _evaluation(source, right or node),
+            **common,
+        }
+    return None
+
+
+def _parameters(source: bytes, node: Node | None) -> list[dict[str, str]]:
+    if node is None:
+        return []
+    results: list[dict[str, str]] = []
+    for parameter in node.named_children:
+        if parameter.type != "parameter":
+            continue
+        name = _text(source, parameter.child_by_field_name("name")).strip()
+        type_expression = _compact(_text(source, parameter.child_by_field_name("type")))
+        if name and type_expression:
+            results.append({"name": name, "type_expression": type_expression})
+    return results
+
+
+def _variables(source: bytes, root: Node, statement_type: str) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+    for statement in _walk(root):
+        if statement.type != statement_type:
+            continue
+        declaration = next(
+            (
+                child
+                for child in statement.named_children
+                if child.type == "variable_declaration"
+            ),
+            None,
+        )
+        if declaration is None:
+            continue
+        type_node = declaration.child_by_field_name("type")
+        if type_node is None and declaration.named_children:
+            type_node = declaration.named_children[0]
+        type_expression = _compact(_text(source, type_node))
+        for declarator in declaration.named_children:
+            if declarator.type != "variable_declarator":
+                continue
+            name = _text(source, declarator.child_by_field_name("name")).strip()
+            if name and type_expression:
+                results.append(
+                    {
+                        "name": name,
+                        "type_expression": type_expression,
+                        "location": _location(statement),
+                    }
+                )
+    return results
+
+
+def _method(source: bytes, node: Node) -> dict[str, Any]:
+    name = _text(source, node.child_by_field_name("name")).strip()
+    parameter_node = node.child_by_field_name("parameters")
+    body = node.child_by_field_name("body")
+    if body is None:
+        body = next(
+            (
+                child
+                for child in node.named_children
+                if child.type in {"block", "arrow_expression_clause"}
+            ),
+            None,
+        )
+    signature_end = body.start_byte if body is not None else node.end_byte
+    signature = _compact(
+        source[node.start_byte : signature_end].decode("utf-8", errors="replace")
+    ).rstrip(";")
+    parameters_text = _text(source, parameter_node).strip()
+    if parameters_text.startswith("(") and parameters_text.endswith(")"):
+        parameters_text = parameters_text[1:-1]
+    operations = []
+    if body is not None:
+        for descendant in _walk(body):
+            operation = _operation(source, descendant)
+            if operation is not None:
+                operations.append((descendant.start_byte, operation))
+    operations.sort(key=lambda item: item[0])
+    referenced_names = []
+    qualified_references = []
+    if body is not None:
+        for descendant in _walk(body):
+            if descendant.type == "identifier":
+                value = _text(source, descendant)
+                if value not in referenced_names:
+                    referenced_names.append(value)
+            if descendant.type == "member_access_expression":
+                root = _text(source, descendant).replace("?.", ".").split(".", 1)[0]
+                if root and root not in qualified_references:
+                    qualified_references.append(root)
+    return {
+        "name": name,
+        "parameters": _compact(parameters_text),
+        "parameter_variables": _parameters(source, parameter_node),
+        "signature": signature,
+        "has_body": body is not None,
+        "is_constructor": node.type == "constructor_declaration",
+        "location": _location(node),
+        "declared_names": [
+            item["name"]
+            for item in _variables(source, body, "local_declaration_statement")
+        ]
+        if body is not None
+        else [],
+        "local_variables": (
+            _variables(source, body, "local_declaration_statement")
+            if body is not None
+            else []
+        ),
+        "referenced_names": referenced_names,
+        "qualified_references": qualified_references,
+        "operations": [item for _, item in operations],
+    }
+
+
+def parse_csharp_model(text: str) -> dict[str, Any]:
+    source = text.encode("utf-8")
+    tree = _parser().parse(source)
+    classes: list[dict[str, Any]] = []
+    for node in _walk(tree.root_node):
+        if node.type not in {"class_declaration", "struct_declaration"}:
             continue
         name = _text(source, node.child_by_field_name("name")).strip()
         if not name:
             continue
-        bases = []
-        base_list = node.child_by_field_name("bases")
-        if base_list is None:
-            base_list = next(
-                (child for child in node.named_children if child.type == "base_list"),
-                None,
-            )
-        if base_list is not None:
-            bases = [
-                _text(source, child).strip()
+        base_list = next(
+            (child for child in node.named_children if child.type == "base_list"),
+            None,
+        )
+        bases = (
+            [
+                _compact(_text(source, child))
                 for child in base_list.named_children
                 if _text(source, child).strip()
             ]
-        results.append(
+            if base_list is not None
+            else []
+        )
+        body = node.child_by_field_name("body")
+        members = body.named_children if body is not None else []
+        methods = [
+            _method(source, member)
+            for member in members
+            if member.type in {"method_declaration", "constructor_declaration"}
+        ]
+        fields = []
+        if body is not None:
+            fields = _variables(source, body, "field_declaration")
+        classes.append(
             {
-                "kind": kinds[node.type],
+                "kind": "class" if node.type == "class_declaration" else "struct",
                 "name": name,
                 "base_types": bases,
                 "location": _location(node),
+                "fields": fields,
+                "methods": methods,
             }
         )
-    return results
-
-
-def _csharp_functions(root: Node, source: bytes) -> list[dict[str, Any]]:
-    results = []
-    for node in _walk(root):
-        if node.type not in {
-            "method_declaration",
-            "constructor_declaration",
-            "local_function_statement",
-        }:
-            continue
-        name = _text(source, node.child_by_field_name("name")).strip()
-        if not name:
-            continue
-        body = node.child_by_field_name("body")
-        calls = []
-        controls = []
-        if body is not None:
-            for descendant in _walk(body):
-                if descendant.type == "invocation_expression":
-                    callee = _text(
-                        source, descendant.child_by_field_name("function")
-                    ).strip()
-                    if callee:
-                        calls.append(
-                            {"callee": callee, "location": _location(descendant)}
-                        )
-                elif descendant.type in {
-                    "if_statement",
-                    "switch_statement",
-                    "for_statement",
-                    "foreach_statement",
-                    "while_statement",
-                    "do_statement",
-                    "try_statement",
-                    "return_statement",
-                    "throw_statement",
-                }:
-                    controls.append(
-                        {"kind": descendant.type, "location": _location(descendant)}
-                    )
-        results.append(
-            {
-                "name": name,
-                "signature": " ".join(_text(source, node).split("{", 1)[0].split()),
-                "has_body": body is not None,
-                "location": _location(node),
-                "calls": calls,
-                "controls": controls,
-            }
-        )
-    return results
-
-
-def parse_csharp_syntax(text: str) -> dict[str, Any]:
-    source = text.encode("utf-8")
-    tree = _parser("csharp").parse(source)
     return {
         "engine": ENGINE,
         "language": "csharp",
         "parse_error_count": _errors(tree.root_node),
-        "types": _csharp_types(tree.root_node, source),
-        "functions": _csharp_functions(tree.root_node, source),
+        "classes": classes,
+    }
+
+
+def parse_csharp_syntax(text: str) -> dict[str, Any]:
+    model = parse_csharp_model(text)
+    return {
+        "engine": model["engine"],
+        "language": model["language"],
+        "parse_error_count": model["parse_error_count"],
+        "types": [
+            {
+                "kind": item["kind"],
+                "name": item["name"],
+                "base_types": item["base_types"],
+                "location": item["location"],
+            }
+            for item in model["classes"]
+        ],
+        "functions": [
+            {
+                "name": method["name"],
+                "signature": method["signature"],
+                "has_body": method["has_body"],
+                "location": method["location"],
+                "calls": [
+                    {
+                        "callee": operation["callee"],
+                        "location": operation["location"],
+                    }
+                    for operation in method["operations"]
+                    if operation["kind"] == "invocation"
+                ],
+                "controls": [
+                    {
+                        "kind": detail["kind"],
+                        "location": {"line": detail["start_line"]},
+                    }
+                    for operation in method["operations"]
+                    for detail in operation.get("control_details", [])
+                ],
+            }
+            for item in model["classes"]
+            for method in item["methods"]
+        ],
     }

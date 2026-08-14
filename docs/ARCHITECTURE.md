@@ -51,7 +51,7 @@ UE ITPS 是一套面向 Unreal Engine 工程的只读检查与关系浏览系统
 
 1. 调用方通过 `sourcetools/ue_*.py` 传入一个搜索根、项目描述符、构建规则文件或 C++ 源文件。CLI 只负责参数、双语帮助、退出码和 JSON 输出。
 2. `sourcetools/ue_project_tools/` 中对应的领域服务校验入口并限定扫描边界；遇到多个候选项目、Plugin 或伴随源码时返回歧义或警告，不自行猜测目标。
-3. 描述符与版本文件由严格 JSON/Unreal JSON 读取器解析；C++ Source 由 Clang 按选定编译数据库建立翻译单元，C# 继续由 Tree-sitter 投影。UE 宏、委托和生命周期使用领域投影补充，依赖、继承、循环和影响查询使用确定性图算法处理。
+3. 描述符与版本文件由严格 JSON/Unreal JSON 读取器解析；全部 C++ 代码事实由 Clang 按选定编译数据库建立的翻译单元、AST 与预处理记录提供，全部 C# 代码事实由 Tree-sitter C# 提供。UE 宏、委托和生命周期只在这些前端事实之上做领域投影，依赖、继承、循环和影响查询使用确定性图算法处理。
 4. 领域结果通过公共组装器补充 `schema_version`、`validation` 和 `limits`，稳定序列化到 stdout。调用失败、扫描阻断和带警告的完成状态通过不同退出码表达。
 5. 消费方用 `schemas/` 下同名 JSON Schema 校验结果，并根据 `limits` 判断这些静态事实不能证明的运行时语义。
 
@@ -81,7 +81,7 @@ UE ITPS 是一套面向 Unreal Engine 工程的只读检查与关系浏览系统
 | 抽象 | 位置 | 职责 |
 |---|---|---|
 | `BilingualArgumentParser` / `result_document()` | [`sourcetools/ue_project_tools/common.py`](../sourcetools/ue_project_tools/common.py) | 统一静态 CLI 的双语参数处理、失败信封、Validation、Limits 与稳定 JSON 契约。 |
-| Clang C++ 前端 | [`sourcetools/ue_project_tools/clang_frontend.py`](../sourcetools/ue_project_tools/clang_frontend.py) | 读取编译数据库，建立 C++ 翻译单元并输出类型、函数、继承、调用、变量、诊断和实际 include 事实。 |
+| Clang C++ 前端 | [`sourcetools/ue_project_tools/clang_frontend.py`](../sourcetools/ue_project_tools/clang_frontend.py) | 读取编译数据库，建立 C++ 翻译单元并输出类型、函数、继承、调用、变量、诊断、include、宏展开和 Module 注册事实。 |
 | Tree-sitter C# 前端 | [`sourcetools/ue_project_tools/syntax_tree.py`](../sourcetools/ue_project_tools/syntax_tree.py) | 投影 Build.cs、Target.cs 和普通 C# 的声明、调用与位置事实。 |
 | `DependencyGraph` | [`sourcetools/ue_project_tools/dependency_graph.py`](../sourcetools/ue_project_tools/dependency_graph.py) | 保存确定性的类型依赖节点与边，支持循环、继承和反向影响等图查询。 |
 | `list_source_types()` 源码单元入口 | [`sourcetools/ue_project_tools/source_unit.py`](../sourcetools/ue_project_tools/source_unit.py) | 从一个显式 C++ 文件及唯一可推导伴随文件组装类型、成员和声明锚点结果。 |

@@ -2,38 +2,30 @@ from __future__ import annotations
 
 import json
 
-from tests.support import CliTestCase, SCHEMAS_ROOT
+from tests.support import CliTestCase, REPOSITORY_ROOT, SCHEMAS_ROOT, TOOLS_ROOT
 from ue_project_tools.dependency_graph import DependencyGraph
-from ue_project_tools.syntax_tree import parse_cpp_syntax, parse_csharp_syntax
+from ue_project_tools.syntax_tree import parse_csharp_syntax
 
 
 class ToolPoolEnrichmentTests(CliTestCase):
-    def test_cpp_ast_normalizes_ue_macros_and_nested_templates(self) -> None:
-        parsed = parse_cpp_syntax(
-            """
-            namespace Sample::Runtime
-            {
-            UCLASS(BlueprintType)
-            class SAMPLEGAME_API ASample : public AActor
-            {
-                GENERATED_BODY()
-                UPROPERTY(EditAnywhere)
-                TArray<TObjectPtr<UObject>> Objects;
-            public:
-                void Run() { if (Objects.Num()) { Objects[0]->ConditionalBeginDestroy(); } }
-            };
-            }
-            """
+    def test_code_analysis_frontends_have_no_custom_lexer_or_cpp_tree_sitter(self) -> None:
+        package = TOOLS_ROOT / "ue_project_tools"
+        self.assertFalse((package / "source_tokens.py").exists())
+        forbidden = (
+            "lex_source",
+            "source_tokens",
+            "tree_sitter_cpp",
+            "parse_cpp_syntax",
         )
-        self.assertEqual(parsed["parse_error_count"], 0)
-        self.assertEqual(parsed["types"][0]["name"], "ASample")
-        self.assertEqual(parsed["types"][0]["namespace"], "Sample::Runtime")
-        self.assertEqual(
-            parsed["types"][0]["qualified_name"], "Sample::Runtime::ASample"
+        for path in sorted(package.glob("*.py")):
+            source = path.read_text(encoding="utf-8-sig")
+            with self.subTest(path=path.name):
+                for marker in forbidden:
+                    self.assertNotIn(marker, source)
+        requirements = (REPOSITORY_ROOT / "requirements.txt").read_text(
+            encoding="utf-8"
         )
-        self.assertEqual(parsed["types"][0]["base_types"], ["AActor"])
-        self.assertEqual(parsed["types"][0]["type_references"][0]["name"], "Objects")
-        self.assertEqual(parsed["functions"][0]["calls"][0]["callee"], "Objects.Num")
+        self.assertNotIn("tree-sitter-cpp", requirements)
 
     def test_csharp_ast_covers_generics_lambda_and_calls(self) -> None:
         parsed = parse_csharp_syntax(

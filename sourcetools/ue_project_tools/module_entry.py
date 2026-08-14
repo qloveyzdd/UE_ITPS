@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .clang_frontend import load_clang_unit
 from .common import iter_files, normalized, result_document
-from .source_parser import registration_macros
-from .source_tokens import lex_source
+from .discovery import find_nearest_uproject
 
 
 _SUPPORTED_REGISTRATION_MACROS = frozenset(
@@ -25,14 +25,68 @@ def _validated_rules_path(rules_path: Path) -> tuple[Path, str]:
     return rules, module_name
 
 
-def _registration_items(source: Path) -> list[dict[str, Any]]:
-    text = source.read_text(encoding="utf-8-sig", errors="replace")
-    tokens = lex_source(text)
-    return [
-        item
-        for item in registration_macros(text, tokens)
-        if item["macro"] in _SUPPORTED_REGISTRATION_MACROS
-    ]
+def _macro_arguments(tokens: list[str]) -> list[str]:
+    try:
+        opening = tokens.index("(")
+    except ValueError:
+        return []
+    depth = 0
+    current: list[str] = []
+    arguments: list[str] = []
+    for token in tokens[opening + 1 :]:
+        if token in {"(", "[", "{"}:
+            depth += 1
+        elif token in {")", "]", "}"}:
+            if token == ")" and depth == 0:
+                if current:
+                    arguments.append("".join(current).strip())
+                break
+            depth -= 1
+        if token == "," and depth == 0:
+            arguments.append("".join(current).strip())
+            current = []
+        else:
+            current.append(token)
+    return arguments
+
+
+def registration_macros_for_source(
+    source: Path,
+    project_root: Path,
+    compilation_database: Path | None = None,
+) -> list[dict[str, Any]]:
+    model = load_clang_unit(
+        source.resolve(),
+        [source.resolve()],
+        project_root.resolve(),
+        compilation_database,
+    )
+    source_key = str(source.resolve()).replace("\\", "/").casefold()
+    results = []
+    for macro in model["macros"]:
+        if (
+            macro["file"] != source_key
+            or macro["name"] not in _SUPPORTED_REGISTRATION_MACROS
+        ):
+            continue
+        arguments = _macro_arguments(list(macro["tokens"]))
+        module_class = arguments[0] if arguments else None
+        module_name = arguments[1] if len(arguments) > 1 else None
+        if (
+            module_name
+            and len(module_name) >= 2
+            and module_name[0] == module_name[-1] == '"'
+        ):
+            module_name = module_name[1:-1]
+        results.append(
+            {
+                "macro": macro["name"],
+                "module_class": module_class,
+                "module_name": module_name,
+                "location": {"line": int(macro["line"])},
+            }
+        )
+    return results
 
 
 def _header_candidates(source: Path, module_root: Path) -> list[Path]:
@@ -41,8 +95,7 @@ def _header_candidates(source: Path, module_root: Path) -> list[Path]:
     if relative.parts and relative.parts[0].casefold() == "private":
         tail = Path(*relative.parts[1:]).with_suffix("")
         candidate_bases.extend(
-            module_root / public_dir / tail
-            for public_dir in ("Public", "Classes")
+            module_root / public_dir / tail for public_dir in ("Public", "Classes")
         )
     candidates = {
         candidate.resolve()
@@ -52,39 +105,25 @@ def _header_candidates(source: Path, module_root: Path) -> list[Path]:
     return sorted(candidates, key=lambda path: normalized(path).casefold())
 
 
-def _entrypoint(
-    source: Path,
-    registration: dict[str, Any],
-    header: Path | None,
+def inspect_module_entry(
+    rules_path: Path,
+    compilation_database: Path | None = None,
 ) -> dict[str, Any]:
-    return {
-        "header": normalized(header) if header else None,
-        "source": normalized(source),
-        "registration": {
-            "macro": registration["macro"],
-            "module_class": registration.get("module_class"),
-            "module_name": registration.get("module_name"),
-            "source_line": int(registration["location"]["line"]),
-        },
-    }
-
-
-def inspect_module_entry(rules_path: Path) -> dict[str, Any]:
     rules, module_name = _validated_rules_path(rules_path)
     module_root = rules.parent.resolve()
+    project_root = find_nearest_uproject(rules).parent.resolve()
     problems: list[dict[str, Any]] = []
     entrypoints: list[dict[str, Any]] = []
-
     for source in iter_files(module_root, ".cpp"):
         registrations = [
             item
-            for item in _registration_items(source)
-            if str(item.get("module_name", "")).casefold()
-            == module_name.casefold()
+            for item in registration_macros_for_source(
+                source, project_root, compilation_database
+            )
+            if str(item.get("module_name", "")).casefold() == module_name.casefold()
         ]
         if not registrations:
             continue
-
         headers = _header_candidates(source, module_root)
         header = headers[0] if len(headers) == 1 else None
         if len(headers) > 1:
@@ -97,11 +136,19 @@ def inspect_module_entry(rules_path: Path) -> dict[str, Any]:
                     "message": "Multiple same-named module entry headers were found",
                 }
             )
-        entrypoints.extend(
-            _entrypoint(source, registration, header)
-            for registration in registrations
-        )
-
+        for registration in registrations:
+            entrypoints.append(
+                {
+                    "header": normalized(header) if header else None,
+                    "source": normalized(source),
+                    "registration": {
+                        "macro": registration["macro"],
+                        "module_class": registration["module_class"],
+                        "module_name": registration["module_name"],
+                        "source_line": int(registration["location"]["line"]),
+                    },
+                }
+            )
     entrypoints.sort(
         key=lambda item: (
             str(item["source"]).casefold(),
@@ -109,9 +156,7 @@ def inspect_module_entry(rules_path: Path) -> dict[str, Any]:
             str(item["registration"]["macro"]),
         )
     )
-    source_candidates = list(
-        dict.fromkeys(str(item["source"]) for item in entrypoints)
-    )
+    source_candidates = list(dict.fromkeys(str(item["source"]) for item in entrypoints))
     if not entrypoints:
         problems.append(
             {
@@ -119,10 +164,7 @@ def inspect_module_entry(rules_path: Path) -> dict[str, Any]:
                 "code": "module-entry-registration-not-found",
                 "module_name": module_name,
                 "supported_macros": sorted(_SUPPORTED_REGISTRATION_MACROS),
-                "message": (
-                    "No matching IMPLEMENT_PRIMARY_GAME_MODULE or "
-                    f"IMPLEMENT_MODULE registration was found for {module_name}"
-                ),
+                "message": f"No matching Clang-confirmed module registration was found for {module_name}",
             }
         )
     elif len(source_candidates) > 1:
@@ -135,22 +177,14 @@ def inspect_module_entry(rules_path: Path) -> dict[str, Any]:
                 "message": "Matching module registrations were found in multiple source files",
             }
         )
-
     return result_document(
         "ue_inspect_module_entry",
-        {
-            "entrypoints": entrypoints,
-        },
+        {"entrypoints": entrypoints},
         problems,
-        responsibility=(
-            "Locate one module's .cpp registration entry and its uniquely matched "
-            "same-named .h file."
-        ),
+        responsibility="Locate Clang-confirmed module registration entries.",
         boundaries=[
-            "The selected Build.cs parent directory defines the module source boundary.",
-            "Only .cpp files are scanned for IMPLEMENT_PRIMARY_GAME_MODULE and IMPLEMENT_MODULE.",
-            "Entrypoint source and header paths are absolute.",
-            "Headers are matched by same basename in the source directory or conventional Public and Classes mirrors of Private.",
-            "Header contents, module classes, functions, callbacks, lifecycle state, and runtime behavior are not analyzed.",
+            "Each .cpp file is parsed with the selected Clang compilation database and Module profile.",
+            "Missing compilation databases or compile commands are blocking input failures; no lexical fallback is used.",
+            "Headers are matched by conventional same-basename locations and are not analyzed.",
         ],
     )

@@ -15,7 +15,7 @@ UE ITPS 是面向 Unreal Engine 项目维护者与 AI Agent 的确定性、只�
 
 ## 安装
 
-需要 Python 3.10 或更高版本。描述符、规则和清单工具不要求安装 Unreal Engine；C++ Source 检索还要求与目标构建 Profile 对应的 `compile_commands.json`。依赖清单自带 libclang 运行时；当编译数据库指定了其他 Clang 资源目录时，应通过 `UE_ITPS_LIBCLANG` 选择匹配版本的动态库。
+需要 Python 3.10 或更高版本。描述符与 C# 规则工具不要求安装 Unreal Engine；所有读取 C++ 代码的工具（包括 Module 入口与 Module 对账）都要求与目标构建 Profile 对应的 `compile_commands.json`。依赖清单自带 libclang 运行时；当编译数据库指定了其他 Clang 资源目录时，应通过 `UE_ITPS_LIBCLANG` 选择匹配版本的动态库。
 
 ```bash
 git clone https://github.com/qloveyzdd/UE_ITPS.git
@@ -80,6 +80,7 @@ python sourcetools/ue_list_project_cxx_sources.py --project D:/Projects/MyGame/M
 python sourcetools/ue_list_cxx_includes.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp
 python sourcetools/ue_list_cxx_types.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp --compile-database D:/Projects/MyGame/compile_commands.json
 python sourcetools/ue_inspect_cxx_function.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp --function BeginPlay --compile-database D:/Projects/MyGame/compile_commands.json
+python sourcetools/ue_inspect_module_entry.py --rules D:/Projects/MyGame/Source/MyGame/MyGame.Build.cs --compile-database D:/Projects/MyGame/compile_commands.json
 ```
 
 结果包含 Clang 翻译单元实际观察到的 include、类型、函数、继承和调用目标，并保留 UE 宏与委托的领域投影。工具只输出显式选择的文件和唯一可推导的同名伴随文件中的事实，不递归输出 include 或被调用函数的内容。
@@ -137,7 +138,7 @@ Blueprint 只投影静态可达的语义节点和已实现声明；DataAsset 只
 - Build.cs、Target.cs 和 C++ 结果是受支持语法范围内的静态投影，不执行源码或推断最终 UBT 配置。
 - 单个 `.uplugin` 读取器只识别顶层 `Modules` 和 `Plugins`，不扫描 `Build.cs` 或输出依赖图。
 - 唯一物理 include 候选不等于编译器实际选择；Plugin 静态依赖也不等于完整有效的构建 Profile。
-- Module 入口工具只定位 `IMPLEMENT_PRIMARY_GAME_MODULE` / `IMPLEMENT_MODULE` 所在 `.cpp` 及唯一同名 `.h`；函数流和依赖图仍是保守模型，不证明运行时行为。
+- Module 入口工具通过所选 Clang 编译 Profile 定位 `IMPLEMENT_PRIMARY_GAME_MODULE` / `IMPLEMENT_MODULE` 所在 `.cpp`，缺少编译数据库或编译命令时明确失败且不回退；函数流和依赖图仍不证明运行时行为。
 - 编译、启动、资产状态、配置合并、网络行为和目标平台行为仍须使用 Unreal 官方工具验证。
 
 ## 许可证

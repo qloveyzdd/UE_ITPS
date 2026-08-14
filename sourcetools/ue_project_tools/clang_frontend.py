@@ -72,9 +72,7 @@ def resolve_compilation_database(
         )
     for candidate in candidates:
         database_file = (
-            candidate / "compile_commands.json"
-            if candidate.is_dir()
-            else candidate
+            candidate / "compile_commands.json" if candidate.is_dir() else candidate
         )
         if database_file.is_file():
             return database_file.resolve()
@@ -100,9 +98,7 @@ def _load_cindex() -> Any:
     if library and not cindex.Config.loaded:
         resolved = Path(library).resolve()
         if not resolved.is_file():
-            raise ClangFrontendError(
-                f"UE_ITPS_LIBCLANG is not a file: {resolved}"
-            )
+            raise ClangFrontendError(f"UE_ITPS_LIBCLANG is not a file: {resolved}")
         cindex.Config.set_library_file(str(resolved))
     try:
         cindex.Index.create()
@@ -324,6 +320,10 @@ def _function_fact(cursor: Any, location: dict[str, Any]) -> dict[str, Any]:
         "name": cursor.spelling,
         "qualified_name": qualified,
         "parameters": parameters,
+        "parameter_facts": [
+            {"name": item.spelling, "type_expression": item.type.spelling}
+            for item in arguments
+        ],
         "signature": cursor.type.spelling or cursor.displayname,
         "qualifiers": [
             value
@@ -331,11 +331,19 @@ def _function_fact(cursor: Any, location: dict[str, Any]) -> dict[str, Any]:
                 ("const", getattr(cursor, "is_const_method", lambda: False)()),
                 ("static", getattr(cursor, "is_static_method", lambda: False)()),
                 ("virtual", getattr(cursor, "is_virtual_method", lambda: False)()),
-                ("pure_virtual", getattr(cursor, "is_pure_virtual_method", lambda: False)()),
+                (
+                    "pure_virtual",
+                    getattr(cursor, "is_pure_virtual_method", lambda: False)(),
+                ),
             )
             if present
         ],
         "role": "definition" if cursor.is_definition() else "declaration",
+        "linkage": (
+            "internal"
+            if cursor.linkage.name in {"INTERNAL", "NO_LINKAGE"}
+            else "external"
+        ),
         "file": location["file"],
         **extent,
     }
@@ -357,6 +365,16 @@ def _type_fact(cursor: Any, location: dict[str, Any]) -> dict[str, Any]:
         for child in children
         if child.kind.name == "FIELD_DECL"
     ]
+    methods = [
+        {
+            "name": child.spelling,
+            "signature": child.type.spelling or child.displayname,
+            "role": "definition" if child.is_definition() else "declaration",
+            **_extent_location(child),
+        }
+        for child in children
+        if child.kind.name in _FUNCTION_KINDS and child.spelling
+    ]
     return {
         "usr": cursor.get_usr() or _qualified_name(cursor),
         "kind": _TYPE_KINDS[cursor.kind.name],
@@ -367,6 +385,7 @@ def _type_fact(cursor: Any, location: dict[str, Any]) -> dict[str, Any]:
         "role": "definition" if cursor.is_definition() else "declaration",
         "base_types": bases,
         "fields": fields,
+        "methods": methods,
         "scoped": bool(
             cursor.kind.name == "ENUM_DECL"
             and getattr(cursor, "is_scoped_enum", lambda: False)()
@@ -379,10 +398,16 @@ def _type_fact(cursor: Any, location: dict[str, Any]) -> dict[str, Any]:
 def _reference_facts(
     function: Any,
     unit_keys: set[str],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+]:
     symbols: list[dict[str, Any]] = []
     calls: list[dict[str, Any]] = []
     controls: list[dict[str, Any]] = []
+    call_details: list[dict[str, Any]] = []
     stack: list[tuple[Any, str | None, bool]] = [
         (child, function.kind.name, False) for child in function.get_children()
     ]
@@ -429,8 +454,27 @@ def _reference_facts(
             target = cursor.referenced
             source_path = Path(cursor.location.file.name).resolve()
             callee = _call_spelling(cursor, source_path)
-            calls.append(
-                {"callee": callee, "location": {"line": location["line"]}}
+            calls.append({"callee": callee, "location": {"line": location["line"]}})
+            call_details.append(
+                {
+                    "callee": callee,
+                    "expression": _source_slice(
+                        source_path,
+                        int(cursor.extent.start.offset),
+                        int(cursor.extent.end.offset),
+                    ).strip(),
+                    "arguments": [
+                        _source_slice(
+                            source_path,
+                            int(argument.extent.start.offset),
+                            int(argument.extent.end.offset),
+                        ).strip()
+                        for argument in (cursor.get_arguments() or [])
+                    ],
+                    "target_name": target.spelling if target is not None else None,
+                    "target_owner": _owner(target) if target is not None else None,
+                    "line": location["line"],
+                }
             )
             if target is None or target.kind.name not in _FUNCTION_KINDS:
                 if callee:
@@ -481,9 +525,7 @@ def _reference_facts(
                 owner = _owner(target)
                 item = {
                     "kind": (
-                        "callback_target"
-                        if callback_context
-                        else "function_address"
+                        "callback_target" if callback_context else "function_address"
                     ),
                     "spelling": _qualified_name(target),
                     "line": location["line"],
@@ -500,16 +542,31 @@ def _reference_facts(
         ): item
         for item in symbols
     }
-    unique_calls = {
-        (item["callee"], item["location"]["line"]): item for item in calls
-    }
+    unique_calls = {(item["callee"], item["location"]["line"]): item for item in calls}
     unique_controls = {
         (item["kind"], item["location"]["line"]): item for item in controls
     }
+    unique_call_details = {
+        (item["callee"], item["line"], item["expression"]): item
+        for item in call_details
+    }
     return (
-        sorted(unique_symbols.values(), key=lambda item: (item["line"], item["kind"], item["spelling"])),
-        sorted(unique_calls.values(), key=lambda item: (item["location"]["line"], item["callee"])),
-        sorted(unique_controls.values(), key=lambda item: (item["location"]["line"], item["kind"])),
+        sorted(
+            unique_symbols.values(),
+            key=lambda item: (item["line"], item["kind"], item["spelling"]),
+        ),
+        sorted(
+            unique_calls.values(),
+            key=lambda item: (item["location"]["line"], item["callee"]),
+        ),
+        sorted(
+            unique_controls.values(),
+            key=lambda item: (item["location"]["line"], item["kind"]),
+        ),
+        sorted(
+            unique_call_details.values(),
+            key=lambda item: (item["line"], item["callee"], item["expression"]),
+        ),
     )
 
 
@@ -581,17 +638,19 @@ def load_clang_unit(
             seen_functions.add(key)
             functions.append(item)
             if item["role"] == "definition":
-                symbols, calls, controls = _reference_facts(cursor, unit_keys)
+                symbols, calls, controls, call_details = _reference_facts(
+                    cursor, unit_keys
+                )
                 references[item["usr"]] = {
                     "external_symbols": symbols,
                     "calls": calls,
                     "controls": controls,
+                    "call_details": call_details,
                 }
         if (
             cursor.kind.name == "VAR_DECL"
             and cursor.spelling
-            and cursor.semantic_parent.kind.name
-            in {"TRANSLATION_UNIT", "NAMESPACE"}
+            and cursor.semantic_parent.kind.name in {"TRANSLATION_UNIT", "NAMESPACE"}
         ):
             variables.append(
                 {
@@ -599,11 +658,7 @@ def load_clang_unit(
                     "name": cursor.spelling,
                     "qualified_name": _qualified_name(cursor),
                     "type_expression": cursor.type.spelling,
-                    "role": (
-                        "definition"
-                        if cursor.is_definition()
-                        else "declaration"
-                    ),
+                    "role": ("definition" if cursor.is_definition() else "declaration"),
                     "linkage": (
                         "internal"
                         if cursor.linkage.name in {"INTERNAL", "NO_LINKAGE"}
@@ -615,21 +670,40 @@ def load_clang_unit(
             )
 
     includes: list[dict[str, Any]] = []
-    for inclusion in translation_unit.get_includes():
-        source = inclusion.source
-        location = inclusion.location
-        if source is None or location.file is None:
+    macros: list[dict[str, Any]] = []
+    for cursor in translation_unit.cursor.get_children():
+        location = _cursor_location(cursor)
+        if location is None or location["file"] not in unit_keys:
             continue
-        source_key = _location_key(source.name)
-        if source_key not in unit_keys:
-            continue
-        includes.append(
-            {
-                "source_file": source_key,
-                "included_file": _location_key(inclusion.include.name),
-                "line": int(location.line),
-            }
-        )
+        tokens = [token.spelling for token in cursor.get_tokens()]
+        if cursor.kind.name == "INCLUSION_DIRECTIVE":
+            spelling = cursor.spelling
+            included = cursor.get_included_file()
+            includes.append(
+                {
+                    "source_file": location["file"],
+                    "included_file": (
+                        _location_key(included.name) if included is not None else None
+                    ),
+                    "spelling": spelling.replace("\\", "/"),
+                    "syntax": (
+                        "angle"
+                        if any(token.startswith("<") for token in tokens)
+                        else "quote"
+                    ),
+                    "line": int(location["line"]),
+                }
+            )
+        elif cursor.kind.name == "MACRO_INSTANTIATION":
+            macros.append(
+                {
+                    "name": cursor.spelling,
+                    "tokens": tokens,
+                    "expression": "".join(tokens),
+                    "file": location["file"],
+                    **_extent_location(cursor),
+                }
+            )
 
     diagnostics = [
         {
@@ -644,10 +718,38 @@ def load_clang_unit(
         }
         for item in translation_unit.diagnostics
     ]
-    types.sort(key=lambda item: (item["file"], item["line"], item["qualified_name"], item["role"]))
-    functions.sort(key=lambda item: (item["file"], item["line"], item["qualified_name"], item["role"]))
-    variables.sort(key=lambda item: (item["file"], item["line"], item["qualified_name"], item["role"]))
-    includes.sort(key=lambda item: (item["source_file"], item["line"], item["included_file"]))
+    types.sort(
+        key=lambda item: (
+            item["file"],
+            item["line"],
+            item["qualified_name"],
+            item["role"],
+        )
+    )
+    functions.sort(
+        key=lambda item: (
+            item["file"],
+            item["line"],
+            item["qualified_name"],
+            item["role"],
+        )
+    )
+    variables.sort(
+        key=lambda item: (
+            item["file"],
+            item["line"],
+            item["qualified_name"],
+            item["role"],
+        )
+    )
+    includes.sort(
+        key=lambda item: (
+            item["source_file"],
+            item["line"],
+            str(item["included_file"] or ""),
+        )
+    )
+    macros.sort(key=lambda item: (item["file"], item["line"], item["name"]))
     return {
         "engine": ENGINE,
         "version": clang_version(),
@@ -660,6 +762,7 @@ def load_clang_unit(
         "variables": variables,
         "references": references,
         "includes": includes,
+        "macros": macros,
         "diagnostics": diagnostics,
         "diagnostic_error_count": sum(item["severity"] >= 3 for item in diagnostics),
     }
@@ -668,7 +771,8 @@ def load_clang_unit(
 def syntax_projection(model: dict[str, Any], path: Path) -> dict[str, Any]:
     key = _normal_key(path)
     types = [
-        item for item in model["types"]
+        item
+        for item in model["types"]
         if item["file"] == key and item["role"] == "definition"
     ]
     functions = [item for item in model["functions"] if item["file"] == key]
@@ -715,7 +819,9 @@ def syntax_projection(model: dict[str, Any], path: Path) -> dict[str, Any]:
                 "has_body": item["role"] == "definition",
                 "location": {"line": item["line"]},
                 "calls": model["references"].get(item["usr"], {}).get("calls", []),
-                "controls": model["references"].get(item["usr"], {}).get("controls", []),
+                "controls": model["references"]
+                .get(item["usr"], {})
+                .get("controls", []),
             }
             for item in functions
         ],

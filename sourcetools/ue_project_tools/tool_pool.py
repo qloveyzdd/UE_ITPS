@@ -47,6 +47,8 @@ _TOOLS: tuple[dict[str, Any], ...] = (
         "capabilities": [
             "module_reconciliation",
             "module_dependencies",
+            "csharp_ast",
+            "cxx_ast",
             "cycle_detection",
         ],
     },
@@ -115,14 +117,14 @@ _TOOLS: tuple[dict[str, Any], ...] = (
         "category": "module",
         "entrypoint": "sourcetools/ue_inspect_module_entry.py",
         "inputs": ["rules"],
-        "capabilities": ["module_entrypoint", "registration_macros"],
+        "capabilities": ["module_entrypoint", "registration_macros", "cxx_ast"],
     },
     {
         "name": "ue_list_cxx_includes",
         "category": "source",
         "entrypoint": "sourcetools/ue_list_cxx_includes.py",
         "inputs": ["source"],
-        "capabilities": ["include_provenance", "preprocessor_conditions", "cxx_ast"],
+        "capabilities": ["include_provenance", "cxx_ast"],
     },
     {
         "name": "ue_list_cxx_types",

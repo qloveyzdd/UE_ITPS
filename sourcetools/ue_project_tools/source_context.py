@@ -9,20 +9,13 @@ from .descriptor import resolve_internal_directories
 from .discovery import find_nearest_uproject
 from .engine import engine_resolution_status, resolve_engine
 from .source_includes import (
-    extract_includes,
+    include_owner,
     module_records,
     owner_for_path,
     public_owner,
     resolve_include,
     rooted_path,
 )
-from .source_parser import parse_cpp_file
-from .source_namespaces import (
-    namespace_at,
-    observed_namespace_names,
-    resolve_observed_namespace,
-)
-from .source_tokens import delimiter_problems, lex_source
 
 
 _CPP_SUFFIXES = {".cpp", ".cc"}
@@ -53,13 +46,11 @@ def _source_unit_kind(path: Path) -> str:
 
 
 def _automatic_companions(
-    source: Path,
-    source_owner: dict[str, Any] | None,
+    source: Path, source_owner: dict[str, Any] | None
 ) -> list[Path]:
-    source_suffix = source.suffix.casefold()
     companion_suffixes = (
         _CPP_SUFFIXES
-        if source_suffix in _HEADER_SUFFIXES
+        if source.suffix.casefold() in _HEADER_SUFFIXES
         else _HEADER_SUFFIXES
     )
     candidate_bases = [source.parent / source.stem]
@@ -74,8 +65,8 @@ def _automatic_companions(
             tail = relative.parts[1:]
             if first == "private":
                 candidate_bases.extend(
-                    module_root / public_dir / Path(*tail).with_suffix("")
-                    for public_dir in ("Public", "Classes")
+                    module_root / directory / Path(*tail).with_suffix("")
+                    for directory in ("Public", "Classes")
                 )
             elif first in {"public", "classes"}:
                 candidate_bases.append(
@@ -90,221 +81,55 @@ def _automatic_companions(
     return sorted(candidates, key=lambda path: normalized(path).casefold())
 
 
-def _lightweight_source(path: Path) -> dict[str, Any]:
-    text = path.read_text(encoding="utf-8-sig", errors="replace")
-    tokens = lex_source(text)
-    problems = delimiter_problems(tokens)
-    return {
-        "path": normalized(path),
-        "text": text,
-        "tokens": tokens,
-        "problems": problems,
-    }
-
-
-def _parse_source_pair(
-    selected_source: Path | None,
-    selected_header: Path | None,
-    *,
-    load_cpp_analysis: bool,
-) -> list[tuple[Path, dict[str, Any]]]:
-    parsed_files: list[tuple[Path, dict[str, Any]]] = []
-    for path in (selected_source, selected_header):
-        if path is None:
-            continue
-        parsed = (
-            parse_cpp_file(path)
-            if load_cpp_analysis
-            else _lightweight_source(path)
-        )
-        parsed_files.append((path, parsed))
-    if load_cpp_analysis:
-        _classify_namespace_qualified_definitions(parsed_files)
-    return parsed_files
-
-
-def _classify_namespace_qualified_definitions(
-    parsed_files: list[tuple[Path, dict[str, Any]]],
-) -> None:
-    known_namespaces = {
-        namespace
-        for _path, parsed in parsed_files
-        for namespace in observed_namespace_names(
-            parsed["namespace_scopes"]
-        )
-    }
-    for _path, parsed in parsed_files:
-        member_definitions: list[dict[str, Any]] = []
-        for definition in parsed["external_definitions"]:
-            qualifier = str(definition["qualifier"])
-            namespace = resolve_observed_namespace(
-                qualifier,
-                namespace_at(
-                    parsed["namespace_scopes"],
-                    int(definition["_token_index"]),
-                ),
-                known_namespaces,
-            )
-            if namespace is None:
-                member_definitions.append(definition)
-                continue
-            parsed["free_functions"].append(
-                {
-                    "name": definition["name"],
-                    "parameters": definition["parameters"],
-                    "signature": definition["signature"],
-                    "location": definition["location"],
-                    "body_range": definition["body_range"],
-                    "_token_index": definition["_token_index"],
-                    "_name_index": definition["_name_index"],
-                    "_explicit_namespace": namespace,
-                }
-            )
-        parsed["external_definitions"] = member_definitions
-        parsed["free_functions"].sort(
-            key=lambda item: int(item["_token_index"])
-        )
-
-
-def _collect_include_facts(
-    parsed_files: list[tuple[Path, dict[str, Any]]],
+def _public_include(
+    include: dict[str, Any],
+    including_file: Path,
     records: list[dict[str, Any]],
     project_root: Path,
     engine_root: Path | None,
-    header_locations: list[dict[str, Any]],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    includes: list[dict[str, Any]] = []
-    problems: list[dict[str, Any]] = []
-    messages = {
-        "ambiguous": "Include resolved to multiple filesystem candidates",
-        "not_found": "Include could not be located in known source roots",
-        "macro_unresolved": "Include macro could not be resolved statically",
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    spelling = str(include["spelling"])
+    source_include = {
+        "spelling": spelling,
+        "syntax": include.get("syntax", "quote"),
     }
-    retained_unresolved = {
-        "generated_header",
-        "generated_source",
-        "system_or_sdk_unresolved",
+    if spelling.casefold().endswith(".generated.h"):
+        resolution: dict[str, Any] = {"status": "generated_header"}
+    elif include.get("included_file"):
+        included_path = Path(str(include["included_file"])).resolve()
+        resolution = {
+            "status": "resolved",
+            "location": rooted_path(included_path, project_root, engine_root),
+            "owner": include_owner(owner_for_path(included_path, records)),
+            "method": ["clang-inclusion-directive"],
+        }
+    else:
+        resolution = resolve_include(
+            source_include, including_file, records, project_root, engine_root
+        )
+    fact = {
+        "spelling": spelling,
+        "conditions": [],
+        "evidence": {
+            "unit": _source_unit_kind(including_file),
+            "line": int(include["line"]),
+        },
+        "resolution": resolution,
     }
-    for path, parsed in parsed_files:
-        unit = _source_unit_kind(path)
-        for include in extract_includes(str(parsed["text"])):
-            resolution = resolve_include(
-                include,
-                path,
-                records,
-                project_root,
-                engine_root,
-            )
-            resolved_locations = [
-                *(
-                    [resolution["location"]]
-                    if "location" in resolution
-                    else []
-                ),
-                *[
-                    candidate["location"]
-                    for candidate in resolution.get("candidates", [])
-                ],
-            ]
-            if any(
-                location in header_locations
-                for location in resolved_locations
-            ):
-                continue
-
-            fact = {
-                "spelling": include["spelling"],
-                "conditions": include["conditions"],
-                "evidence": {
-                    "unit": unit,
-                    "line": int(include["line"]),
-                },
-                "resolution": resolution,
-            }
-            status = str(resolution["status"])
-            if status == "resolved":
-                fact["resolution"] = {
-                    key: value
-                    for key, value in resolution.items()
-                    if key != "status"
-                }
-                includes.append(fact)
-            elif status in retained_unresolved:
-                includes.append(fact)
-            else:
-                problems.append(
-                    {
-                        "severity": "warning",
-                        "code": (
-                            f"source-include-{status.replace('_', '-')}"
-                        ),
-                        "include": fact,
-                        "message": messages.get(
-                            status,
-                            "Include provenance could not be resolved",
-                        ),
-                    }
-                )
-    return includes, problems
-
-
-def _source_context_problems(
-    engine_result: dict[str, Any],
-    source_owner: dict[str, Any] | None,
-    source: Path,
-    source_is_header: bool,
-    companion_candidates: list[Path],
-    parsed_files: list[tuple[Path, dict[str, Any]]],
-    project_root: Path,
-    engine_root: Path | None,
-) -> list[dict[str, Any]]:
-    problems: list[dict[str, Any]] = []
-    if engine_resolution_status(engine_result) != "resolved":
-        problems.append(
-            {
-                "severity": "warning",
-                "code": "source-unit-engine-unresolved",
-                "message": (
-                    "Engine provenance could not be resolved; project source "
-                    "facts remain available but Engine ownership may be "
-                    "incomplete"
-                ),
-            }
-        )
-    if source_owner is None:
-        problems.append(
-            {
-                "severity": "warning",
-                "code": "source-unit-owner-unresolved",
-                "source": rooted_path(source, project_root, engine_root),
-                "message": "No enclosing Build.cs source boundary was found",
-            }
-        )
-    if len(companion_candidates) > 1:
-        companion_kind = "source" if source_is_header else "header"
-        problems.append(
-            {
-                "severity": "warning",
-                "code": f"source-unit-{companion_kind}-ambiguous",
-                "candidates": [
-                    rooted_path(candidate, project_root, engine_root)
-                    for candidate in companion_candidates
-                ],
-                "message": (
-                    "Multiple automatically derived companion "
-                    f"{companion_kind} files were found"
-                ),
-            }
-        )
-    for path, parsed in parsed_files:
-        problems.extend(
-            {
-                **problem,
-                "source": rooted_path(path, project_root, engine_root),
-            }
-            for problem in parsed["problems"]
-        )
-    return problems
+    status = str(resolution["status"])
+    if status == "resolved":
+        fact["resolution"] = {
+            key: value for key, value in resolution.items() if key != "status"
+        }
+        return fact, None
+    if status in {"generated_header", "generated_source", "system_or_sdk_unresolved"}:
+        return fact, None
+    return None, {
+        "severity": "warning",
+        "code": f"source-include-{status.replace('_', '-')}",
+        "include": fact,
+        "message": "Include provenance could not be resolved from the Clang translation unit",
+    }
 
 
 def load_source_context(
@@ -319,11 +144,8 @@ def load_source_context(
     project = find_nearest_uproject(source)
     descriptor = read_json(project)
     project_root = project.parent.resolve()
-
     engine_result = resolve_engine(
-        project,
-        str(descriptor.get("EngineAssociation") or ""),
-        engine_override,
+        project, str(descriptor.get("EngineAssociation") or ""), engine_override
     )
     engine_status = engine_resolution_status(engine_result)
     engine_root = (
@@ -359,51 +181,57 @@ def load_source_context(
     source_is_header = source.suffix.casefold() in _HEADER_SUFFIXES
     selected_source = selected_companion if source_is_header else source
     selected_header = source if source_is_header else selected_companion
-    header_candidates = (
-        [source] if source_is_header else companion_candidates
-    )
-    header_locations = [
-        rooted_path(candidate, project_root, engine_root)
-        for candidate in header_candidates
-    ]
-    parsed_files = _parse_source_pair(
-        selected_source,
-        selected_header,
-        load_cpp_analysis=load_cpp_analysis,
-    )
     unit_files = [path for path in (selected_source, selected_header) if path]
     anchor = selected_source or selected_header
     if anchor is None:
         raise ValueError(f"No C++ source unit could be selected for: {source}")
     clang_model = load_clang_unit(
-        anchor,
-        unit_files,
-        project_root,
-        compilation_database,
+        anchor, unit_files, project_root, compilation_database
     )
-    for path, parsed in parsed_files:
-        parsed["syntax_tree"] = syntax_projection(clang_model, path)
-    includes, include_problems = (
-        _collect_include_facts(
-            parsed_files,
-            records,
-            project_root,
-            engine_root,
-            header_locations,
+    parsed_files = [
+        (
+            path,
+            {
+                "path": normalized(path),
+                "text": path.read_text(encoding="utf-8-sig", errors="replace"),
+                "problems": [],
+                "syntax_tree": syntax_projection(clang_model, path),
+            },
         )
-        if load_includes
-        else ([], [])
-    )
-    problems = _source_context_problems(
-        engine_result,
-        source_owner,
-        source,
-        source_is_header,
-        companion_candidates,
-        parsed_files,
-        project_root,
-        engine_root,
-    )
+        for path in unit_files
+    ]
+
+    problems: list[dict[str, Any]] = []
+    if engine_status != "resolved":
+        problems.append(
+            {
+                "severity": "warning",
+                "code": "source-unit-engine-unresolved",
+                "message": "Engine provenance could not be resolved",
+            }
+        )
+    if source_owner is None:
+        problems.append(
+            {
+                "severity": "warning",
+                "code": "source-unit-owner-unresolved",
+                "source": rooted_path(source, project_root, engine_root),
+                "message": "No enclosing Build.cs source boundary was found",
+            }
+        )
+    if len(companion_candidates) > 1:
+        companion_kind = "source" if source_is_header else "header"
+        problems.append(
+            {
+                "severity": "warning",
+                "code": f"source-unit-{companion_kind}-ambiguous",
+                "candidates": [
+                    rooted_path(candidate, project_root, engine_root)
+                    for candidate in companion_candidates
+                ],
+                "message": f"Multiple automatically derived companion {companion_kind} files were found",
+            }
+        )
     if clang_model["command_source"] != "direct":
         problems.append(
             {
@@ -415,59 +243,47 @@ def load_source_context(
             }
         )
     for diagnostic in clang_model["diagnostics"]:
-        if diagnostic["severity"] < 3:
-            continue
-        problems.append(
-            {
-                "severity": "error",
-                "code": "clang-diagnostic-error",
-                "source": {
-                    "path": diagnostic["file"],
-                    "line": diagnostic["line"],
-                },
-                "message": diagnostic["message"],
-            }
-        )
+        if diagnostic["severity"] >= 3:
+            problems.append(
+                {
+                    "severity": "error",
+                    "code": "clang-diagnostic-error",
+                    "source": {
+                        "path": diagnostic["file"],
+                        "line": diagnostic["line"],
+                    },
+                    "message": diagnostic["message"],
+                }
+            )
+
+    includes: list[dict[str, Any]] = []
+    include_problems: list[dict[str, Any]] = []
+    unit_by_key = {
+        str(path.resolve()).replace("\\", "/").casefold(): path for path in unit_files
+    }
+    header_key = (
+        str(selected_header.resolve()).replace("\\", "/").casefold()
+        if selected_header is not None
+        else None
+    )
     if load_includes:
-        unit_paths = {
-            "cpp": (
-                str(selected_source.resolve()).replace("\\", "/").casefold()
-                if selected_source is not None
-                else None
-            ),
-            "header": (
-                str(selected_header.resolve()).replace("\\", "/").casefold()
-                if selected_header is not None
-                else None
-            ),
-        }
-        observed_includes = {
-            (item["source_file"], int(item["line"]))
-            for item in clang_model["includes"]
-        }
-        for include in includes:
-            resolution = include.get("resolution", {})
-            if resolution.get("status") in {
-                "generated_header",
-                "generated_source",
-                "system_or_sdk_unresolved",
-            }:
+        for include in clang_model["includes"]:
+            including_file = unit_by_key.get(include["source_file"])
+            if including_file is None:
                 continue
-            evidence = include["evidence"]
-            source_key = unit_paths.get(str(evidence["unit"]))
-            if source_key and (
-                source_key,
-                int(evidence["line"]),
-            ) not in observed_includes:
-                problems.append(
-                    {
-                        "severity": "warning",
-                        "code": "clang-direct-include-not-observed",
-                        "spelling": include["spelling"],
-                        "evidence": evidence,
-                        "message": "The lexical include was not observed in the active Clang translation unit",
-                    }
-                )
+            if include.get("included_file") == header_key:
+                continue
+            fact, problem = _public_include(
+                include,
+                including_file,
+                records,
+                project_root,
+                engine_root,
+            )
+            if fact is not None:
+                includes.append(fact)
+            if problem is not None:
+                include_problems.append(problem)
 
     source_fact = (
         rooted_path(selected_source, project_root, engine_root)
@@ -503,10 +319,7 @@ def load_source_context(
                 "command_file": clang_model["command_file"],
             },
         },
-        "source_unit": {
-            "source": source_fact,
-            "header": header_fact,
-        },
+        "source_unit": {"source": source_fact, "header": header_fact},
         "includes": includes,
         "include_problems": include_problems,
         "parsed_files": parsed_files,
@@ -535,7 +348,6 @@ def source_result(
             "parse_error_count": parsed["syntax_tree"]["parse_error_count"],
         }
         for path, parsed in loaded["parsed_files"]
-        if "syntax_tree" in parsed
     ]
     return result_document(
         schema_version,
@@ -549,9 +361,9 @@ def source_result(
         [*loaded["problems"], *(additional_problems or [])],
         responsibility=responsibility,
         boundaries=[
-            "Only the selected .h/.hpp/.cpp/.cc file and one unambiguous automatically derived companion are read as C++ source.",
+            "Only the selected source file and one unambiguous automatically derived companion are emitted.",
             *boundaries,
-            "The result does not decide required dependencies, feature meaning, implementation correctness, or build-rule changes.",
-            "Validation reports input and locally observable structural problems; ok does not prove compilation or runtime behavior.",
+            "All C++ syntax and semantic facts come from the active Clang translation unit.",
+            "Validation ok does not prove runtime behavior.",
         ],
     )

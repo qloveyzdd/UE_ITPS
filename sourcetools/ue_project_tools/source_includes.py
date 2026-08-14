@@ -2,20 +2,10 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-import re
 from typing import Any, Iterable
 
 from .code_inventory import discover_module_build_rules
 from .common import normalized
-from .source_preprocessor import preprocessor_conditions
-
-
-_INCLUDE_DIRECTIVE_PATTERN = re.compile(
-    r"^\s*#\s*include\s*(?P<operand>.+?)\s*$"
-)
-_INCLUDE_LITERAL_PATTERN = re.compile(
-    r'^(?P<open>[<"])(?P<value>[^>"]+)[>"]$'
-)
 
 
 def _is_relative_to_resolved(path: Path, root: Path) -> bool:
@@ -197,38 +187,6 @@ def rooted_path(
             "path": resolved.relative_to(resolved_root).as_posix(),
         }
     return {"root": "absolute", "path": normalized(resolved)}
-
-
-def extract_includes(text: str) -> list[dict[str, Any]]:
-    contexts = preprocessor_conditions(text)
-    includes: list[dict[str, Any]] = []
-    for line_number, line in enumerate(text.splitlines(), start=1):
-        directive = _INCLUDE_DIRECTIVE_PATTERN.match(line)
-        if not directive:
-            continue
-        operand = directive.group("operand").strip()
-        literal = _INCLUDE_LITERAL_PATTERN.match(operand)
-        spelling = literal.group("value") if literal else operand
-        syntax = (
-            "angle"
-            if literal and literal.group("open") == "<"
-            else ("quote" if literal else "macro")
-        )
-        includes.append(
-            {
-                "spelling": spelling.replace("\\", "/"),
-                "syntax": syntax,
-                "conditions": [
-                    {
-                        key: condition[key]
-                        for key in ("kind", "expression", "branch", "start_line")
-                    }
-                    for condition in contexts.get(line_number, [])
-                ],
-                "line": line_number,
-            }
-        )
-    return includes
 
 
 def resolve_include(
