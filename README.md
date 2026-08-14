@@ -135,6 +135,7 @@ Blueprint 只投影静态可达的语义节点和已实现声明；DataAsset 只
 ## 能力边界
 
 - Build.cs、Target.cs 和 C++ 结果是受支持语法范围内的静态投影，不执行源码或推断最终 UBT 配置。
+- 单个 `.uplugin` 读取器只识别顶层 `Modules` 和 `Plugins`，不扫描 `Build.cs` 或输出依赖图。
 - 唯一物理 include 候选不等于编译器实际选择；Plugin 静态依赖也不等于完整有效的构建 Profile。
 - Module 入口工具只定位 `IMPLEMENT_PRIMARY_GAME_MODULE` / `IMPLEMENT_MODULE` 所在 `.cpp` 及唯一同名 `.h`；函数流和依赖图仍是保守模型，不证明运行时行为。
 - 编译、启动、资产状态、配置合并、网络行为和目标平台行为仍须使用 Unreal 官方工具验证。

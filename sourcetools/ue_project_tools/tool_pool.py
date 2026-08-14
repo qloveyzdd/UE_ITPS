@@ -85,7 +85,7 @@ _TOOLS: tuple[dict[str, Any], ...] = (
         "inputs": ["plugin"],
         "capabilities": [
             "plugin_descriptor",
-            "module_reconciliation",
+            "module_declarations",
             "plugin_dependencies",
         ],
     },

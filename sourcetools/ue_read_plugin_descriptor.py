@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read one explicit .uplugin descriptor."""
+"""Read Modules and Plugins from one explicit .uplugin descriptor."""
 
 from pathlib import Path
 
@@ -9,15 +9,15 @@ from ue_project_tools.plugin_descriptor import read_plugin_descriptor
 
 SCHEMA_VERSION = "ue_read_plugin_descriptor"
 RESPONSIBILITY = (
-    "Read and validate modeled facts from one explicitly selected .uplugin "
-    "descriptor, including recursive Build.cs reconciliation."
+    "Read and validate the Modules and Plugins declarations from one "
+    "explicitly selected .uplugin descriptor."
 )
 
 
 def main() -> int:
     parser = cli_parser(
-        "读取单个 .uplugin 描述符。",
-        "Read one explicit .uplugin descriptor.",
+        "读取单个 .uplugin 的 Modules 和 Plugins 声明。",
+        "Read Modules and Plugins from one explicit .uplugin descriptor.",
         schema_version=SCHEMA_VERSION,
         responsibility=RESPONSIBILITY,
     )

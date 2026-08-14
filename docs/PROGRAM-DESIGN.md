@@ -73,7 +73,7 @@ schemas/
 |---|---|
 | `discovery.py`、`descriptor.py`、`engine.py` | 项目发现、描述符投影、Engine 解析 |
 | `code_inventory.py`、`project_cxx_sources.py` | Module、Target 和项目 C++ 源码清单 |
-| `plugins.py`、`plugin_descriptor.py` | Plugin 定位、静态依赖图与单个 `.uplugin` 对账 |
+| `plugins.py`、`plugin_descriptor.py` | Plugin 定位与静态依赖图、单个 `.uplugin` 的 Modules/Plugins 投影 |
 | `rule_source.py`、`cs_source.py` | ModuleRules、TargetRules 和 C# 成员投影 |
 | `module_entry*.py` | Module 注册、回调、清理和生命周期状态 |
 | `source_context.py`、`source_includes.py` | C++ 源码单元和 include 来源 |
@@ -135,7 +135,7 @@ selected .h/.hpp/.cpp/.cc
 
 1. 项目发现遇到多个 `.uproject` 时返回歧义错误。
 2. `.uproject` Plugin 声明先解析直接描述符，再将可读 `.uplugin` 声明投影为静态传递依赖图。
-3. `.uplugin` 提供 Build.cs 候选和一跳依赖图；规则与 C++ 仍由聚焦探针分析。
+3. 单个 `.uplugin` 聚焦工具只投影 Modules 和 Plugins；Build.cs、依赖图与 C++ 仍由其他聚焦探针分析。
 4. TargetRules 索引先列出函数，再由调用方选择一个函数名。
 5. C++ 类型工具先提供成员函数锚点，再由调用方选择函数名。
 6. 后续工具结果保持独立，不嵌入前一层 Schema。
@@ -200,7 +200,7 @@ limits
 - `.uproject`、`Build.version` 等通用输入使用严格 JSON。
 - 严格读取拒绝重复键、`NaN` 等非标准常量和非对象根值。
 - `.uplugin` 使用独立 Unreal JSON 读取器，允许注释和尾随逗号。
-- `.uplugin` 重复字段保留最后值，同时产生带描述符指针的 Validation 问题。
+- `.uplugin` 的 Modules/Plugins 重复字段保留最后值并产生 Validation 问题；其他顶层字段被忽略。
 
 ## 6. 项目与构建事实
 
@@ -220,7 +220,7 @@ Engine 定位成功不证明项目能够构建或运行。
 - Target 工具发现 Target.cs 位置，只报告原生 Target 证据。
 - 项目 C++ 清单按物理 Build.cs 祖先、Plugin 和可见性分组。
 - Plugin 解析只处理 `.uproject` 的直接声明和显式 Profile。
-- `.uplugin` 工具只读取选中的描述符及其 Source/Platforms 下的 Build.cs 候选。
+- 单个 `.uplugin` 工具只读取选中描述符的 Modules 和 Plugins，不扫描 Source/Platforms 或 Build.cs。
 
 物理位置和命名约定是证据，不是 UBT 有效配置结论。
 

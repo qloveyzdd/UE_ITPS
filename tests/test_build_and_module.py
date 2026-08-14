@@ -4,23 +4,29 @@ from tests.support import CliTestCase, write_text
 
 
 class BuildAndModuleTests(CliTestCase):
-    def test_plugin_descriptor_reconciles_module_and_dependency(self) -> None:
+    def test_plugin_descriptor_reports_only_modules_and_plugins(self) -> None:
         result = self.cli(
             "ue_read_plugin_descriptor.py",
             "--plugin",
             str(self.fixture.plugin),
         )
-        self.assertEqual(result["file_version"], 3)
-        self.assertEqual(result["descriptor_fields"]["FriendlyName"], "Sample Plugin")
-        self.assertEqual(result["modules"][0]["name"], "SamplePlugin")
         self.assertEqual(
-            result["modules"][0]["build_rules"]["status"],
-            "resolved",
+            list(result),
+            [
+                "schema_version",
+                "modules",
+                "plugin_dependencies",
+                "validation",
+                "limits",
+            ],
         )
+        self.assertEqual(result["modules"][0]["name"], "SamplePlugin")
+        self.assertNotIn("build_rules", result["modules"][0])
         self.assertEqual(
             result["plugin_dependencies"][0]["name"],
             "GameplayAbilities",
         )
+        self.assertNotIn("dependency_graph", result)
 
     def test_plugin_descriptor_accepts_comments_and_trailing_commas(self) -> None:
         plugin_root = self.fixture.project_root / "Plugins" / "Commented"
@@ -41,15 +47,6 @@ class BuildAndModuleTests(CliTestCase):
             }
             """,
         )
-        write_text(
-            plugin_root / "Source" / "Commented" / "Commented.Build.cs",
-            """
-            public class Commented : ModuleRules
-            {
-                public Commented(ReadOnlyTargetRules Target) : base(Target) {}
-            }
-            """,
-        )
         result = self.cli(
             "ue_read_plugin_descriptor.py",
             "--plugin",
@@ -58,13 +55,33 @@ class BuildAndModuleTests(CliTestCase):
         self.assertEqual(result["modules"][0]["name"], "Commented")
         self.assertEqual(result["validation"]["status"], "ok")
 
-    def test_plugin_descriptor_reports_duplicate_fields(self) -> None:
+    def test_plugin_descriptor_ignores_other_top_level_fields(self) -> None:
         plugin = write_text(
             self.fixture.root / "Duplicate.uplugin",
             """
             {
-              "FileVersion": 3,
+              "FileVersion": "invalid but ignored",
               "FileVersion": 4,
+              "LocalizationTargets": "invalid but ignored",
+              "Modules": []
+            }
+            """,
+        )
+        result = self.cli(
+            "ue_read_plugin_descriptor.py",
+            "--plugin",
+            str(plugin),
+        )
+        self.assertEqual(result["validation"]["status"], "ok")
+        self.assertEqual(result["modules"], [])
+        self.assertEqual(result["plugin_dependencies"], [])
+
+    def test_plugin_descriptor_reports_duplicate_modeled_fields(self) -> None:
+        plugin = write_text(
+            self.fixture.root / "Duplicate.uplugin",
+            """
+            {
+              "Modules": [],
               "Modules": []
             }
             """,

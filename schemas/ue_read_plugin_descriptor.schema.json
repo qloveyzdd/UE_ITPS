@@ -26,14 +26,8 @@
       "type": "object",
       "required": [
         "schema_version",
-        "descriptor_path",
-        "file_version",
-        "descriptor_fields",
         "modules",
         "plugin_dependencies",
-        "descriptor_top_level_fields",
-        "unmodeled_top_level_fields",
-        "dependency_graph",
         "validation",
         "limits"
       ],
@@ -41,33 +35,11 @@
         "schema_version": {
           "const": "ue_read_plugin_descriptor"
         },
-        "descriptor_path": {
-          "type": "string"
-        },
-        "file_version": {},
-        "descriptor_fields": {
-          "type": "object"
-        },
         "modules": {
           "type": "array"
         },
         "plugin_dependencies": {
           "type": "array"
-        },
-        "descriptor_top_level_fields": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "unmodeled_top_level_fields": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "dependency_graph": {
-          "type": "object"
         },
         "validation": {
           "$ref": "urn:ue-itps:schema:common#/$defs/validation"

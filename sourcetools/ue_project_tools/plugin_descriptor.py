@@ -3,9 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .code_inventory import discover_module_build_rules
-from .common import normalized, result_document
-from .dependency_graph import DependencyGraph
+from .common import result_document
 from .ue_json import read_ue_json
 
 
@@ -49,71 +47,6 @@ TARGET_CONFIGURATIONS = {
     "Development",
     "Test",
     "Shipping",
-}
-VERSE_SCOPES = {"PublicAPI", "InternalAPI", "PublicUser", "InternalUser"}
-LOCALIZATION_LOADING_POLICIES = {
-    "Never",
-    "Always",
-    "Editor",
-    "Game",
-    "PropertyNames",
-    "ToolTips",
-}
-LOCALIZATION_CONFIG_POLICIES = {"Never", "User", "Auto"}
-
-TOP_LEVEL_STRING_FIELDS = {
-    "VersionName",
-    "FriendlyName",
-    "Description",
-    "Category",
-    "CategoryPath",
-    "CreatedBy",
-    "CreatedByURL",
-    "DocsURL",
-    "MarketplaceURL",
-    "SupportURL",
-    "EngineVersion",
-    "EngineVersionRange",
-    "DeprecatedEngineVersion",
-    "EditorCustomVirtualPath",
-    "VersePath",
-}
-TOP_LEVEL_BOOL_FIELDS = {
-    "EnabledByDefault",
-    "CanContainContent",
-    "CanContainVerse",
-    "IsBetaVersion",
-    "IsExperimentalVersion",
-    "Installed",
-    "ExplicitlyLoaded",
-    "HasExplicitPlatforms",
-    "RequiresBuildPlatform",
-    "Sealed",
-    "NoCode",
-    "CanBeUsedWithUnrealHeaderTool",
-    "bIsPluginExtension",
-    "EnableSceneGraph",
-    "EnableVerseAssetReflection",
-}
-TOP_LEVEL_STRING_ARRAY_FIELDS = {
-    "SupportedTargetPlatforms",
-    "SupportedPrograms",
-}
-
-KNOWN_PLUGIN_FIELDS = {
-    "FileVersion",
-    "Version",
-    *TOP_LEVEL_STRING_FIELDS,
-    *TOP_LEVEL_BOOL_FIELDS,
-    *TOP_LEVEL_STRING_ARRAY_FIELDS,
-    "VerseScope",
-    "VerseVersion",
-    "DisallowedPlugins",
-    "Modules",
-    "Plugins",
-    "LocalizationTargets",
-    "PreBuildSteps",
-    "PostBuildSteps",
 }
 
 MODULE_STRING_ARRAY_FIELDS = {
@@ -195,18 +128,14 @@ def _validate_optional_exact_type(
     problems: list[dict[str, Any]],
     code: str,
 ) -> None:
-    if field not in value:
-        return
-    item = value[field]
-    valid = type(item) is expected_type
-    if not valid:
+    if field in value and type(value[field]) is not expected_type:
         _type_problem(
             problems,
             code=code,
             pointer=f"{pointer}/{field}",
             field=field,
             expected=expected_type.__name__,
-            value=item,
+            value=value[field],
         )
 
 
@@ -280,8 +209,7 @@ def _validate_enum(
             value=raw,
         )
         return
-    allowed_by_key = {item.casefold(): item for item in allowed}
-    if raw.casefold() not in allowed_by_key:
+    if raw.casefold() not in {item.casefold() for item in allowed}:
         problems.append(
             {
                 "severity": "error",
@@ -319,95 +247,6 @@ def _validate_enum_array(
                     "allowed_values": sorted(allowed),
                     "message": f"{field} has an unknown UE 5.6 value: {item}",
                 }
-            )
-
-
-def _validate_top_level_fields(
-    raw: dict[str, Any], problems: list[dict[str, Any]]
-) -> None:
-    for field in sorted(TOP_LEVEL_STRING_FIELDS):
-        _validate_optional_exact_type(
-            raw,
-            field,
-            str,
-            "",
-            problems,
-            "invalid-plugin-descriptor-field-type",
-        )
-    for field in sorted(TOP_LEVEL_BOOL_FIELDS):
-        _validate_optional_exact_type(
-            raw,
-            field,
-            bool,
-            "",
-            problems,
-            "invalid-plugin-descriptor-field-type",
-        )
-    for field in sorted(TOP_LEVEL_STRING_ARRAY_FIELDS):
-        _validate_string_array(
-            raw,
-            field,
-            "",
-            problems,
-            "invalid-plugin-descriptor-field-type",
-        )
-    _validate_optional_exact_type(
-        raw,
-        "Version",
-        int,
-        "",
-        problems,
-        "invalid-plugin-descriptor-field-type",
-    )
-    _validate_optional_exact_type(
-        raw,
-        "VerseVersion",
-        int,
-        "",
-        problems,
-        "invalid-plugin-descriptor-field-type",
-    )
-    if type(raw.get("VerseVersion")) is int and raw["VerseVersion"] < 0:
-        problems.append(
-            {
-                "severity": "error",
-                "code": "invalid-plugin-descriptor-field-value",
-                "descriptor_pointer": "/VerseVersion",
-                "field": "VerseVersion",
-                "value": raw["VerseVersion"],
-                "message": "VerseVersion must be a non-negative integer",
-            }
-        )
-    _validate_enum(
-        raw,
-        "VerseScope",
-        VERSE_SCOPES,
-        "",
-        problems,
-        "invalid-plugin-descriptor-field-type",
-        "invalid-plugin-descriptor-enum-value",
-    )
-    for field in ("PreBuildSteps", "PostBuildSteps"):
-        if field not in raw:
-            continue
-        steps = raw[field]
-        if not isinstance(steps, dict):
-            _type_problem(
-                problems,
-                code="invalid-plugin-descriptor-field-type",
-                pointer=f"/{field}",
-                field=field,
-                expected="object of string arrays",
-                value=steps,
-            )
-            continue
-        for platform in steps:
-            _validate_string_array(
-                steps,
-                platform,
-                f"/{field}",
-                problems,
-                "invalid-plugin-descriptor-field-type",
             )
 
 
@@ -497,12 +336,6 @@ def _module_declarations(
             or key.startswith("Blacklist")
             or key in {"SupportedTargetPlatforms", "HasExplicitPlatforms"}
         }
-        additional = {
-            key: item
-            for key, item in value.items()
-            if key not in {"Name", "Type", "LoadingPhase"}
-            and key not in restrictions
-        }
         modules.append(
             {
                 "name": value["Name"],
@@ -510,7 +343,12 @@ def _module_declarations(
                 "loading_phase": value.get("LoadingPhase", "Default"),
                 "descriptor_pointer": pointer,
                 "restrictions": restrictions,
-                "additional_fields": additional,
+                "additional_fields": {
+                    key: item
+                    for key, item in value.items()
+                    if key not in {"Name", "Type", "LoadingPhase"}
+                    and key not in restrictions
+                },
             }
         )
     return modules, problems
@@ -643,150 +481,6 @@ def _duplicate_declaration_problems(
     ]
 
 
-def _reconcile_module_build_rules(
-    descriptor_path: Path,
-    modules: list[dict[str, Any]],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    plugin_root = descriptor_path.parent
-    source_root = plugin_root / "Source"
-    search_roots = [source_root, plugin_root / "Platforms"]
-    rules_by_module, discovered_names = discover_module_build_rules(search_roots)
-    declaration_counts: dict[str, int] = {}
-    for module in modules:
-        key = str(module["name"]).casefold()
-        declaration_counts[key] = declaration_counts.get(key, 0) + 1
-
-    problems: list[dict[str, Any]] = []
-    for module in modules:
-        name = str(module["name"])
-        key = name.casefold()
-        candidates = rules_by_module.get(key, [])
-        conventional_path = normalized(
-            source_root / name / f"{name}.Build.cs"
-        ).casefold()
-        candidate_items = [
-            {
-                "path": normalized(candidate),
-                "conventional": normalized(candidate).casefold()
-                == conventional_path,
-            }
-            for candidate in candidates
-        ]
-        if declaration_counts[key] > 1:
-            status = "duplicate-declaration"
-        else:
-            status = (
-                "resolved"
-                if len(candidates) == 1
-                else ("missing" if not candidates else "ambiguous")
-            )
-            if status != "resolved":
-                problems.append(
-                    {
-                        "severity": "error",
-                        "code": f"plugin-module-build-rules-{status}",
-                        "module_name": name,
-                        "descriptor_pointer": module["descriptor_pointer"],
-                        "candidates": candidate_items,
-                        "message": (
-                            f"Plugin module {name} has {len(candidates)} "
-                            "Build.cs candidates"
-                        ),
-                    }
-                )
-        module["build_rules"] = {
-            "status": status,
-            "candidates": candidate_items,
-        }
-
-    declared_keys = set(declaration_counts)
-    unlisted = [
-        {"module_name": discovered_names[key], "path": normalized(candidate)}
-        for key in sorted(
-            set(rules_by_module) - declared_keys,
-            key=lambda item: discovered_names[item].casefold(),
-        )
-        for candidate in rules_by_module[key]
-    ]
-    for item in unlisted:
-        problems.append(
-            {
-                "severity": "error",
-                "code": "plugin-module-build-rules-unlisted",
-                **item,
-                "message": (
-                    f"Build.cs for {item['module_name']} is not declared by "
-                    "the selected .uplugin"
-                ),
-            }
-        )
-    return unlisted, problems
-
-
-def _localization_target_problems(raw: Any) -> list[dict[str, Any]]:
-    if raw is None:
-        return []
-    if not isinstance(raw, list):
-        return [
-            {
-                "severity": "error",
-                "code": "invalid-plugin-localization-targets",
-                "descriptor_pointer": "/LocalizationTargets",
-                "message": ".uplugin LocalizationTargets must be an array",
-            }
-        ]
-    problems: list[dict[str, Any]] = []
-    for index, value in enumerate(raw):
-        pointer = f"/LocalizationTargets/{index}"
-        if not isinstance(value, dict):
-            _type_problem(
-                problems,
-                code="invalid-plugin-localization-target-field-type",
-                pointer=pointer,
-                field="LocalizationTargets",
-                expected="object",
-                value=value,
-            )
-            continue
-        _validate_optional_exact_type(
-            value,
-            "Name",
-            str,
-            pointer,
-            problems,
-            "invalid-plugin-localization-target-field-type",
-        )
-        if not isinstance(value.get("Name"), str) or not value["Name"]:
-            problems.append(
-                {
-                    "severity": "error",
-                    "code": "invalid-plugin-localization-target",
-                    "descriptor_pointer": pointer + "/Name",
-                    "message": "Localization target requires a non-empty string Name",
-                }
-            )
-        _validate_enum(
-            value,
-            "LoadingPolicy",
-            LOCALIZATION_LOADING_POLICIES,
-            pointer,
-            problems,
-            "invalid-plugin-localization-target-field-type",
-            "invalid-plugin-localization-target-enum-value",
-            required=True,
-        )
-        _validate_enum(
-            value,
-            "ConfigGenerationPolicy",
-            LOCALIZATION_CONFIG_POLICIES,
-            pointer,
-            problems,
-            "invalid-plugin-localization-target-field-type",
-            "invalid-plugin-localization-target-enum-value",
-        )
-    return problems
-
-
 def _validated_plugin_path(path: Path) -> Path:
     resolved = path.resolve()
     if resolved.suffix.casefold() != ".uplugin":
@@ -804,18 +498,9 @@ def plugin_descriptor_facts(
     modules, module_problems = _module_declarations(raw.get("Modules"))
     dependencies, dependency_problems = _plugin_dependencies(raw.get("Plugins"))
     problems = [*module_problems, *dependency_problems]
-    _validate_top_level_fields(raw, problems)
-    problems.extend(_localization_target_problems(raw.get("LocalizationTargets")))
-    if type(raw.get("FileVersion")) is not int:
-        problems.append(
-            {
-                "severity": "error",
-                "code": "missing-or-invalid-plugin-file-version",
-                "descriptor_pointer": "/FileVersion",
-                "message": ".uplugin FileVersion must be an integer",
-            }
-        )
     for duplicate in duplicate_fields:
+        if duplicate["field"] not in {"Modules", "Plugins"}:
+            continue
         problems.append(
             {
                 "severity": "error",
@@ -842,85 +527,26 @@ def plugin_descriptor_facts(
             kind="plugin_dependency",
         )
     )
-    unlisted_build_rules, build_rule_problems = _reconcile_module_build_rules(
-        resolved, modules
-    )
-    problems.extend(build_rule_problems)
-    descriptor_fields = {
-        key: raw[key]
-        for key in raw
-        if key in KNOWN_PLUGIN_FIELDS
-        and key
-        not in {
-            "FileVersion",
-            "Modules",
-            "Plugins",
-            "LocalizationTargets",
-            "PreBuildSteps",
-            "PostBuildSteps",
-        }
-    }
-    facts = {
-        "descriptor_path": normalized(resolved),
-        "file_version": raw.get("FileVersion"),
-        "descriptor_fields": descriptor_fields,
+    return {
         "modules": modules,
-        "unlisted_build_rules": unlisted_build_rules,
         "plugin_dependencies": dependencies,
-    }
-    if "LocalizationTargets" in raw:
-        facts["localization_targets"] = raw["LocalizationTargets"]
-    build_steps = {
-        key: raw[key]
-        for key in ("PreBuildSteps", "PostBuildSteps")
-        if key in raw
-    }
-    if build_steps:
-        facts["build_steps"] = build_steps
-    facts["descriptor_top_level_fields"] = sorted(raw)
-    facts["unmodeled_top_level_fields"] = sorted(
-        set(raw) - KNOWN_PLUGIN_FIELDS
-    )
-    return facts, problems
+    }, problems
 
 
 def read_plugin_descriptor(path: Path) -> dict[str, Any]:
     facts, problems = plugin_descriptor_facts(path)
-    public_facts = {
-        key: value
-        for key, value in facts.items()
-        if key != "unlisted_build_rules"
-    }
-    graph = DependencyGraph()
-    descriptor_name = path.stem
-    graph.add_node(descriptor_name, kind="plugin", file=normalized(path))
-    for module in public_facts.get("modules", []):
-        name = module.get("name") if isinstance(module, dict) else None
-        if not isinstance(name, str):
-            continue
-        graph.add_node(name, kind="module", file=normalized(path))
-        graph.add_edge(descriptor_name, name, kind="contains_module", file=normalized(path))
-    for dependency in public_facts.get("plugin_dependencies", []):
-        name = dependency.get("name") if isinstance(dependency, dict) else None
-        if not isinstance(name, str):
-            continue
-        graph.add_node(name, kind="plugin", file="")
-        graph.add_edge(descriptor_name, name, kind="plugin_reference", file=normalized(path))
-    public_facts["dependency_graph"] = graph.document()
     return result_document(
         "ue_read_plugin_descriptor",
-        public_facts,
+        facts,
         problems,
         responsibility=(
-            "Read and validate modeled facts from one explicitly selected "
-            ".uplugin descriptor, including recursive Build.cs reconciliation."
+            "Read and validate the Modules and Plugins declarations from one "
+            "explicitly selected .uplugin descriptor."
         ),
         boundaries=[
-            "Only the selected descriptor and its Source and Platforms directories are read.",
-            "Build.cs files are discovered recursively by basename; the conventional Source/<Name>/<Name>.Build.cs path is evidence, not a requirement.",
-            "Plugin and contained Module declarations are projected into a one-descriptor dependency graph; dependency descriptors are not traversed.",
-            "Build.cs and C++ bodies are not expanded by this tool.",
-            "Enum validation follows the UE 5.6.1 UnrealBuildTool source model.",
-            "Unmodeled fields are preserved as an inventory and are not declared invalid.",
+            "Only the selected descriptor's Modules and Plugins fields are modeled.",
+            "All other top-level descriptor fields are ignored without validation.",
+            "Build.cs files, dependency descriptors, and C++ bodies are not read.",
+            "Module and Plugin enum validation follows the UE 5.6.1 UnrealBuildTool source model.",
         ],
     )

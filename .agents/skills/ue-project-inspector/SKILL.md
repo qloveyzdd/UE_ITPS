@@ -53,8 +53,8 @@ When the user needs to modify or understand one plugin, drill down instead of me
 
 1. Read the `.uproject` declaration with `ue_read_project_descriptor.py`.
 2. Locate its direct plugin descriptors with `ue_resolve_plugins.py`.
-3. Select one resolved `.uplugin` and read it with `ue_read_plugin_descriptor.py`.
-4. Select one resolved Build.cs path from the descriptor result and run only the source tool needed next: `ue_inspect_module_rules.py` for direct module dependencies or `ue_inspect_module_entry.py` for registration source and header evidence.
+3. Select one resolved `.uplugin` and read its direct `Modules` and `Plugins` declarations with `ue_read_plugin_descriptor.py`.
+4. If Build.cs evidence is needed, locate it independently with `ue_list_project_cxx_sources.py`, then run only the source tool needed next: `ue_inspect_module_rules.py` for direct module dependencies or `ue_inspect_module_entry.py` for registration source and header evidence.
 
 When the user or model explicitly selects one `.h/.hpp/.cpp/.cc`, run only the smallest source fact tool that answers the request. Pass only that file; every source tool discovers the nearest unique `.uproject` from the selected file's ancestor directories. C++ Source tools require the active build Profile's `compile_commands.json`; pass `--compile-database` when it is not in a supported project-local discovery path. Missing databases, missing Module commands, and Clang diagnostic errors are blocking evidence and never trigger a lexical fallback. Report missing or ambiguous project discovery instead of choosing for the model. Source tools derive an opposite-kind, same-name companion from the selected file's directory and conventional module `Private` to `Public` or `Classes` mappings in either direction. A source entry searches `.h/.hpp`; a header entry searches `.cpp/.cc`. One candidate is scanned with the selected file; zero candidates leave the corresponding `source_unit` field null; multiple candidates leave it null and produce a validation warning.
 
@@ -191,7 +191,7 @@ Treat `ue-itps.cs-function.v1` as a lexical projection of one explicitly selecte
 - `EngineAssociation` remains an association key for tools that resolve Engine identity. The project descriptor reader ignores it and requires an explicit trusted `Build.version` path.
 - `.uproject` declares Modules and direct Plugin references, but the project descriptor result intentionally reports only Module names, Plugin enabled states, and explicit non-empty Target allow lists. Filesystem checks use same-named Build.cs and .uplugin evidence without returning their paths, and the result does not declare `Target.cs` or a dependency graph.
 - Direct Plugin resolution is not the effective `.uplugin` dependency closure.
-- The single-plugin descriptor tool reports direct Plugin dependency declarations without locating or traversing their descriptors; it recursively reconciles declared Modules with Build.cs files under the selected plugin's Source and Platforms directories.
+- The single-plugin descriptor tool reports only direct Module and Plugin declarations. It ignores every other top-level `.uplugin` field and does not read Build.cs files or dependency descriptors.
 - Build.cs dependency arrays report direct literal declarations only. The generic C# function tool reports lexical external references, while the TargetRules index omits function bodies; none is an effective UBT result.
 - Module entry scans only the two supported registration macros in `.cpp` files and derives an optional same-named `.h` companion from filesystem conventions.
 - Path v1 derives the project root from the selected `.uproject` and reports conventional path roles, filesystem state (`missing | file | directory | other`), and unclassified root directories.
