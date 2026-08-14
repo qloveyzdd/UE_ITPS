@@ -15,6 +15,12 @@ class EndToEndWorkflowTests(CliTestCase):
                 "--search-root",
                 str(self.fixture.project_root),
             ),
+            "ue_find_build_descriptor.py": (
+                "--project",
+                str(self.fixture.project),
+                "--modulename",
+                "SampleGame",
+            ),
             "ue_read_project_descriptor.py": (
                 "--project",
                 str(self.fixture.project),

@@ -27,6 +27,7 @@ if str(TOOLS_ROOT) not in sys.path:
 PUBLIC_CLIS = {
     "ue_list_tools.py": "ue_list_tools",
     "ue_find_projects.py": "ue_find_projects",
+    "ue_find_build_descriptor.py": "ue_find_build_descriptor",
     "ue_read_project_descriptor.py": "ue_read_project_descriptor",
     "ue_resolve_engine.py": "ue_resolve_engine",
     "ue_inspect_modules.py": "ue_inspect_modules",
@@ -49,6 +50,7 @@ PUBLIC_CLIS = {
 }
 
 REQUIRED_PATH_ARGUMENTS = {
+    "ue_find_build_descriptor.py": "--project",
     "ue_read_project_descriptor.py": "--project",
     "ue_resolve_engine.py": "--project",
     "ue_inspect_modules.py": "--project",

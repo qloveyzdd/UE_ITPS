@@ -71,6 +71,7 @@ class CliContractTests(CliTestCase):
         missing = self.fixture.root / "Missing.input"
         for script, argument in REQUIRED_PATH_ARGUMENTS.items():
             extras = {
+                "ue_find_build_descriptor.py": ("--modulename", "Missing"),
                 "ue_read_project_descriptor.py": (
                     "--engine-build-version",
                     str(

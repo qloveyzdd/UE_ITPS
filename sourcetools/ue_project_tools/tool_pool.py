@@ -14,6 +14,13 @@ _TOOLS: tuple[dict[str, Any], ...] = (
         "capabilities": ["project_discovery"],
     },
     {
+        "name": "ue_find_build_descriptor",
+        "category": "build",
+        "entrypoint": "sourcetools/ue_find_build_descriptor.py",
+        "inputs": ["project", "modulename_or_pluginname", "engine_build_version"],
+        "capabilities": ["build_descriptor_discovery"],
+    },
+    {
         "name": "ue_read_project_descriptor",
         "category": "project",
         "entrypoint": "sourcetools/ue_read_project_descriptor.py",

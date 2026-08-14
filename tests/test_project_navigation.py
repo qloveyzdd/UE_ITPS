@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import patch
 
 from tests.support import CliTestCase, write_json, write_text
@@ -8,6 +7,154 @@ from ue_project_tools.engine import engine_resolution_status, resolve_engine
 
 
 class ProjectNavigationTests(CliTestCase):
+    def test_build_descriptor_finds_project_module_by_name(self) -> None:
+        result = self.cli(
+            "ue_find_build_descriptor.py",
+            "--project",
+            str(self.fixture.project),
+            "--modulename",
+            "SampleGame",
+        )
+        self.assertEqual(
+            result["candidates"],
+            [self.fixture.module_rules.resolve().as_posix()],
+        )
+
+    def test_build_descriptor_finds_project_plugin_case_insensitively(self) -> None:
+        result = self.cli(
+            "ue_find_build_descriptor.py",
+            "--project",
+            str(self.fixture.project),
+            "--pluginname",
+            "sampleplugin",
+        )
+        self.assertEqual(
+            result["candidates"][0],
+            self.fixture.plugin.resolve().as_posix(),
+        )
+
+    def test_build_descriptor_does_not_search_engine_modules(self) -> None:
+        result = self.cli(
+            "ue_find_build_descriptor.py",
+            "--project",
+            str(self.fixture.project),
+            "--modulename",
+            "Core",
+        )
+        self.assertEqual(result["candidates"], [])
+        self.assertEqual(result["validation"]["status"], "warning")
+        self.assertIn(
+            "--engine-build-version FILE",
+            result["validation"]["problems"][0]["message"],
+        )
+
+    def test_build_descriptor_searches_explicit_engine_build_version(self) -> None:
+        result = self.cli(
+            "ue_find_build_descriptor.py",
+            "--project",
+            str(self.fixture.project),
+            "--modulename",
+            "Core",
+            "--engine-build-version",
+            str(
+                self.fixture.engine_root
+                / "Engine"
+                / "Build"
+                / "Build.version"
+            ),
+        )
+        self.assertEqual(len(result["candidates"]), 1)
+        self.assertTrue(result["candidates"][0].endswith("/Core/Core.Build.cs"))
+
+    def test_build_descriptor_reports_missing_name(self) -> None:
+        result = self.cli(
+            "ue_find_build_descriptor.py",
+            "--project",
+            str(self.fixture.project),
+            "--pluginname",
+            "MissingPlugin",
+        )
+        self.assertEqual(result["candidates"], [])
+        self.assertEqual(
+            result["validation"]["problems"][0]["code"],
+            "build-descriptor-not-found-in-project",
+        )
+
+    def test_build_descriptor_reports_missing_name_after_engine_search(self) -> None:
+        result = self.cli(
+            "ue_find_build_descriptor.py",
+            "--project",
+            str(self.fixture.project),
+            "--pluginname",
+            "MissingPlugin",
+            "--engine-build-version",
+            str(
+                self.fixture.engine_root
+                / "Engine"
+                / "Build"
+                / "Build.version"
+            ),
+            expected_code=1,
+        )
+        self.assertEqual(result["candidates"], [])
+        self.assertEqual(
+            result["validation"]["problems"][0]["code"],
+            "build-descriptor-not-found",
+        )
+
+    def test_build_descriptor_rejects_missing_engine_build_version(self) -> None:
+        result = self.cli(
+            "ue_find_build_descriptor.py",
+            "--project",
+            str(self.fixture.project),
+            "--modulename",
+            "Core",
+            "--engine-build-version",
+            str(self.fixture.root / "Missing" / "Build.version"),
+            expected_code=2,
+        )
+        self.assert_request_failure(result, kind="input")
+
+    def test_build_descriptor_reports_ambiguous_name(self) -> None:
+        write_text(
+            self.fixture.project_root / "Source" / "Core" / "Core.Build.cs",
+            "public class Core : ModuleRules {}",
+        )
+        write_text(
+            self.fixture.project_root
+            / "Plugins"
+            / "DuplicateCore"
+            / "Source"
+            / "Core"
+            / "Core.Build.cs",
+            "public class Core : ModuleRules {}",
+        )
+        result = self.cli(
+            "ue_find_build_descriptor.py",
+            "--project",
+            str(self.fixture.project),
+            "--modulename",
+            "Core",
+            expected_code=1,
+        )
+        self.assertEqual(len(result["candidates"]), 2)
+        self.assertTrue(
+            all(path.endswith("/Core/Core.Build.cs") for path in result["candidates"])
+        )
+
+    def test_build_descriptor_requires_exactly_one_name_type(self) -> None:
+        result = self.cli(
+            "ue_find_build_descriptor.py",
+            "--project",
+            str(self.fixture.project),
+            "--modulename",
+            "SampleGame",
+            "--pluginname",
+            "SamplePlugin",
+            expected_code=2,
+        )
+        self.assert_request_failure(result, kind="argument")
+
     def test_discovery_selects_the_only_project(self) -> None:
         result = self.cli(
             "ue_find_projects.py",

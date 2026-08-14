@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:schema:ue_find_build_descriptor",
+  "title": "ue_find_build_descriptor.py result",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/success"
+    },
+    {
+      "allOf": [
+        {
+          "$ref": "urn:ue-itps:schema:common#/$defs/errorDocument"
+        },
+        {
+          "properties": {
+            "schema_version": {
+              "const": "ue_find_build_descriptor"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "success": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "candidates",
+        "validation",
+        "limits"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "ue_find_build_descriptor"
+        },
+        "candidates": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "validation": {
+          "$ref": "urn:ue-itps:schema:common#/$defs/validation"
+        },
+        "limits": {
+          "$ref": "urn:ue-itps:schema:common#/$defs/limits"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

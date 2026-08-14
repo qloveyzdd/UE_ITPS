@@ -3,11 +3,11 @@
 
 UE ITPS 是面向 Unreal Engine 项目维护者与 AI Agent 的确定性、只读项目检查工具集，可从显式选择的项目、构建规则和 C++ 源文件生成带验证状态与能力边界的 JSON 事实。
 
-仓库提供 21 个 Python CLI，覆盖 `.uproject`、Engine、Module、Target、Plugin、C++ 源码清单、类型关系、依赖关系和局部函数流分析。工具只读取静态证据，不替代 UnrealBuildTool、UnrealHeaderTool、Unreal Editor、编译器或运行时验证。
+仓库提供 22 个 Python CLI，覆盖 `.uproject`、Engine、Module、Target、Plugin、C++ 源码清单、类型关系、依赖关系和局部函数流分析。工具只读取静态证据，不替代 UnrealBuildTool、UnrealHeaderTool、Unreal Editor、编译器或运行时验证。
 
 ## 当前状态
 
-- 核心静态工具池已形成 21 个正式 CLI、21 份逐工具 Schema 与 1 份公共 Schema；C++ Source 检索正式以 Clang 编译语义为基座。
+- 核心静态工具池已形成 22 个正式 CLI、22 份逐工具 Schema 与 1 份公共 Schema；C++ Source 检索正式以 Clang 编译语义为基座。
 - `edittools/` 已提供 16 个只读工具，覆盖 Gameplay Tag、资产依赖、Blueprint 结构、DataTable、按需 DataAsset 属性、Primary Asset、配置、C++/Blueprint Gameplay Message，以及统一逻辑图谱的构建、校验和差异。
 - `information_pool/` 已能把静态探针结果构建为绑定 Git 提交的不可变 SQLite 快照；`show/` 可在本地浏览语义关系与最短路径；`mcp_connection_pool/` 负责被动发现并选择 UE 5.8 Editor MCP 连接。
 - 当前 Unreal 参考基座为 `LyraStarterGame` + UE 5.8.2。Editor 与多个 PIE Experience 已在本机观察到，但 5.8.2 权威文件指纹、完整 L0/L1 日志以及网络和 Travel 路径仍在重新核验。
@@ -47,6 +47,14 @@ python -m pip install -r requirements-dev.txt
 
    ```bash
    python sourcetools/ue_read_project_descriptor.py --project D:/Projects/MyGame/MyGame.uproject --engine-build-version D:/Epic/UE_5.8/Engine/Build/Build.version
+   ```
+
+4. 按名称查找项目中唯一的 Module Build.cs / Plugin `.uplugin`：
+
+   ```bash
+   python sourcetools/ue_find_build_descriptor.py --project D:/Projects/MyGame/MyGame.uproject --modulename MyGame
+   python sourcetools/ue_find_build_descriptor.py --project D:/Projects/MyGame/MyGame.uproject --pluginname GameplayAbilities
+   python sourcetools/ue_find_build_descriptor.py --project D:/Projects/MyGame/MyGame.uproject --modulename Core --engine-build-version D:/Epic/UE_5.8/Engine/Build/Build.version
    ```
 
 每个正式 CLI 都将 JSON 写入标准输出，并使用统一的顶层结构：领域事实、`validation` 和 `limits`。当搜索范围内存在多个项目时，发现工具会返回歧义错误和候选列表，不会自行选择。
@@ -91,7 +99,7 @@ python sourcetools/ue_analyze_cxx_impact.py --project D:/Projects/MyGame/MyGame.
 - [`information_pool/`](information_pool/)：将确定性探针结果构建为绑定 Git 提交的不可变 SQLite 快照，并提供搜索、层级、影响、调用者、循环、最短路径和差异查询。
 - [`edittools/`](edittools/)：连接运行中的 Unreal Editor，读取 Gameplay Tag、资产引用、Blueprint 和 Gameplay Message 事实；其前置条件和命令见 [`edittools/README.md`](edittools/README.md)。
 - [`show/`](show/)：在本地浏览工程信息池 SQLite 快照中的语义关系，不上传或修改数据库。
-- [`schemas/`](schemas/)：21 个正式 CLI Schema 和 1 个公共 Schema，均采用 JSON Schema Draft 2020-12。
+- [`schemas/`](schemas/)：22 个正式 CLI Schema 和 1 个公共 Schema，均采用 JSON Schema Draft 2020-12。
 - [`docs/PROGRAM-DESIGN.md`](docs/PROGRAM-DESIGN.md)：公共契约、内部边界、测试策略和扩展规则。
 
 ## 文档导航
@@ -111,7 +119,7 @@ python sourcetools/ue_analyze_cxx_impact.py --project D:/Projects/MyGame/MyGame.
 python -m unittest discover -s tests -v
 ```
 
-当前测试套件共 67 项，覆盖 CLI 与 Schema 契约、项目导航、Module 与构建规则、Clang C++ 分析、图关系和端到端只读性。测试使用临时工程夹具，不依赖本地 Unreal Engine、`LyraStarterGame/` 或 `ExternalProjects/`。
+当前测试套件共 94 项，覆盖 CLI 与 Schema 契约、项目导航、Module 与构建规则、Clang C++ 分析、图关系和端到端只读性。测试使用临时工程夹具，不依赖本地 Unreal Engine、`LyraStarterGame/` 或 `ExternalProjects/`。
 
 Editor 工具拥有独立测试套件：
 
