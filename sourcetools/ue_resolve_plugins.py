@@ -8,7 +8,7 @@ from ue_project_tools.descriptor import (
     directory_finding_problems,
     resolve_internal_directories,
 )
-from ue_project_tools.engine import resolve_engine
+from ue_project_tools.engine import engine_resolution_status, resolve_engine
 from ue_project_tools.plugins import resolve_project_plugins
 
 
@@ -74,7 +74,7 @@ def main() -> int:
         )
         engine_root = (
             Path(engine_info["engine_root"])
-            if engine_info["status"] == "resolved"
+            if engine_resolution_status(engine_info) == "resolved"
             else None
         )
         roots, directory_findings = resolve_internal_directories(

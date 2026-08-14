@@ -27,13 +27,9 @@
       "required": [
         "schema_version",
         "association_raw",
-        "status",
-        "resolution_method",
-        "resolution_candidates",
         "engine_root",
         "build_version_file",
         "version",
-        "build",
         "validation",
         "limits"
       ],
@@ -44,15 +40,6 @@
         "association_raw": {
           "type": ["string", "null"]
         },
-        "status": {
-          "enum": ["resolved", "ambiguous", "unresolved"]
-        },
-        "resolution_method": {
-          "type": ["string", "null"]
-        },
-        "resolution_candidates": {
-          "type": "array"
-        },
         "engine_root": {
           "type": ["string", "null"]
         },
@@ -61,9 +48,6 @@
         },
         "version": {
           "type": ["string", "null"]
-        },
-        "build": {
-          "type": ["object", "null"]
         },
         "validation": {
           "$ref": "urn:ue-itps:schema:common#/$defs/validation"

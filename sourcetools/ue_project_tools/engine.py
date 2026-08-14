@@ -108,26 +108,21 @@ def resolve_engine(
     project_file: Path, association: str, override: Path | None = None
 ) -> dict[str, Any]:
     root: Path | None = None
-    source: str | None = None
     candidates: list[dict[str, str]] = []
 
     if override:
         root = override.expanduser().resolve()
-        source = "cli-override"
     elif association and ("/" in association or "\\" in association):
         raw_path = Path(association).expanduser()
         root = (
             raw_path if raw_path.is_absolute() else project_file.parent / raw_path
         ).resolve()
-        source = "association-relative-or-absolute-path"
     else:
         candidates = registry_engine_candidates(association)
         if len(candidates) == 1:
             root = Path(candidates[0]["root"])
-            source = candidates[0]["source"]
         elif not candidates:
             root = ancestor_engine_root(project_file)
-            source = "ancestor-engine" if root else None
 
     build_file = root / "Engine" / "Build" / "Build.version" if root else None
     build = read_json(build_file) if build_file and build_file.is_file() else None
@@ -162,13 +157,9 @@ def resolve_engine(
         "ue_resolve_engine",
         {
             "association_raw": association or None,
-            "status": status,
-            "resolution_method": source,
-            "resolution_candidates": candidates,
             "engine_root": normalized(root) if root else None,
             "build_version_file": normalized(build_file) if build_file else None,
             "version": version,
-            "build": build,
         },
         problems,
         responsibility=(
@@ -180,3 +171,15 @@ def resolve_engine(
             "Registry and ancestor lookup are static resolution mechanisms only.",
         ],
     )
+
+
+def engine_resolution_status(result: dict[str, Any]) -> str:
+    """Recover the resolution state represented by validation."""
+    if result["validation"]["status"] != "error":
+        return "resolved"
+    if any(
+        problem.get("code") == "engine-ambiguous"
+        for problem in result["validation"]["problems"]
+    ):
+        return "ambiguous"
+    return "unresolved"

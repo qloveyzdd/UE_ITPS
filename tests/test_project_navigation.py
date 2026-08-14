@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 from tests.support import CliTestCase, write_json, write_text
+from ue_project_tools.engine import engine_resolution_status, resolve_engine
 
 
 class ProjectNavigationTests(CliTestCase):
@@ -325,10 +327,50 @@ class ProjectNavigationTests(CliTestCase):
             "--project",
             str(self.fixture.project),
         )
-        self.assertEqual(result["status"], "resolved")
+        self.assertEqual(
+            list(result),
+            [
+                "schema_version",
+                "association_raw",
+                "engine_root",
+                "build_version_file",
+                "version",
+                "validation",
+                "limits",
+            ],
+        )
         self.assertEqual(result["version"], "5.6.1")
-        self.assertEqual(result["build"]["Changelist"], 12345)
+        self.assertEqual(
+            result["build_version_file"],
+            str(
+                self.fixture.engine_root
+                / "Engine"
+                / "Build"
+                / "Build.version"
+            ).replace("\\", "/"),
+        )
         self.assertEqual(result["validation"]["status"], "ok")
+        self.assertEqual(result["limits"]["analysis_engines"], ["ue-itps"])
+
+    def test_engine_resolution_reports_ambiguous_candidates_as_error(self) -> None:
+        candidates = [
+            {"root": "D:/UE_5.6_A", "source": "test:first"},
+            {"root": "D:/UE_5.6_B", "source": "test:second"},
+        ]
+        with patch(
+            "ue_project_tools.engine.registry_engine_candidates",
+            return_value=candidates,
+        ):
+            result = resolve_engine(self.fixture.project, "5.6")
+
+        self.assertEqual(engine_resolution_status(result), "ambiguous")
+        self.assertEqual(result["validation"]["status"], "error")
+        self.assertEqual(
+            result["validation"]["problems"][0]["code"],
+            "engine-ambiguous",
+        )
+        self.assertNotIn("status", result)
+        self.assertNotIn("resolution_candidates", result)
 
     def test_engine_resolution_honors_explicit_override(self) -> None:
         alternate = self.fixture.root / "AlternateEngine"

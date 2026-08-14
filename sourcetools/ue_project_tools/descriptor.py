@@ -320,7 +320,7 @@ def declared_plugin_file_problems(
     project_file: Path,
     descriptor: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    from .engine import resolve_engine
+    from .engine import engine_resolution_status, resolve_engine
     from .plugins import descriptor_index
 
     declarations = descriptor.get("Plugins", [])
@@ -374,7 +374,7 @@ def declared_plugin_file_problems(
             project_file,
             association if isinstance(association, str) else "",
         )
-        if engine_info["status"] == "resolved":
+        if engine_resolution_status(engine_info) == "resolved":
             engine_root = Path(str(engine_info["engine_root"]))
             engine_matches = descriptor_index(
                 [

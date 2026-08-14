@@ -7,7 +7,7 @@ from .common import normalized, read_json, result_document
 from .clang_frontend import load_clang_unit, syntax_projection
 from .descriptor import resolve_internal_directories
 from .discovery import find_nearest_uproject
-from .engine import resolve_engine
+from .engine import engine_resolution_status, resolve_engine
 from .source_includes import (
     extract_includes,
     module_records,
@@ -259,7 +259,7 @@ def _source_context_problems(
     engine_root: Path | None,
 ) -> list[dict[str, Any]]:
     problems: list[dict[str, Any]] = []
-    if engine_result["status"] != "resolved":
+    if engine_resolution_status(engine_result) != "resolved":
         problems.append(
             {
                 "severity": "warning",
@@ -325,9 +325,10 @@ def load_source_context(
         str(descriptor.get("EngineAssociation") or ""),
         engine_override,
     )
+    engine_status = engine_resolution_status(engine_result)
     engine_root = (
         Path(engine_result["engine_root"]).resolve()
-        if engine_result["status"] == "resolved"
+        if engine_status == "resolved"
         else None
     )
     if not _is_relative_to(source, project_root) and (
@@ -487,7 +488,7 @@ def load_source_context(
             "project_descriptor": project.name,
             "project_discovery_method": "nearest-source-ancestor",
             "engine": {
-                "status": engine_result["status"],
+                "status": engine_status,
                 "version": engine_result.get("version"),
             },
             "source_owner": public_owner(source_owner),
