@@ -48,7 +48,7 @@ UE ITPS 没有统一的全局配置文件。核心 Python CLI 通过每次调用
 python sourcetools/ue_find_projects.py --search-root D:/Projects
 
 # 再把唯一、明确的工程传给聚焦工具
-python sourcetools/ue_read_project_descriptor.py --project D:/Projects/MyGame/MyGame.uproject
+python sourcetools/ue_read_project_descriptor.py --project D:/Projects/MyGame/MyGame.uproject --engine-build-version D:/Epic/UE_5.8/Engine/Build/Build.version
 
 # Engine 自动解析不满足需要时才使用显式覆盖
 python sourcetools/ue_resolve_engine.py `

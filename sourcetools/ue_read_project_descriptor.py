@@ -27,9 +27,21 @@ def main() -> int:
         metavar="FILE",
         help=".uproject 文件路径 / Path to the .uproject file",
     )
+    parser.add_argument(
+        "--engine-build-version",
+        required=True,
+        metavar="FILE",
+        help=(
+            "引擎 Build.version 文件路径 / "
+            "Path to the Engine Build.version file"
+        ),
+    )
     args = parser.parse_args()
     try:
-        _, result = descriptor_result(Path(args.project))
+        _, result = descriptor_result(
+            Path(args.project),
+            Path(args.engine_build_version),
+        )
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
     print(json_text(result), end="")

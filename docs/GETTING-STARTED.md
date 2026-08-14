@@ -76,7 +76,7 @@ python sourcetools/ue_find_projects.py --search-root D:/Projects/MyGame
 如果结果只有一个候选工程，可将其绝对路径传给聚焦工具：
 
 ```powershell
-python sourcetools/ue_read_project_descriptor.py --project D:/Projects/MyGame/MyGame.uproject
+python sourcetools/ue_read_project_descriptor.py --project D:/Projects/MyGame/MyGame.uproject --engine-build-version D:/Epic/UE_5.8/Engine/Build/Build.version
 ```
 
 每个正式 CLI 都输出带 `schema_version`、`validation` 和 `limits` 的 JSON。`validation.status` 为 `ok` 或 `warning` 表示扫描已完成；`error` 表示工具发现了阻断问题。
@@ -100,7 +100,7 @@ python -c "from clang import cindex; print(cindex.Config.library_path or 'extern
 `sourcetools/ue_find_projects.py` 遇到多个候选工程时会返回 `project-discovery-ambiguous`，不会自动替你选择。缩小 `--search-root`，或从返回的 `candidates` 中选择明确的 `.uproject` 路径，再传给后续命令：
 
 ```powershell
-python sourcetools/ue_read_project_descriptor.py --project D:/Projects/MyGame/MyGame.uproject
+python sourcetools/ue_read_project_descriptor.py --project D:/Projects/MyGame/MyGame.uproject --engine-build-version D:/Epic/UE_5.8/Engine/Build/Build.version
 ```
 
 ### 无法解析 Unreal Engine

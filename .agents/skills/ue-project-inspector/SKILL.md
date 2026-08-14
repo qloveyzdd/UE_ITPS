@@ -71,7 +71,7 @@ All normal scan results follow this top-level order: `schema_version`, module fa
 Replace `<project>` with the absolute `.uproject` path.
 
 ```powershell
-python sourcetools/ue_read_project_descriptor.py --project <project>
+python sourcetools/ue_read_project_descriptor.py --project <project> --engine-build-version <Engine/Build/Build.version>
 python sourcetools/ue_resolve_engine.py --project <project>
 python sourcetools/ue_inspect_modules.py --project <project>
 python sourcetools/ue_inspect_targets.py --project <project>
@@ -126,8 +126,9 @@ Treat `ue_read_project_descriptor` as a narrow projection of the original `.upro
 - `plugin_declarations.enabled` and `.disabled` report every valid direct Plugin reference according to its boolean `Enabled` value.
 - `plugin_declarations.target_allow_list` reports only explicit, non-empty `TargetAllowList` declarations. Each item keeps one Plugin `name` together with its source-ordered `targets` array.
 - Missing `TargetAllowList` fields and explicit empty arrays do not produce items. Other Plugin reference fields and all other `.uproject` fields are outside this tool's result.
-- `validation` requires exactly one same-named `Build.cs` for each declared project Module and at least one same-named `.uplugin` for each direct Plugin reference. Module roots follow the project Module inspector; Plugin roots include supported project locations and the resolved Engine.
-- A missing enabled Plugin is an error. A missing disabled Plugin is retained as an `info` problem whose message states that it is not enabled; info-only problems leave `validation.status` as `ok`. If Engine resolution fails, the result reports incomplete Plugin search scope instead of claiming that unresolved Engine Plugins are absent.
+- `validation` requires exactly one same-named `Build.cs` for each declared project Module and at least one same-named `.uplugin` for each direct Plugin reference. Module roots follow the project Module inspector; Plugin roots include supported project locations and the Engine derived from the required `--engine-build-version` path.
+- A missing enabled Plugin is an error. A missing disabled Plugin is retained as an `info` problem whose message states that it is not enabled; info-only problems leave `validation.status` as `ok`.
+- `ue_read_project_descriptor.py` does not read `EngineAssociation`. Its required `Build.version` path is a trusted anchor: derive the Engine root from the conventional parent depth without validating the path layout, JSON, or version fields.
 
 Stop after `ue_read_project_descriptor.py` for declared Module names, Plugin enabled states, or explicit non-empty Target allow lists. Resolve Engine and run `ue_resolve_plugins.py` only when the question also needs Plugin location, origin, `.uplugin` evidence, or Profile applicability.
 
@@ -207,7 +208,7 @@ Treat `ue-itps.cs-function.v1` as a lexical projection of one explicitly selecte
 
 ## Interpretation boundaries
 
-- `EngineAssociation` is an association key. Use resolved `Build.version` for the actual engine version.
+- `EngineAssociation` remains an association key for tools that resolve Engine identity. The project descriptor reader ignores it and requires an explicit trusted `Build.version` path.
 - `.uproject` declares Modules and direct Plugin references, but the project descriptor result intentionally reports only Module names, Plugin enabled states, and explicit non-empty Target allow lists. Filesystem checks use same-named Build.cs and .uplugin evidence without returning their paths, and the result does not declare `Target.cs` or a dependency graph.
 - Direct Plugin resolution is not the effective `.uplugin` dependency closure.
 - The single-plugin descriptor tool reports direct Plugin dependency declarations without locating or traversing their descriptors; it recursively reconciles declared Modules with Build.cs files under the selected plugin's Source and Platforms directories.

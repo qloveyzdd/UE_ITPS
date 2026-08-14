@@ -71,6 +71,15 @@ class CliContractTests(CliTestCase):
         missing = self.fixture.root / "Missing.input"
         for script, argument in REQUIRED_PATH_ARGUMENTS.items():
             extras = {
+                "ue_read_project_descriptor.py": (
+                    "--engine-build-version",
+                    str(
+                        self.fixture.engine_root
+                        / "Engine"
+                        / "Build"
+                        / "Build.version"
+                    ),
+                ),
                 "ue_inspect_cs_function.py": ("--function", "MissingFunction"),
                 "ue_inspect_cxx_function.py": ("--function", "MissingFunction"),
                 "ue_query_cxx_hierarchy.py": ("--class", "MissingClass"),
@@ -87,6 +96,15 @@ class CliContractTests(CliTestCase):
                     expected_code=2,
                 )
                 self.assert_request_failure(result, kind="input")
+
+    def test_project_descriptor_requires_engine_build_version(self) -> None:
+        result = self.cli(
+            "ue_read_project_descriptor.py",
+            "--project",
+            str(self.fixture.project),
+            expected_code=2,
+        )
+        self.assert_request_failure(result, kind="argument")
 
     def test_discovery_defaults_to_process_working_directory(self) -> None:
         result = self.cli(

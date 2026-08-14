@@ -46,7 +46,7 @@ python -m pip install -r requirements-dev.txt
 3. 从返回结果中明确选择一个 `.uproject`，再读取其声明：
 
    ```bash
-   python sourcetools/ue_read_project_descriptor.py --project D:/Projects/MyGame/MyGame.uproject
+   python sourcetools/ue_read_project_descriptor.py --project D:/Projects/MyGame/MyGame.uproject --engine-build-version D:/Epic/UE_5.8/Engine/Build/Build.version
    ```
 
 每个正式 CLI 都将 JSON 写入标准输出，并使用统一的顶层结构：领域事实、`validation` 和 `limits`。当搜索范围内存在多个项目时，发现工具会返回歧义错误和候选列表，不会自行选择。

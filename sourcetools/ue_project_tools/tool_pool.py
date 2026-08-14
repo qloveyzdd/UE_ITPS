@@ -17,7 +17,7 @@ _TOOLS: tuple[dict[str, Any], ...] = (
         "name": "ue_read_project_descriptor",
         "category": "project",
         "entrypoint": "sourcetools/ue_read_project_descriptor.py",
-        "inputs": ["project"],
+        "inputs": ["project", "engine_build_version"],
         "capabilities": [
             "module_declarations",
             "plugin_declarations",

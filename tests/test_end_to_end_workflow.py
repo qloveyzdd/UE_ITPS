@@ -18,6 +18,13 @@ class EndToEndWorkflowTests(CliTestCase):
             "ue_read_project_descriptor.py": (
                 "--project",
                 str(self.fixture.project),
+                "--engine-build-version",
+                str(
+                    self.fixture.engine_root
+                    / "Engine"
+                    / "Build"
+                    / "Build.version"
+                ),
             ),
             "ue_resolve_engine.py": (
                 "--project",

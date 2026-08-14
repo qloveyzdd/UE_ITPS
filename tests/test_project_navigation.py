@@ -68,6 +68,8 @@ class ProjectNavigationTests(CliTestCase):
             "ue_read_project_descriptor.py",
             "--project",
             str(self.fixture.project),
+            "--engine-build-version",
+            str(self.fixture.engine_root / "Engine" / "Build" / "Build.version"),
         )
         self.assertEqual(result["declared_modules"], ["SampleGame"])
         self.assertEqual(
@@ -151,6 +153,8 @@ class ProjectNavigationTests(CliTestCase):
             "ue_read_project_descriptor.py",
             "--project",
             str(project),
+            "--engine-build-version",
+            str(self.fixture.engine_root / "Engine" / "Build" / "Build.version"),
         )
         declarations = result["plugin_declarations"]
         self.assertEqual(
@@ -196,6 +200,8 @@ class ProjectNavigationTests(CliTestCase):
             "ue_read_project_descriptor.py",
             "--project",
             str(project),
+            "--engine-build-version",
+            str(self.fixture.engine_root / "Engine" / "Build" / "Build.version"),
             expected_code=1,
         )
         self.assertEqual(result["validation"]["status"], "error")
@@ -217,6 +223,8 @@ class ProjectNavigationTests(CliTestCase):
             "ue_read_project_descriptor.py",
             "--project",
             str(project),
+            "--engine-build-version",
+            str(self.fixture.engine_root / "Engine" / "Build" / "Build.version"),
             expected_code=1,
         )
         self.assertEqual(
@@ -249,6 +257,8 @@ class ProjectNavigationTests(CliTestCase):
             "ue_read_project_descriptor.py",
             "--project",
             str(project),
+            "--engine-build-version",
+            str(self.fixture.engine_root / "Engine" / "Build" / "Build.version"),
             expected_code=1,
         )
         self.assertEqual(
@@ -272,6 +282,8 @@ class ProjectNavigationTests(CliTestCase):
             "ue_read_project_descriptor.py",
             "--project",
             str(project),
+            "--engine-build-version",
+            str(self.fixture.engine_root / "Engine" / "Build" / "Build.version"),
             expected_code=1,
         )
         self.assertEqual(
@@ -279,7 +291,7 @@ class ProjectNavigationTests(CliTestCase):
             "declared-plugin-descriptor-missing",
         )
 
-    def test_project_descriptor_accepts_plugin_from_resolved_engine(self) -> None:
+    def test_project_descriptor_accepts_plugin_from_explicit_engine(self) -> None:
         plugin_name = "EngineFixturePlugin"
         write_json(
             self.fixture.engine_root
@@ -297,29 +309,42 @@ class ProjectNavigationTests(CliTestCase):
             "ue_read_project_descriptor.py",
             "--project",
             str(project),
+            "--engine-build-version",
+            str(self.fixture.engine_root / "Engine" / "Build" / "Build.version"),
         )
         self.assertEqual(result["validation"]["status"], "ok")
 
-    def test_project_descriptor_reports_incomplete_engine_plugin_search(self) -> None:
+    def test_project_descriptor_ignores_engine_association_and_build_contents(
+        self,
+    ) -> None:
+        plugin_name = "TrustedBuildVersionPlugin"
+        write_json(
+            self.fixture.engine_root
+            / "Engine"
+            / "Plugins"
+            / plugin_name
+            / f"{plugin_name}.uplugin",
+            {"FileVersion": 3},
+        )
+        engine_build_version = write_text(
+            self.fixture.engine_root / "Engine" / "Build" / "Build.version",
+            "not parsed by ue_read_project_descriptor.py",
+        )
         project = write_json(
             self.fixture.root / "UnresolvedEnginePlugin.uproject",
             {
                 "EngineAssociation": "../NoSuchFixtureEngine",
-                "Plugins": [
-                    {"Name": "UnresolvedEnginePlugin", "Enabled": True}
-                ],
+                "Plugins": [{"Name": plugin_name, "Enabled": True}],
             },
         )
         result = self.cli(
             "ue_read_project_descriptor.py",
             "--project",
             str(project),
-            expected_code=1,
+            "--engine-build-version",
+            str(engine_build_version),
         )
-        self.assertEqual(
-            result["validation"]["problems"][0]["code"],
-            "plugin-descriptor-search-incomplete",
-        )
+        self.assertEqual(result["validation"]["status"], "ok")
 
     def test_engine_resolution_reads_build_version(self) -> None:
         result = self.cli(

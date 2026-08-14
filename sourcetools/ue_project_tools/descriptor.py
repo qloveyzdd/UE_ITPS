@@ -319,8 +319,8 @@ def declared_module_file_problems(
 def declared_plugin_file_problems(
     project_file: Path,
     descriptor: dict[str, Any],
+    engine_build_version: Path,
 ) -> list[dict[str, Any]]:
-    from .engine import engine_resolution_status, resolve_engine
     from .plugins import descriptor_index
 
     declarations = descriptor.get("Plugins", [])
@@ -369,51 +369,19 @@ def declared_plugin_file_problems(
     }
 
     if unresolved:
-        association = descriptor.get("EngineAssociation")
-        engine_info = resolve_engine(
-            project_file,
-            association if isinstance(association, str) else "",
+        engine_root = engine_build_version.expanduser().resolve().parents[2]
+        engine_matches = descriptor_index(
+            [
+                ("engine", engine_root / "Engine" / "Plugins"),
+                ("engine-platform", engine_root / "Engine" / "Platforms"),
+            ],
+            {
+                declared_plugins[plugin_key]["Name"]
+                for plugin_key in unresolved
+            },
         )
-        if engine_resolution_status(engine_info) == "resolved":
-            engine_root = Path(str(engine_info["engine_root"]))
-            engine_matches = descriptor_index(
-                [
-                    ("engine", engine_root / "Engine" / "Plugins"),
-                    ("engine-platform", engine_root / "Engine" / "Platforms"),
-                ],
-                {
-                    declared_plugins[plugin_key]["Name"]
-                    for plugin_key in unresolved
-                },
-            )
-            for plugin_key, candidates in engine_matches.items():
-                matches.setdefault(plugin_key, []).extend(candidates)
-        else:
-            unresolved_plugins = [
-                declared_plugins[plugin_key]
-                for plugin_key in sorted(unresolved)
-            ]
-            has_enabled_plugin = any(
-                raw["Enabled"] for raw in unresolved_plugins
-            )
-            problems.append(
-                {
-                    "severity": "error" if has_enabled_plugin else "info",
-                    "code": "plugin-descriptor-search-incomplete",
-                    "plugin_names": [raw["Name"] for raw in unresolved_plugins],
-                    "message": (
-                        "Engine could not be resolved, so declared Plugin "
-                        "descriptors could not be checked in Engine roots"
-                        + (
-                            ""
-                            if has_enabled_plugin
-                            else "; these Plugins are not enabled, so this "
-                            "does not affect the current project"
-                        )
-                    ),
-                }
-            )
-            return problems
+        for plugin_key, candidates in engine_matches.items():
+            matches.setdefault(plugin_key, []).extend(candidates)
 
     for plugin_key, raw in declared_plugins.items():
         if matches.get(plugin_key):
@@ -439,7 +407,10 @@ def declared_plugin_file_problems(
     return problems
 
 
-def descriptor_result(project_file: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+def descriptor_result(
+    project_file: Path,
+    engine_build_version: Path,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     project_file = project_file.resolve()
     descriptor = read_json(project_file)
     problems: list[dict[str, Any]] = []
@@ -453,7 +424,13 @@ def descriptor_result(project_file: Path) -> tuple[dict[str, Any], dict[str, Any
     )
     problems.extend(module_problems)
     problems.extend(declared_module_file_problems(project_file, descriptor))
-    problems.extend(declared_plugin_file_problems(project_file, descriptor))
+    problems.extend(
+        declared_plugin_file_problems(
+            project_file,
+            descriptor,
+            engine_build_version,
+        )
+    )
 
     result = result_document(
         "ue_read_project_descriptor",
@@ -469,7 +446,8 @@ def descriptor_result(project_file: Path) -> tuple[dict[str, Any], dict[str, Any
         boundaries=[
             "Only Module names, Plugin enabled states, and explicit non-empty Plugin TargetAllowList values are reported.",
             "Other .uproject fields and Plugin reference fields are outside this tool's responsibility.",
-            "Module existence requires one same-named Build.cs; Plugin existence requires at least one same-named .uplugin in supported project or resolved Engine roots.",
+            "Module existence requires one same-named Build.cs; Plugin existence requires at least one same-named .uplugin in supported project roots or Engine roots derived from the required Build.version path.",
+            "The Build.version path is a trusted input anchor; its layout and contents are not validated or reported.",
             "Filesystem validation does not prove that modules or plugins compile, load, or apply to an effective build profile.",
         ],
     )
