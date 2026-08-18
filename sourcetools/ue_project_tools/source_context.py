@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from .common import normalized, read_json, result_document
-from .clang_frontend import load_clang_unit, syntax_projection
+from .cpp_frontend import load_cpp_unit, syntax_projection
 from .descriptor import resolve_internal_directories
 from .discovery import find_nearest_uproject
 from .engine import engine_resolution_status, resolve_engine
@@ -101,7 +101,7 @@ def _public_include(
             "status": "resolved",
             "location": rooted_path(included_path, project_root, engine_root),
             "owner": include_owner(owner_for_path(included_path, records)),
-            "method": ["clang-inclusion-directive"],
+            "method": ["parser-inclusion-directive"],
         }
     else:
         resolution = resolve_include(
@@ -128,14 +128,13 @@ def _public_include(
         "severity": "warning",
         "code": f"source-include-{status.replace('_', '-')}",
         "include": fact,
-        "message": "Include provenance could not be resolved from the Clang translation unit",
+        "message": "Include provenance could not be resolved from deterministic filesystem roots",
     }
 
 
 def load_source_context(
     source_file: Path,
     engine_override: Path | None = None,
-    compilation_database: Path | None = None,
     *,
     load_includes: bool = False,
     load_cpp_analysis: bool = True,
@@ -185,9 +184,7 @@ def load_source_context(
     anchor = selected_source or selected_header
     if anchor is None:
         raise ValueError(f"No C++ source unit could be selected for: {source}")
-    clang_model = load_clang_unit(
-        anchor, unit_files, project_root, compilation_database
-    )
+    cpp_model = load_cpp_unit(anchor, unit_files, project_root)
     parsed_files = [
         (
             path,
@@ -195,7 +192,7 @@ def load_source_context(
                 "path": normalized(path),
                 "text": path.read_text(encoding="utf-8-sig", errors="replace"),
                 "problems": [],
-                "syntax_tree": syntax_projection(clang_model, path),
+                "syntax_tree": syntax_projection(cpp_model, path),
             },
         )
         for path in unit_files
@@ -232,22 +229,12 @@ def load_source_context(
                 "message": f"Multiple automatically derived companion {companion_kind} files were found",
             }
         )
-    if clang_model["command_source"] != "direct":
-        problems.append(
-            {
-                "severity": "warning",
-                "code": "clang-compile-command-borrowed",
-                "source": rooted_path(anchor, project_root, engine_root),
-                "command_file": clang_model["command_file"],
-                "message": "Clang used another source file's compile command from the same Module profile",
-            }
-        )
-    for diagnostic in clang_model["diagnostics"]:
-        if diagnostic["severity"] >= 3:
+    for diagnostic in cpp_model["diagnostics"]:
+        if diagnostic["severity"] >= 2:
             problems.append(
                 {
-                    "severity": "error",
-                    "code": "clang-diagnostic-error",
+                    "severity": "warning",
+                    "code": "tree-sitter-cpp-syntax-warning",
                     "source": {
                         "path": diagnostic["file"],
                         "line": diagnostic["line"],
@@ -267,11 +254,15 @@ def load_source_context(
         else None
     )
     if load_includes:
-        for include in clang_model["includes"]:
+        for include in cpp_model["includes"]:
             including_file = unit_by_key.get(include["source_file"])
             if including_file is None:
                 continue
-            if include.get("included_file") == header_key:
+            if include.get("included_file") == header_key or (
+                selected_header is not None
+                and str(include.get("spelling", "")).casefold()
+                == selected_header.name.casefold()
+            ):
                 continue
             fact, problem = _public_include(
                 include,
@@ -308,15 +299,10 @@ def load_source_context(
                 "version": engine_result.get("version"),
             },
             "source_owner": public_owner(source_owner),
-            "clang": {
-                "engine": clang_model["engine"],
-                "version": clang_model["version"],
-                "compilation_database": clang_model["compilation_database"],
-                "compilation_database_sha256": clang_model[
-                    "compilation_database_sha256"
-                ],
-                "command_source": clang_model["command_source"],
-                "command_file": clang_model["command_file"],
+            "cpp_analyzer": {
+                "engine": cpp_model["engine"],
+                "version": cpp_model["version"],
+                "model": "syntax",
             },
         },
         "source_unit": {"source": source_fact, "header": header_fact},
@@ -326,7 +312,10 @@ def load_source_context(
         "parsed_by_path": {path: parsed for path, parsed in parsed_files},
         "project_root": project_root,
         "engine_root": engine_root,
-        "clang_model": clang_model,
+        "cpp_model": cpp_model,
+        "parts": [
+            item for item in cpp_model["functions"] if item["file"] in unit_by_key
+        ],
         "problems": problems,
     }
 
@@ -363,7 +352,7 @@ def source_result(
         boundaries=[
             "Only the selected source file and one unambiguous automatically derived companion are emitted.",
             *boundaries,
-            "All C++ syntax and semantic facts come from the active Clang translation unit.",
+            "C++ facts are syntax projections from the selected files; no compiler semantic binding or preprocessing is performed.",
             "Validation ok does not prove runtime behavior.",
         ],
     )

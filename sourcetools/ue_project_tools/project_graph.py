@@ -4,7 +4,7 @@ from pathlib import Path
 import re
 from typing import Any
 
-from .clang_frontend import ClangFrontendError, load_clang_unit
+from .cpp_frontend import CppFrontendError, load_cpp_unit
 from .common import iter_files, normalized, result_document
 from .dependency_graph import DependencyGraph, type_names
 from .source_context import load_source_context
@@ -76,81 +76,72 @@ def _selected_node_name(
 
 def build_project_graph(
     project_root: Path,
-    compilation_database: Path | None = None,
 ) -> tuple[DependencyGraph, list[dict[str, Any]], list[dict[str, Any]]]:
     graph = DependencyGraph()
     parsed_files: list[dict[str, Any]] = []
     problems: list[dict[str, Any]] = []
     project_files = project_cpp_files(project_root)
-    anchors = [
-        path for path in project_files
-        if path.suffix.casefold() in {".cpp", ".cc"}
+    if not project_files:
+        return graph, parsed_files, problems
+    try:
+        model = load_cpp_unit(project_files[0], project_files, project_root)
+    except CppFrontendError as exc:
+        problems.append(
+            {
+                "severity": "error",
+                "code": "project-tree-sitter-cpp-parse-failure",
+                "path": project_files[0].relative_to(project_root).as_posix(),
+                "message": str(exc),
+            }
+        )
+        return graph, parsed_files, problems
+
+    types_by_path: dict[str, list[dict[str, Any]]] = {}
+    for item in model["types"]:
+        if item["role"] != "definition":
+            continue
+        relative = Path(item["file"]).resolve().relative_to(project_root).as_posix()
+        types_by_path.setdefault(relative, []).append(
+            {
+                "kind": item["kind"],
+                "name": item["name"],
+                "qualified_name": item["qualified_name"],
+                "base_types": item["base_types"],
+                "type_references": [
+                    {
+                        "kind": "field",
+                        "name": field["name"],
+                        "type_expression": field["type_expression"],
+                        "location": {"line": field["line"]},
+                    }
+                    for field in item["fields"]
+                ],
+                "location": {"line": item["line"]},
+                "_path": relative,
+            }
+        )
+    parsed_files = [
+        {
+            "path": path.relative_to(project_root).as_posix(),
+            "syntax": {
+                "types": types_by_path.get(
+                    path.relative_to(project_root).as_posix(), []
+                )
+            },
+        }
+        for path in project_files
     ]
-    seen_types: set[tuple[str, str, int]] = set()
-    for path in anchors:
-        relative = path.relative_to(project_root).as_posix()
-        try:
-            model = load_clang_unit(
-                path,
-                project_files,
-                project_root,
-                compilation_database,
-            )
-        except ClangFrontendError as exc:
+    for diagnostic in model["diagnostics"]:
+        if diagnostic["severity"] >= 3:
             problems.append(
                 {
                     "severity": "error",
-                    "code": "project-clang-translation-unit-failure",
-                    "path": relative,
-                    "message": str(exc),
+                    "code": "project-tree-sitter-cpp-syntax-error",
+                    "path": Path(diagnostic["file"]).resolve().relative_to(project_root).as_posix(),
+                    "line": diagnostic["line"],
+                    "message": diagnostic["message"],
                 }
             )
-            continue
-        syntax_types = []
-        for item in model["types"]:
-            if item["role"] != "definition":
-                continue
-            key = (item["qualified_name"], item["file"], int(item["line"]))
-            if key in seen_types:
-                continue
-            seen_types.add(key)
-            syntax_types.append(
-                {
-                    "kind": item["kind"],
-                    "name": item["name"],
-                    "qualified_name": item["qualified_name"],
-                    "base_types": item["base_types"],
-                    "type_references": [
-                        {
-                            "kind": "field",
-                            "name": field["name"],
-                            "type_expression": field["type_expression"],
-                            "location": {"line": field["line"]},
-                        }
-                        for field in item["fields"]
-                    ],
-                    "location": {"line": item["line"]},
-                    "_path": (
-                        Path(item["file"]).resolve()
-                        .relative_to(project_root)
-                        .as_posix()
-                    ),
-                }
-            )
-        parsed_files.append(
-            {"path": relative, "syntax": {"types": syntax_types}}
-        )
-        for diagnostic in model["diagnostics"]:
-            if diagnostic["severity"] >= 3:
-                problems.append(
-                    {
-                        "severity": "error",
-                        "code": "project-clang-diagnostic-error",
-                        "path": relative,
-                        "line": diagnostic["line"],
-                        "message": diagnostic["message"],
-                    }
-                )
     all_types = [
         (item.get("_path", parsed["path"]), item)
         for parsed in parsed_files
@@ -204,11 +195,8 @@ def build_project_graph(
 
 def dependency_result(
     project_root: Path,
-    compilation_database: Path | None = None,
 ) -> dict[str, Any]:
-    graph, parsed_files, problems = build_project_graph(
-        project_root, compilation_database
-    )
+    graph, parsed_files, problems = build_project_graph(project_root)
     return result_document(
         "ue_analyze_cxx_dependencies",
         {
@@ -229,11 +217,8 @@ def dependency_result(
 def hierarchy_result(
     project_root: Path,
     class_name: str,
-    compilation_database: Path | None = None,
 ) -> dict[str, Any]:
-    graph, parsed_files, problems = build_project_graph(
-        project_root, compilation_database
-    )
+    graph, parsed_files, problems = build_project_graph(project_root)
     selected_name, ambiguous = _selected_node_name(graph, class_name)
     node = graph.nodes.get(selected_name) if selected_name else None
     if node is None:
@@ -281,11 +266,8 @@ def impact_result(
     project_root: Path,
     symbol: str,
     max_depth: int,
-    compilation_database: Path | None = None,
 ) -> dict[str, Any]:
-    graph, parsed_files, problems = build_project_graph(
-        project_root, compilation_database
-    )
+    graph, parsed_files, problems = build_project_graph(project_root)
     selected_name, ambiguous = _selected_node_name(graph, symbol)
     if selected_name is None:
         problems.append(
@@ -322,12 +304,8 @@ def impact_result(
 def function_flow_result(
     source: Path,
     function_name: str,
-    compilation_database: Path | None = None,
 ) -> dict[str, Any]:
-    loaded = load_source_context(
-        source,
-        compilation_database=compilation_database,
-    )
+    loaded = load_source_context(source)
     syntax = loaded["parsed_by_path"][source.resolve()]["syntax_tree"]
     matches = [
         item
@@ -385,7 +363,7 @@ def function_flow_result(
         problems,
         responsibility="Report local control-flow constructs and direct calls for selected C++ function definitions.",
         boundaries=[
-            "Calls and function identities come from the active Clang translation unit.",
+            "Calls and function identities are local Tree-sitter syntax projections.",
             "The flow is local to the selected file and does not recursively follow callees.",
         ],
     )

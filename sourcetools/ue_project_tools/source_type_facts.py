@@ -112,10 +112,9 @@ def _compound(
 def list_source_types(
     source_file: Path,
     engine_override: Path | None = None,
-    compilation_database: Path | None = None,
 ) -> dict[str, Any]:
-    loaded = load_source_context(source_file, engine_override, compilation_database)
-    model = loaded["clang_model"]
+    loaded = load_source_context(source_file, engine_override)
+    model = loaded["cpp_model"]
     unit_files = {
         str(path.resolve()).replace("\\", "/").casefold()
         for path, _ in loaded["parsed_files"]
@@ -233,9 +232,9 @@ def list_source_types(
             "free_functions": free_functions,
             "unresolved_declarations": [],
         },
-        responsibility="Index Clang-confirmed C++ declarations and definitions.",
+        responsibility="Index Tree-sitter C++ declarations and definitions.",
         boundaries=[
-            "Clang is authoritative for declaration identity, roles, members, linkage, and locations.",
-            "UE reflection macros come from Clang preprocessing records and are attached by source adjacency.",
+            "Declaration identity, roles, members, and linkage are syntax projections rather than compiler semantic facts.",
+            "UE reflection macros are read from local source text and attached by source adjacency.",
         ],
     )

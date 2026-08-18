@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .clang_frontend import load_clang_unit
+from .cpp_frontend import load_cpp_unit
 from .common import iter_files, normalized, result_document
 from .discovery import find_nearest_uproject
 
@@ -53,13 +53,11 @@ def _macro_arguments(tokens: list[str]) -> list[str]:
 def registration_macros_for_source(
     source: Path,
     project_root: Path,
-    compilation_database: Path | None = None,
 ) -> list[dict[str, Any]]:
-    model = load_clang_unit(
+    model = load_cpp_unit(
         source.resolve(),
         [source.resolve()],
         project_root.resolve(),
-        compilation_database,
     )
     source_key = str(source.resolve()).replace("\\", "/").casefold()
     results = []
@@ -107,7 +105,6 @@ def _header_candidates(source: Path, module_root: Path) -> list[Path]:
 
 def inspect_module_entry(
     rules_path: Path,
-    compilation_database: Path | None = None,
 ) -> dict[str, Any]:
     rules, module_name = _validated_rules_path(rules_path)
     module_root = rules.parent.resolve()
@@ -118,7 +115,7 @@ def inspect_module_entry(
         registrations = [
             item
             for item in registration_macros_for_source(
-                source, project_root, compilation_database
+                source, project_root
             )
             if str(item.get("module_name", "")).casefold() == module_name.casefold()
         ]
@@ -164,7 +161,7 @@ def inspect_module_entry(
                 "code": "module-entry-registration-not-found",
                 "module_name": module_name,
                 "supported_macros": sorted(_SUPPORTED_REGISTRATION_MACROS),
-                "message": f"No matching Clang-confirmed module registration was found for {module_name}",
+                "message": f"No matching Tree-sitter C++ module registration was found for {module_name}",
             }
         )
     elif len(source_candidates) > 1:
@@ -181,10 +178,10 @@ def inspect_module_entry(
         "ue_inspect_module_entry",
         {"entrypoints": entrypoints},
         problems,
-        responsibility="Locate Clang-confirmed module registration entries.",
+        responsibility="Locate syntax-confirmed module registration entries.",
         boundaries=[
-            "Each .cpp file is parsed with the selected Clang compilation database and Module profile.",
-            "Missing compilation databases or compile commands are blocking input failures; no lexical fallback is used.",
+            "Each .cpp file is parsed independently with Tree-sitter C++.",
+            "Registration macros are read from local source text without preprocessing.",
             "Headers are matched by conventional same-basename locations and are not analyzed.",
         ],
     )

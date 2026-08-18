@@ -27,16 +27,10 @@ def main() -> int:
         metavar="FILE",
         help="模块 Build.cs 文件路径 / Path to the module Build.cs file",
     )
-    parser.add_argument(
-        "--compile-database",
-        metavar="FILE_OR_DIRECTORY",
-        help="Clang compile_commands.json file or containing directory",
-    )
     args = parser.parse_args()
     try:
         result = inspect_module_entry(
             Path(args.rules),
-            Path(args.compile_database) if args.compile_database else None,
         )
     except (OSError, ValueError) as exc:
         parser.error(str(exc))

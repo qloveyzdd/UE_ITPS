@@ -4,7 +4,7 @@ from tests.support import CliTestCase, write_text
 
 
 class CxxAnalysisTests(CliTestCase):
-    def test_clang_backend_is_reported_and_compile_database_is_required(self) -> None:
+    def test_tree_sitter_cpp_backend_runs_without_compile_database(self) -> None:
         result = self.cli(
             "ue_list_cxx_types.py",
             "--source",
@@ -12,20 +12,19 @@ class CxxAnalysisTests(CliTestCase):
         )
         self.assertEqual(
             result["analysis"]["syntax_trees"][0]["engine"],
-            "clang/libclang",
-        )
-        self.assertIn("clang version", result["context"]["clang"]["version"])
-
-        self.fixture.compilation_database.unlink()
-        failure = self.cli(
-            "ue_list_cxx_types.py",
-            "--source",
-            str(self.fixture.source_cpp),
-            expected_code=2,
+            "tree-sitter/cpp",
         )
         self.assertIn(
-            "compilation database",
-            failure["validation"]["problems"][0]["message"].lower(),
+            "tree-sitter-cpp",
+            result["context"]["cpp_analyzer"]["version"],
+        )
+        self.assertEqual(
+            result["context"]["cpp_analyzer"]["model"],
+            "syntax",
+        )
+        self.assertNotIn("clang", result["context"])
+        self.assertFalse(
+            (self.fixture.project_root / "compile_commands.json").exists()
         )
 
     def _write_delegate_fixture(self):
@@ -331,6 +330,40 @@ class CxxAnalysisTests(CliTestCase):
         self.assertEqual(
             {item["qualified_name"] for item in result["enums"]},
             {"EMode"},
+        )
+
+    def test_template_fields_and_initializers_emit_only_declared_names(self) -> None:
+        header = write_text(
+            self.fixture.project_root
+            / "Source"
+            / "SampleGame"
+            / "Public"
+            / "Container.h",
+            """
+            #pragma once
+            class FContainer
+            {
+                TArray<TObjectPtr<UObject>> Items;
+                double Time = 0.0;
+            };
+            """,
+        )
+
+        result = self.cli(
+            "ue_list_cxx_types.py",
+            "--source",
+            str(header),
+        )
+        fields = {
+            item["name"]: item["type_expression"]
+            for item in result["classes"][0]["member_anchors"]
+        }
+        self.assertEqual(
+            fields,
+            {
+                "Items": "TArray<TObjectPtr<UObject>>",
+                "Time": "double",
+            },
         )
 
     def test_type_facts_identify_local_interface_candidates(self) -> None:

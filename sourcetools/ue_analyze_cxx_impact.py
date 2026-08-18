@@ -33,7 +33,6 @@ def main() -> int:
         metavar="PATH",
         help=".uproject 文件或项目根目录 / .uproject file or project root",
     )
-    parser.add_argument("--compile-database", metavar="PATH", help="compile_commands.json 或其目录 / compile_commands.json or its directory")
     parser.add_argument(
         "--symbol", required=True, metavar="NAME", help="类型名 / Type name"
     )
@@ -52,7 +51,6 @@ def main() -> int:
             _root(args.project),
             args.symbol,
             args.max_depth,
-            Path(args.compile_database) if args.compile_database else None,
         )
     except (OSError, ValueError) as exc:
         result = cli_error_document(

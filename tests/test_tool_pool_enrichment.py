@@ -8,14 +8,14 @@ from ue_project_tools.syntax_tree import parse_csharp_syntax
 
 
 class ToolPoolEnrichmentTests(CliTestCase):
-    def test_code_analysis_frontends_have_no_custom_lexer_or_cpp_tree_sitter(self) -> None:
+    def test_code_analysis_frontends_use_tree_sitter_for_cpp_and_csharp(self) -> None:
         package = TOOLS_ROOT / "ue_project_tools"
         self.assertFalse((package / "source_tokens.py").exists())
         forbidden = (
             "lex_source",
             "source_tokens",
-            "tree_sitter_cpp",
-            "parse_cpp_syntax",
+            "clang_frontend",
+            "libclang",
         )
         for path in sorted(package.glob("*.py")):
             source = path.read_text(encoding="utf-8-sig")
@@ -25,7 +25,8 @@ class ToolPoolEnrichmentTests(CliTestCase):
         requirements = (REPOSITORY_ROOT / "requirements.txt").read_text(
             encoding="utf-8"
         )
-        self.assertNotIn("tree-sitter-cpp", requirements)
+        self.assertIn("tree-sitter-cpp==0.23.4", requirements)
+        self.assertNotIn("libclang", requirements)
 
     def test_csharp_ast_covers_generics_lambda_and_calls(self) -> None:
         parsed = parse_csharp_syntax(

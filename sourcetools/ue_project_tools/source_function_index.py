@@ -92,7 +92,7 @@ def _callable_parts(loaded: dict[str, Any]) -> list[dict[str, Any]]:
     }
     return [
         item
-        for item in loaded["clang_model"]["functions"]
+        for item in loaded["cpp_model"]["functions"]
         if item["file"] in unit_files
     ]
 
@@ -100,9 +100,8 @@ def _callable_parts(loaded: dict[str, Any]) -> list[dict[str, Any]]:
 def list_source_functions(
     source_file: Path,
     engine_override: Path | None = None,
-    compilation_database: Path | None = None,
 ) -> dict[str, Any]:
-    loaded = load_source_context(source_file, engine_override, compilation_database)
+    loaded = load_source_context(source_file, engine_override)
     parts = _callable_parts(loaded)
     relations = {item["usr"]: item for item in _relations(parts, loaded)}
     functions = []
@@ -130,8 +129,8 @@ def list_source_functions(
         "ue_list_cxx_functions",
         loaded,
         {"functions": functions, "unresolved_declarations": [], "function_macros": []},
-        responsibility="Index Clang-confirmed C++ functions.",
+        responsibility="Index Tree-sitter C++ functions.",
         boundaries=[
-            "Function identity and declaration-definition relations come from Clang USRs."
+            "Function identities are stable syntax keys; overload and declaration-definition relations are not compiler-bound."
         ],
     )

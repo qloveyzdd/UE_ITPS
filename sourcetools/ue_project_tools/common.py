@@ -26,14 +26,14 @@ OPERATION_CHOICES = (
     "cook_package",
 )
 
-_TREE_SITTER_TOOLS = {
+_TREE_SITTER_CSHARP_TOOLS = {
     "ue_inspect_cs_function",
     "ue_inspect_module_rules",
     "ue_inspect_target_rules",
     "ue_inspect_targets",
     "ue_inspect_modules",
 }
-_CLANG_TOOLS = {
+_TREE_SITTER_CPP_TOOLS = {
     "ue_inspect_cxx_function",
     "ue_list_cxx_includes",
     "ue_list_cxx_types",
@@ -57,10 +57,10 @@ _GRAPH_TOOLS = {
 
 def analysis_engines(tool_name: str) -> list[str]:
     engines = ["ue-itps"]
-    if tool_name in _TREE_SITTER_TOOLS:
+    if tool_name in _TREE_SITTER_CSHARP_TOOLS:
         engines.append("tree-sitter/ast-outline+gdep")
-    if tool_name in _CLANG_TOOLS:
-        engines.append("clang/libclang")
+    if tool_name in _TREE_SITTER_CPP_TOOLS:
+        engines.append("tree-sitter/cpp")
     if tool_name in _GRAPH_TOOLS:
         engines.append("gdep-adapted")
     return engines

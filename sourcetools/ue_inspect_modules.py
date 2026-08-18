@@ -27,11 +27,6 @@ def main() -> int:
         metavar="FILE",
         help=".uproject 文件路径 / Path to the .uproject file",
     )
-    parser.add_argument(
-        "--compile-database",
-        metavar="FILE_OR_DIRECTORY",
-        help="Clang compile_commands.json file or containing directory",
-    )
     args = parser.parse_args()
     project = Path(args.project).resolve()
     try:
@@ -43,7 +38,6 @@ def main() -> int:
             project.parent,
             descriptor.get("Modules", []),
             roots,
-            Path(args.compile_database) if args.compile_database else None,
         )
     except (OSError, ValueError) as exc:
         parser.error(str(exc))

@@ -82,16 +82,15 @@ def inspect_source_function(
     source_file: Path,
     function_name: str,
     engine_override: Path | None = None,
-    compilation_database: Path | None = None,
 ) -> dict[str, Any]:
-    loaded = load_source_context(source_file, engine_override, compilation_database)
+    loaded = load_source_context(source_file, engine_override)
     parts = _callable_parts(loaded)
     relations = {item["usr"]: item for item in _relations(parts, loaded)}
     matches = []
     for item in parts:
         if item["role"] != "definition" or item["name"] != function_name:
             continue
-        references = loaded["clang_model"]["references"].get(item["usr"], {})
+        references = loaded["cpp_model"]["references"].get(item["usr"], {})
         external_symbols = []
         for symbol in references.get("external_symbols", []):
             public = {
@@ -134,7 +133,10 @@ def inspect_source_function(
             "match_count": len(matches),
             "matches": matches,
         },
-        responsibility="Report Clang-confirmed external symbols for selected C++ functions.",
-        boundaries=["Called function bodies are not followed."],
+        responsibility="Report syntax-derived external symbol candidates for selected C++ functions.",
+        boundaries=[
+            "Call and symbol targets are local syntax candidates and are not compiler-resolved.",
+            "Called function bodies are not followed.",
+        ],
         additional_problems=additional,
     )

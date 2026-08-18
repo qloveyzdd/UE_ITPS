@@ -41,7 +41,6 @@ def build_information_pool(
     *,
     source_commit: str | None = None,
     engine_override: Path | None = None,
-    compilation_database: Path | None = None,
     cache_dir: Path | None = None,
     workers: int | None = None,
     progress: Any | None = None,
@@ -70,7 +69,6 @@ def build_information_pool(
         probe = scan_project(
             project_file,
             engine_override=engine_override,
-            compilation_database=compilation_database,
             cache_dir=selected_cache_dir,
             workers=workers,
             progress=progress,

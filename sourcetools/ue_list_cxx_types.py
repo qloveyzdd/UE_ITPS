@@ -23,13 +23,11 @@ def main() -> int:
     )
     parser.add_argument("--source", required=True, metavar="FILE", help="显式选择的 .h/.hpp/.cpp/.cc 文件 / Explicitly selected .h/.hpp/.cpp/.cc file")
     parser.add_argument("--engine-root", metavar="PATH", help="显式 Engine 根目录覆盖 / Explicit Engine root override")
-    parser.add_argument("--compile-database", metavar="PATH", help="compile_commands.json 或其目录 / compile_commands.json or its directory")
     args = parser.parse_args()
     try:
         result = list_source_types(
             Path(args.source),
             engine_override=Path(args.engine_root) if args.engine_root else None,
-            compilation_database=Path(args.compile_database) if args.compile_database else None,
         )
     except (OSError, ValueError) as exc:
         result = cli_error_document(

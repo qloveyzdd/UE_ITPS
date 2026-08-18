@@ -34,16 +34,13 @@ def discover_module_build_rules(
 def module_entrypoints(
     module_dir: Path,
     project_root: Path,
-    compilation_database: Path | None = None,
 ) -> list[dict[str, str]]:
     results: list[dict[str, str]] = []
     if not module_dir.is_dir():
         return results
     for path in iter_files(module_dir, ".cpp"):
         path_text = normalized(path)
-        for macro in registration_macros_for_source(
-            path, project_root, compilation_database
-        ):
+        for macro in registration_macros_for_source(path, project_root):
             if not macro.get("module_class") or not macro.get("module_name"):
                 continue
             results.append(
@@ -69,7 +66,6 @@ def inspect_modules(
     project_root: Path,
     declarations: list[Any],
     additional_roots: list[Path],
-    compilation_database: Path | None = None,
 ) -> dict[str, Any]:
     modules: list[dict[str, Any]] = []
     dependency_graph = DependencyGraph()
@@ -157,9 +153,7 @@ def inspect_modules(
         entrypoint_candidates = [
             entrypoint
             for module_dir in module_dirs
-            for entrypoint in module_entrypoints(
-                module_dir, project_root, compilation_database
-            )
+            for entrypoint in module_entrypoints(module_dir, project_root)
         ]
         entrypoints = sorted(
             {

@@ -79,7 +79,7 @@ schemas/
 | `source_context.py`、`source_includes.py` | C++ 源码单元和 include 来源 |
 | `source_type_facts.py` | 类型、成员、接口候选、全局变量和自由函数 |
 | `source_function_*.py` | 函数身份、声明关系和外部符号 |
-| `clang_frontend.py` | 基于编译数据库的 Clang C++ 翻译单元与语义事实 |
+| `cpp_frontend.py` | 基于 Tree-sitter C++ 的独立文件语法事实与局部候选关系 |
 | `syntax_tree.py` | Build.cs、Target.cs 和普通 C# 的唯一 Tree-sitter 前端 |
 | `dependency_graph.py`、`project_graph.py` | 类型依赖、循环、继承、反向影响和局部函数流程 |
 | `tool_pool.py` | 项目工具池注册表与能力发现 |
@@ -92,7 +92,7 @@ schemas/
 
 - 严格 JSON 和 Unreal 描述符 JSON 读取。
 - 路径规范化及生成目录过滤。
-- C++ 的 Clang AST 与预处理记录、C# 的 Tree-sitter AST，以及只消费这些前端事实的 UE 领域投影。
+- C++ 与 C# 的 Tree-sitter AST、从本地源码读取的 UE 宏，以及只消费这些前端事实的保守领域投影。
 - gdep 思路改写的确定性依赖图、循环检测和反向影响遍历。
 - 源码单元伴随文件推导。
 - 统一 Validation、Limits 和请求失败信封。
@@ -263,7 +263,7 @@ Module 入口工具从 Build.cs 确定 Module 边界，报告：
 - 类型工具报告类、结构体、枚举、接口候选、成员、全局变量和自由函数锚点。
 - 函数工具只返回指定名称的全部定义、声明关系和外部符号候选。
 
-任何 C++ 工具都不会递归读取 include，不会跟踪被调用函数，也不会建立项目级符号 ID。
+任何 C++ 工具都不会递归读取 include，不会跟踪被调用函数，也不会建立编译器级符号 ID。声明配对、调用目标和类型关系均为受支持语法范围内的稳定候选。
 
 ## 8. 测试设计
 
@@ -280,15 +280,16 @@ Module 入口工具从 Build.cs 确定 Module 边界，报告：
 
 测试子进程设置 `PYTHONUTF8=1`，确保双语帮助和 JSON 在不同 Windows 本地编码下仍以 UTF-8 验证。
 
-当前共 57 项：
+当前核心套件共 97 项：
 
 | 模块 | 数量 | 目标 |
 |---|---:|---|
-| `test_cli_contracts.py` | 15 | 公共 CLI、Schema、帮助、错误信封、退出码、严格 JSON |
-| `test_project_navigation.py` | 14 | 项目级发现、导航、Engine、Plugin、路径和源码清单 |
-| `test_build_and_module.py` | 12 | `.uplugin`、规则、C# 函数和 Module 生命周期 |
-| `test_cxx_analysis.py` | 13 | 源码单元、include、类型、接口、函数和符号 |
+| `test_cli_contracts.py` | 16 | 公共 CLI、Schema、帮助、错误信封、退出码、严格 JSON |
+| `test_project_navigation.py` | 34 | 项目级发现、导航、Engine、Plugin、路径和源码清单 |
+| `test_build_and_module.py` | 20 | `.uplugin`、规则、C# 函数和 Module 生命周期 |
+| `test_cxx_analysis.py` | 18 | 源码单元、include、类型、接口、函数和符号 |
 | `test_end_to_end_workflow.py` | 3 | 全部 CLI 导航、重复扫描确定性和只读性 |
+| `test_tool_pool_enrichment.py` | 6 | Tree-sitter 前端、工具池和图算法扩展 |
 
 测试原则：
 
@@ -335,7 +336,7 @@ python -m unittest discover -s tests -v
 - 部分复杂 Schema 允许嵌套事实扩展属性，未锁定所有内部字段。
 - 没有为所有成功结果维护完整 golden 文件；测试以 Schema 和关键语义断言为主。
 - Engine、Plugin 和 Build.cs 树可能在不同 CLI 进程间重复扫描。
-- C++ 工具不跨进程复用 Clang 翻译单元或 AST 上下文。
+- C++ 工具不跨进程复用 Tree-sitter 语法树；信息池只通过源码哈希复用已序列化探针结果。
 - 大型 Engine、Plugin 树或 Module 可能产生明显 I/O 与内存开销。
 - 当前没有覆盖率阈值、性能基准或持续集成配置。
 - junction、symlink、权限失败、注册表多版本歧义和完整 Plugin Profile 组合尚未形成系统矩阵。

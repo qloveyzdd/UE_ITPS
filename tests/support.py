@@ -102,7 +102,6 @@ class Fixture:
     plugin: Path
     plugin_rules: Path
     plugin_source: Path
-    compilation_database: Path
 
 
 def create_fixture(root: Path) -> Fixture:
@@ -334,66 +333,9 @@ def create_fixture(root: Path) -> Fixture:
         }
         """,
     )
-    clang_shim = write_text(
-        project_root / "Intermediate" / "ClangFixture.h",
-        """
-        #pragma once
-        using int32 = int;
-        using uint8 = unsigned char;
-        template <typename T> class TSubclassOf {};
-        class AActor {};
-        class UInterface {};
-        class IModuleInterface
-        {
-        public:
-            virtual ~IModuleInterface() = default;
-            virtual void StartupModule() {}
-            virtual void ShutdownModule() {}
-        };
-        class FFixtureDelegate
-        {
-        public:
-            template <typename... T> void AddRaw(T...);
-            template <typename... T> void RemoveAll(T...);
-        };
-        struct FCoreDelegates { inline static FFixtureDelegate OnPostEngineInit; };
-        template <typename T> T* Cast(void*) { return nullptr; }
-        #define UCLASS(...)
-        #define SAMPLEGAME_API
-        #define override
-        #define USTRUCT(...)
-        #define UENUM(...)
-        #define UINTERFACE(...)
-        #define UFUNCTION(...)
-        #define UPROPERTY(...)
-        #define GENERATED_BODY(...)
-        #define GENERATED_IINTERFACE_BODY(...)
-        #define GENERATED_UINTERFACE_BODY(...)
-        #define IMPLEMENT_PRIMARY_GAME_MODULE(...)
-        #define IMPLEMENT_MODULE(...)
-        #define DECLARE_EVENT_OneParam(Owner, Name, Param) \\
-            class Name { public: void Broadcast(Param); \\
-            template <typename... T> void AddSP(T...); };
-        """,
-    )
     generated_root = project_root / "Intermediate" / "Generated"
     write_text(generated_root / "SampleActor.generated.h", "#pragma once")
-    compile_arguments = [
-        "clang++",
-        "-std=c++20",
-        "-x",
-        "c++",
-        "-fsyntax-only",
-        "-include",
-        str(clang_shim),
-        f"-I{source_header.parent}",
-        f"-I{source_cpp.parent}",
-        f"-I{generated_root}",
-        f"-I{engine_root / 'Engine' / 'Source' / 'Runtime' / 'Core' / 'Public'}",
-        f"-I{engine_root / 'Engine' / 'Source' / 'Runtime' / 'GameplayTags' / 'Classes'}",
-        str(source_cpp),
-    ]
-    sample_game_source = write_text(
+    write_text(
         project_root
         / "Source"
         / "SampleGame"
@@ -502,18 +444,6 @@ def create_fixture(root: Path) -> Fixture:
         / "ModuleManager.h",
         "#pragma once",
     )
-    compilation_database = write_json(
-        project_root / "compile_commands.json",
-        [
-            {
-                "directory": str(project_root),
-                "file": str(path),
-                "arguments": [*compile_arguments[:-1], str(path)],
-            }
-            for path in (source_cpp, sample_game_source, plugin_source)
-        ],
-    )
-
     (project_root / "Config").mkdir(parents=True, exist_ok=True)
     (project_root / "Content").mkdir(parents=True, exist_ok=True)
     (project_root / "Reports").mkdir(parents=True, exist_ok=True)
@@ -531,7 +461,6 @@ def create_fixture(root: Path) -> Fixture:
         plugin=plugin,
         plugin_rules=plugin_rules,
         plugin_source=plugin_source,
-        compilation_database=compilation_database,
     )
 
 
