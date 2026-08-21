@@ -198,13 +198,7 @@ def resolve_include(
 ) -> dict[str, Any]:
     spelling = str(include["spelling"])
     if include["syntax"] == "macro":
-        return {
-            "status": (
-                "generated_source"
-                if spelling.startswith("UE_INLINE_GENERATED_CPP_BY_NAME")
-                else "macro_unresolved"
-            )
-        }
+        return {"status": "macro_unresolved"}
     direct = including_file.parent / spelling
     candidates: set[Path] = set()
     candidate_owners: dict[Path, list[dict[str, Any]]] = {}
@@ -261,8 +255,6 @@ def resolve_include(
             ],
             "method": sorted(methods),
         }
-    if spelling.casefold().endswith(".generated.h"):
-        return {"status": "generated_header"}
     if include["syntax"] == "angle":
         return {"status": "system_or_sdk_unresolved"}
     return {"status": "not_found"}

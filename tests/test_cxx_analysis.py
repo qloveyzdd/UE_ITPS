@@ -172,7 +172,11 @@ class CxxAnalysisTests(CliTestCase):
         self.assertNotIn("source_unit", result)
         self.assertEqual(
             {item["spelling"] for item in result["includes"]},
-            {"SampleActor.h", "GameplayTagContainer.h"},
+            {
+                "SampleActor.h",
+                "GameplayTagContainer.h",
+                "UE_INLINE_GENERATED_CPP_BY_NAME(SampleActor)",
+            },
         )
 
     def test_explicit_same_name_source_and_header_are_both_scanned(self) -> None:
@@ -209,6 +213,12 @@ class CxxAnalysisTests(CliTestCase):
         self.assertEqual(
             by_spelling["SampleActor.generated.h"]["resolution"]["status"],
             "generated_header",
+        )
+        self.assertEqual(
+            by_spelling["UE_INLINE_GENERATED_CPP_BY_NAME(SampleActor)"][
+                "resolution"
+            ]["status"],
+            "generated_source",
         )
 
     def test_include_scan_does_not_follow_nested_includes(self) -> None:

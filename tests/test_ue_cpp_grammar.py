@@ -101,6 +101,21 @@ class UECppGrammarTests(unittest.TestCase):
             0,
         )
 
+    def test_generated_includes_have_dedicated_grammar_nodes(self) -> None:
+        nodes = self.parse_nodes(
+            """
+            #include "SampleActor.generated.h"
+            #include UE_INLINE_GENERATED_CPP_BY_NAME(SampleActor)
+            #include "SampleActor.h"
+            """
+        )
+
+        self.assert_no_syntax_errors(nodes)
+        node_types = [node.type for node in nodes]
+        self.assertEqual(node_types.count("ue_generated_header_path"), 1)
+        self.assertEqual(node_types.count("ue_inline_generated_cpp_path"), 1)
+        self.assertEqual(node_types.count("preproc_include"), 3)
+
     @unittest.skipUnless(
         (
             REPOSITORY_ROOT

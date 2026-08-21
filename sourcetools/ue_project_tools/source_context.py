@@ -85,8 +85,8 @@ def _public_include(
         "spelling": spelling,
         "syntax": include.get("syntax", "quote"),
     }
-    if spelling.casefold().endswith(".generated.h"):
-        resolution: dict[str, Any] = {"status": "generated_header"}
+    if include.get("kind") in {"generated_header", "generated_source"}:
+        resolution: dict[str, Any] = {"status": str(include["kind"])}
     elif include.get("included_file"):
         included_path = Path(str(include["included_file"])).resolve()
         resolution = {

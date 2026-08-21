@@ -35,10 +35,6 @@ _CONTROL_NODES = {
     "throw_statement": "throw_expression",
     "return_statement": "return_statement",
 }
-_INCLUDE_RE = re.compile(
-    rb"^[ \t]*#[ \t]*include[ \t]+(?P<value><[^>]+>|\"[^\"]+\"|[^\r\n]+)",
-    re.MULTILINE,
-)
 _TOKEN_RE = re.compile(
     r'::|->|\.\.\.|"(?:\\.|[^"\\])*"|[A-Za-z_]\w*|\d+|[^\s]'
 )
@@ -142,26 +138,43 @@ def _macros(
     return results
 
 
-def _includes(source: bytes, file_key: str) -> list[dict[str, Any]]:
+def _includes(root: Node, source: bytes, file_key: str) -> list[dict[str, Any]]:
     results = []
-    for match in _INCLUDE_RE.finditer(source):
-        raw = match.group("value").strip()
-        if raw.startswith(b"<") and raw.endswith(b">"):
+    for node in _walk(root):
+        if node.type != "preproc_include":
+            continue
+        path = node.child_by_field_name("path")
+        if path is None:
+            continue
+        raw = _text(path, source).strip()
+        if path.type == "ue_generated_header_path":
+            kind = "generated_header"
+            syntax = "quote"
+            spelling = raw[1:-1]
+        elif path.type == "ue_inline_generated_cpp_path":
+            kind = "generated_source"
+            syntax = "macro"
+            spelling = raw
+        elif path.type == "system_lib_string":
+            kind = "regular"
             syntax = "angle"
             spelling = raw[1:-1]
-        elif raw.startswith(b'"') and raw.endswith(b'"'):
+        elif path.type == "string_literal":
+            kind = "regular"
             syntax = "quote"
             spelling = raw[1:-1]
         else:
+            kind = "regular"
             syntax = "macro"
             spelling = raw
         results.append(
             {
                 "source_file": file_key,
                 "included_file": None,
-                "spelling": spelling.decode("utf-8", errors="replace").replace("\\", "/"),
+                "spelling": spelling.replace("\\", "/"),
                 "syntax": syntax,
-                "line": source.count(b"\n", 0, match.start()) + 1,
+                "kind": kind,
+                "line": _line(node),
             }
         )
     return results
@@ -547,7 +560,7 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
         "functions": functions,
         "variables": variables,
         "references": references,
-        "includes": _includes(source, file_key),
+        "includes": _includes(tree.root_node, source, file_key),
         "macros": _macros(tree.root_node, source, file_key),
         "diagnostics": diagnostics,
     }

@@ -310,6 +310,7 @@ def create_fixture(root: Path) -> Fixture:
         """
         #include "SampleActor.h"
         #include "GameplayTagContainer.h"
+        #include UE_INLINE_GENERATED_CPP_BY_NAME(SampleActor)
 
         namespace Gameplay
         {

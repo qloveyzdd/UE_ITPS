@@ -7,7 +7,7 @@ UE ITPS 是面向 Unreal Engine 项目维护者与 AI Agent 的确定性、只�
 
 ## 当前状态
 
-- 核心静态工具池已形成 23 个正式 CLI、23 份逐工具 Schema 与 1 份公共 Schema；C++ Source 检索以仓库内 `tree-sitter-ue-cpp` 语法树为基座，直接解析原始源码，不依赖编译数据库或宏清洗副本。
+- 核心静态工具池已形成 23 个正式 CLI、23 份逐工具 Schema 与 1 份公共 Schema；C++ Source 检索以仓库内 `tree-sitter-ue-cpp` 语法树为基座，直接解析原始源码，并由专用路径节点识别 UE 生成头和内联生成源，不依赖编译数据库、宏清洗副本或文本过滤。
 - `edittools/` 已提供 16 个只读工具，覆盖 Gameplay Tag、资产依赖、Blueprint 结构、DataTable、按需 DataAsset 属性、Primary Asset、配置、C++/Blueprint Gameplay Message，以及统一逻辑图谱的构建、校验和差异。
 - `information_pool/` 第一阶段把 `.uproject`、`.uplugin`、Target、模块规则、C++ 文件和 Include 归一为带证据的文件级 SQLite 图谱；`show/` 在本地逐层浏览这些文件关系；`mcp_connection_pool/` 负责被动发现并选择 UE 5.8 Editor MCP 连接。
 - 当前 Unreal 参考基座为 `LyraStarterGame` + UE 5.8.2。Editor 与多个 PIE Experience 已在本机观察到，但 5.8.2 权威文件指纹、完整 L0/L1 日志以及网络和 Travel 路径仍在重新核验。
