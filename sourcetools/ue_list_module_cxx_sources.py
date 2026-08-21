@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""List C++ source candidates for one explicitly selected Module."""
+"""Pair C++ headers and sources for one explicitly selected Module."""
 
 from pathlib import Path
 
@@ -9,15 +9,15 @@ from ue_project_tools.project_cxx_sources import list_module_cxx_sources
 
 SCHEMA_VERSION = "ue_list_module_cxx_sources"
 RESPONSIBILITY = (
-    "List project-local, manually maintained C++ source candidates for one "
+    "Pair project-local, manually maintained C++ headers and sources for one "
     "explicitly selected Module."
 )
 
 
 def main() -> int:
     parser = cli_parser(
-        "列出显式选择的单个 Module 中人工维护的 C++ 源码。",
-        "List manually maintained C++ source candidates for one explicitly selected Module.",
+        "对显式选择的单个 Module 中人工维护的 C++ 头文件和源文件进行配对。",
+        "Pair manually maintained C++ headers and sources for one explicitly selected Module.",
         schema_version=SCHEMA_VERSION,
         responsibility=RESPONSIBILITY,
     )

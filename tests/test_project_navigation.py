@@ -845,6 +845,10 @@ class ProjectNavigationTests(CliTestCase):
             self.fixture.module_rules.parent / "Public" / "Ignored.generated.h",
             "#pragma once",
         )
+        write_text(
+            self.fixture.module_rules.parent / "Public" / "HeaderOnly.hpp",
+            "#pragma once",
+        )
 
         result = self.cli(
             "ue_list_module_cxx_sources.py",
@@ -855,21 +859,47 @@ class ProjectNavigationTests(CliTestCase):
         self.assertEqual(result["schema_version"], "ue_list_module_cxx_sources")
         self.assertEqual(
             set(result),
-            {"schema_version", "headers", "cpp", "validation", "limits"},
+            {
+                "schema_version",
+                "pairs",
+                "header_only",
+                "cpp_only",
+                "validation",
+                "limits",
+            },
         )
         self.assertIn(
-            "Source/SampleGame/Public/SampleActor.h",
-            result["headers"],
+            {
+                "header": "Source/SampleGame/Public/SampleActor.h",
+                "cpp": "Source/SampleGame/Private/SampleActor.cpp",
+            },
+            result["pairs"],
         )
         self.assertIn(
-            "Source/SampleGame/Private/SampleActor.cpp",
-            result["cpp"],
+            "Source/SampleGame/Public/HeaderOnly.hpp",
+            result["header_only"],
         )
-        all_paths = [*result["headers"], *result["cpp"]]
+        self.assertIn(
+            "Source/SampleGame/Private/SampleGame.cpp",
+            result["cpp_only"],
+        )
+        all_paths = [
+            *result["header_only"],
+            *result["cpp_only"],
+            *(pair["header"] for pair in result["pairs"]),
+            *(pair["cpp"] for pair in result["pairs"]),
+        ]
         self.assertFalse(any("Nested" in path for path in all_paths))
         self.assertFalse(any("generated" in path.casefold() for path in all_paths))
-        self.assertEqual(result["headers"], sorted(result["headers"], key=str.casefold))
-        self.assertEqual(result["cpp"], sorted(result["cpp"], key=str.casefold))
+        self.assertEqual(result["validation"]["status"], "ok")
+        self.assertEqual(
+            result["header_only"],
+            sorted(result["header_only"], key=str.casefold),
+        )
+        self.assertEqual(
+            result["cpp_only"],
+            sorted(result["cpp_only"], key=str.casefold),
+        )
 
     def test_module_source_inventory_scans_selected_plugin_module(self) -> None:
         result = self.cli(
@@ -878,17 +908,73 @@ class ProjectNavigationTests(CliTestCase):
             str(self.fixture.plugin_rules),
         )
 
+        self.assertEqual(result["pairs"], [])
+        self.assertEqual(result["header_only"], [])
         self.assertEqual(
-            result["headers"],
-            [],
-        )
-        self.assertEqual(
-            result["cpp"],
+            result["cpp_only"],
             [
                 "Plugins/SamplePlugin/Source/SamplePlugin/Private/"
                 "SamplePluginModule.cpp"
             ],
         )
+
+    def test_module_source_inventory_pairs_files_at_module_root(self) -> None:
+        module_root = self.fixture.module_rules.parent
+        write_text(module_root / "RootPair.h", "#pragma once")
+        write_text(module_root / "RootPair.cpp", "// source")
+
+        result = self.cli(
+            "ue_list_module_cxx_sources.py",
+            "--rules",
+            str(self.fixture.module_rules),
+        )
+
+        self.assertIn(
+            {
+                "header": "Source/SampleGame/RootPair.h",
+                "cpp": "Source/SampleGame/RootPair.cpp",
+            },
+            result["pairs"],
+        )
+
+    def test_module_source_inventory_reports_ambiguous_pairs_in_validation(
+        self,
+    ) -> None:
+        module_root = self.fixture.module_rules.parent
+        write_text(module_root / "Public" / "Ambiguous.h", "#pragma once")
+        write_text(module_root / "Classes" / "Ambiguous.hpp", "#pragma once")
+        write_text(module_root / "Private" / "Ambiguous.cpp", "// source")
+
+        result = self.cli(
+            "ue_list_module_cxx_sources.py",
+            "--rules",
+            str(self.fixture.module_rules),
+        )
+
+        self.assertEqual(result["validation"]["status"], "warning")
+        problem = next(
+            item
+            for item in result["validation"]["problems"]
+            if item["code"] == "source-pair-ambiguous"
+        )
+        self.assertEqual(
+            problem["headers"],
+            [
+                "Source/SampleGame/Classes/Ambiguous.hpp",
+                "Source/SampleGame/Public/Ambiguous.h",
+            ],
+        )
+        self.assertEqual(
+            problem["cpp"],
+            ["Source/SampleGame/Private/Ambiguous.cpp"],
+        )
+        emitted_paths = {
+            *result["header_only"],
+            *result["cpp_only"],
+            *(pair["header"] for pair in result["pairs"]),
+            *(pair["cpp"] for pair in result["pairs"]),
+        }
+        self.assertFalse(any("Ambiguous" in path for path in emitted_paths))
 
     def test_plugin_resolution_keeps_enabled_and_disabled_declarations(self) -> None:
         result = self.cli(

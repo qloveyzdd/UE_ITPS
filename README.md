@@ -71,7 +71,7 @@ python sourcetools/ue_list_project_cxx_sources.py --project D:/Projects/MyGame/M
 python sourcetools/ue_list_module_cxx_sources.py --rules D:/Projects/MyGame/Source/MyGame/MyGame.Build.cs
 ```
 
-结果分别提供 Engine 定位证据、Module 声明与规则对应关系、Target 类型及其直接声明或从项目内基类继承的 `ExtraModuleNames`、按 Module 和可见性组织的项目 C++ 源文件清单，以及单个 Module 的扁平 `headers` / `cpp` 文件列表。
+结果分别提供 Engine 定位证据、Module 声明与规则对应关系、Target 类型及其直接声明或从项目内基类继承的 `ExtraModuleNames`、按 Module 和可见性组织的项目 C++ 源文件清单，以及单个 Module 的 `pairs`、`header_only`、`cpp_only` 文件列表。存在多个配对候选时，冲突组只报告在 `validation.problems` 中。
 
 ### 检查一个 C++ 源码单元
 
@@ -121,7 +121,7 @@ python sourcetools/ue_analyze_cxx_impact.py --project D:/Projects/MyGame/MyGame.
 python -m unittest discover -s tests -v
 ```
 
-当前核心测试套件共 104 项，覆盖 CLI 与 Schema 契约、项目导航、Module 与构建规则、Tree-sitter UE C++ grammar、图关系和端到端只读性。测试使用不含编译数据库的临时工程夹具；本地存在 `LyraStarterGame/` 时会额外执行 LyraEditor 原始源码回归，否则该用例跳过。
+当前核心测试套件共 106 项，覆盖 CLI 与 Schema 契约、项目导航、Module 与构建规则、Tree-sitter UE C++ grammar、图关系和端到端只读性。测试使用不含编译数据库的临时工程夹具；本地存在 `LyraStarterGame/` 时会额外执行 LyraEditor 原始源码回归，否则该用例跳过。
 
 Editor 工具拥有独立测试套件：
 

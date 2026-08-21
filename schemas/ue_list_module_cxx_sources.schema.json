@@ -29,12 +29,28 @@
         "minLength": 1
       }
     },
+    "pair": {
+      "type": "object",
+      "required": ["header", "cpp"],
+      "properties": {
+        "header": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cpp": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
     "success": {
       "type": "object",
       "required": [
         "schema_version",
-        "headers",
-        "cpp",
+        "pairs",
+        "header_only",
+        "cpp_only",
         "validation",
         "limits"
       ],
@@ -42,10 +58,16 @@
         "schema_version": {
           "const": "ue_list_module_cxx_sources"
         },
-        "headers": {
+        "pairs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/pair"
+          }
+        },
+        "header_only": {
           "$ref": "#/$defs/pathList"
         },
-        "cpp": {
+        "cpp_only": {
           "$ref": "#/$defs/pathList"
         },
         "validation": {

@@ -209,15 +209,109 @@ def _file_count(module_records: Iterable[dict[str, Any]]) -> int:
     )
 
 
-def _flatten_sources(module: dict[str, Any], kind: str) -> list[str]:
-    return sorted(
-        (
-            path
-            for paths in module[kind].values()
-            for path in paths
-        ),
+def _module_source_paths(
+    module: dict[str, Any],
+    kind: str,
+    project_root: Path,
+) -> set[Path]:
+    return {
+        (project_root / path).resolve()
+        for paths in module[kind].values()
+        for path in paths
+    }
+
+
+def _companion_bases(path: Path, module_root: Path) -> list[Path]:
+    bases = [path.parent / path.stem]
+    relative = path.relative_to(module_root)
+    if len(relative.parts) < 2:
+        return bases
+    first = relative.parts[0].casefold()
+    tail = Path(*relative.parts[1:]).with_suffix("")
+    if first == "private":
+        bases.extend(
+            module_root / directory / tail
+            for directory in ("Public", "Classes")
+        )
+    elif first in {"public", "classes"}:
+        bases.append(module_root / "Private" / tail)
+    return bases
+
+
+def _pair_module_sources(
+    module: dict[str, Any],
+    module_root: Path,
+    project_root: Path,
+) -> tuple[list[dict[str, str]], list[str], list[str], list[dict[str, Any]]]:
+    headers = _module_source_paths(module, "headers", project_root)
+    cpp = _module_source_paths(module, "cpp", project_root)
+    header_edges: dict[Path, set[Path]] = {path: set() for path in headers}
+    cpp_edges: dict[Path, set[Path]] = {path: set() for path in cpp}
+    for header in headers:
+        candidates = {
+            (base.parent / f"{base.name}{suffix}").resolve()
+            for base in _companion_bases(header, module_root)
+            for suffix in CPP_EXTENSIONS
+        }
+        for source in candidates & cpp:
+            header_edges[header].add(source)
+            cpp_edges[source].add(header)
+
+    pairs: list[dict[str, str]] = []
+    problems: list[dict[str, Any]] = []
+    visited_headers: set[Path] = set()
+    connected_headers = {path for path, edges in header_edges.items() if edges}
+    connected_cpp = {path for path, edges in cpp_edges.items() if edges}
+    for start in sorted(connected_headers, key=lambda path: normalized(path).casefold()):
+        if start in visited_headers:
+            continue
+        component_headers: set[Path] = set()
+        component_cpp: set[Path] = set()
+        pending: list[tuple[str, Path]] = [("header", start)]
+        while pending:
+            kind, path = pending.pop()
+            if kind == "header":
+                if path in component_headers:
+                    continue
+                component_headers.add(path)
+                pending.extend(("cpp", candidate) for candidate in header_edges[path])
+            else:
+                if path in component_cpp:
+                    continue
+                component_cpp.add(path)
+                pending.extend(("header", candidate) for candidate in cpp_edges[path])
+        visited_headers.update(component_headers)
+        relative_headers = sorted(
+            (_relative(path, project_root) for path in component_headers),
+            key=str.casefold,
+        )
+        relative_cpp = sorted(
+            (_relative(path, project_root) for path in component_cpp),
+            key=str.casefold,
+        )
+        if len(relative_headers) == len(relative_cpp) == 1:
+            pairs.append({"header": relative_headers[0], "cpp": relative_cpp[0]})
+            continue
+        problems.append(
+            {
+                "severity": "warning",
+                "code": "source-pair-ambiguous",
+                "headers": relative_headers,
+                "cpp": relative_cpp,
+                "message": "Multiple same-named source pairing candidates were found",
+            }
+        )
+
+    pairs.sort(key=lambda item: (item["header"].casefold(), item["cpp"].casefold()))
+    header_only = sorted(
+        (_relative(path, project_root) for path in headers - connected_headers),
         key=str.casefold,
     )
+    cpp_only = sorted(
+        (_relative(path, project_root) for path in cpp - connected_cpp),
+        key=str.casefold,
+    )
+    return pairs, header_only, cpp_only, problems
 
 
 def list_module_cxx_sources(rules_path: Path) -> dict[str, Any]:
@@ -241,21 +335,29 @@ def list_module_cxx_sources(rules_path: Path) -> dict[str, Any]:
         module_roots,
         None,
     )
+    pairs, header_only, cpp_only, problems = _pair_module_sources(
+        module,
+        rules.parent,
+        project_root,
+    )
     return result_document(
         "ue_list_module_cxx_sources",
         {
-            "headers": _flatten_sources(module, "headers"),
-            "cpp": _flatten_sources(module, "cpp"),
+            "pairs": pairs,
+            "header_only": header_only,
+            "cpp_only": cpp_only,
         },
-        [],
+        problems,
         responsibility=(
-            "List project-local, manually maintained C++ source candidates "
+            "Pair project-local, manually maintained C++ headers and sources "
             "for one explicitly selected Module."
         ),
         boundaries=[
             "The selected Module boundary is derived from physical *.Build.cs ancestry; UBT rules are not evaluated.",
             "Nested Modules with their own *.Build.cs files are excluded from the selected Module.",
             "Reported paths are relative to the nearest unique .uproject root.",
+            "Pairing uses same-stem files in the same directory and conventional Public or Classes to Private mirrors in either direction.",
+            "Only one-header-to-one-source components are paired; ambiguous candidate components are reported in validation.",
             "Generated-source exclusion uses generated directories and conventional generated filename patterns; file authorship is not inferred from file contents.",
             "Header extensions are .h, .hh, .hpp, .hxx, .inl, and .ipp; CPP extensions are .cpp, .cc, .cxx, and .mm.",
         ],
