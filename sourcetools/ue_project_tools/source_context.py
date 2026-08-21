@@ -12,7 +12,6 @@ from .source_includes import (
     include_owner,
     module_records,
     owner_for_path,
-    public_owner,
     resolve_include,
     rooted_path,
 )
@@ -287,24 +286,6 @@ def load_source_context(
         else None
     )
     return {
-        "path_roots": {
-            "project": normalized(project_root),
-            "engine": normalized(engine_root) if engine_root else None,
-        },
-        "context": {
-            "project_descriptor": project.name,
-            "project_discovery_method": "nearest-source-ancestor",
-            "engine": {
-                "status": engine_status,
-                "version": engine_result.get("version"),
-            },
-            "source_owner": public_owner(source_owner),
-            "cpp_analyzer": {
-                "engine": cpp_model["engine"],
-                "version": cpp_model["version"],
-                "model": "syntax",
-            },
-        },
         "source_unit": {"source": source_fact, "header": header_fact},
         "includes": includes,
         "include_problems": include_problems,
@@ -329,22 +310,10 @@ def source_result(
     boundaries: list[str],
     additional_problems: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    syntax_trees = [
-        {
-            "source": rooted_path(path, loaded["project_root"], loaded["engine_root"]),
-            "engine": parsed["syntax_tree"]["engine"],
-            "language": parsed["syntax_tree"]["language"],
-            "parse_error_count": parsed["syntax_tree"]["parse_error_count"],
-        }
-        for path, parsed in loaded["parsed_files"]
-    ]
     return result_document(
         schema_version,
         {
-            "path_roots": loaded["path_roots"],
-            "context": loaded["context"],
             "source_unit": loaded["source_unit"],
-            "analysis": {"syntax_trees": syntax_trees},
             **content,
         },
         [*loaded["problems"], *(additional_problems or [])],

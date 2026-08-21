@@ -4,25 +4,16 @@ from tests.support import CliTestCase, write_text
 
 
 class CxxAnalysisTests(CliTestCase):
-    def test_tree_sitter_ue_cpp_backend_runs_without_compile_database(self) -> None:
+    def test_cxx_output_omits_diagnostic_metadata(self) -> None:
         result = self.cli(
             "ue_list_cxx_types.py",
             "--source",
             str(self.fixture.source_cpp),
         )
-        self.assertEqual(
-            result["analysis"]["syntax_trees"][0]["engine"],
-            "tree-sitter/ue-cpp",
-        )
-        self.assertIn(
-            "tree-sitter-ue-cpp",
-            result["context"]["cpp_analyzer"]["version"],
-        )
-        self.assertEqual(
-            result["context"]["cpp_analyzer"]["model"],
-            "syntax",
-        )
-        self.assertNotIn("clang", result["context"])
+        self.assertNotIn("path_roots", result)
+        self.assertNotIn("context", result)
+        self.assertNotIn("analysis", result)
+        self.assertEqual(result["classes"][0]["name"], "ASampleActor")
         self.assertFalse(
             (self.fixture.project_root / "compile_commands.json").exists()
         )

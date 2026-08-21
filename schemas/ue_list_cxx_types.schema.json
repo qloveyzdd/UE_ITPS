@@ -26,10 +26,7 @@
       "type": "object",
       "required": [
         "schema_version",
-        "path_roots",
-        "context",
         "source_unit",
-        "analysis",
         "classes",
         "structs",
         "enums",
@@ -44,16 +41,7 @@
         "schema_version": {
           "const": "ue_list_cxx_types"
         },
-        "path_roots": {
-          "type": "object"
-        },
-        "context": {
-          "type": "object"
-        },
         "source_unit": {
-          "type": "object"
-        },
-        "analysis": {
           "type": "object"
         },
         "classes": {
