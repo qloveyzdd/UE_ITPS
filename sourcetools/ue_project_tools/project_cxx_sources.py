@@ -6,12 +6,23 @@ from typing import Any, Iterable
 
 from .common import SKIP_DIRS, iter_files, normalized, result_document
 from .descriptor import resolve_internal_directories
+from .discovery import find_nearest_uproject
 
 
 HEADER_EXTENSIONS = {".h", ".hh", ".hpp", ".hxx", ".inl", ".ipp"}
 CPP_EXTENSIONS = {".cpp", ".cc", ".cxx", ".mm"}
 SOURCE_EXTENSIONS = HEADER_EXTENSIONS | CPP_EXTENSIONS
 SKIP_DIR_KEYS = {name.casefold() for name in SKIP_DIRS}
+
+
+_BOUNDARIES = [
+    "Module ownership is derived from physical *.Build.cs ancestry; UBT rules are not evaluated.",
+    "Plugin ownership is derived from project-local .uplugin ancestry, including undeclared or disabled Plugins.",
+    "Engine directories and external additional directories are not scanned.",
+    "Generated-source exclusion uses generated directories and conventional generated filename patterns; file authorship is not inferred from file contents.",
+    "Public, Classes, and Private are physical directory classifications, not effective compiler visibility.",
+    "Header extensions are .h, .hh, .hpp, .hxx, .inl, and .ipp; CPP extensions are .cpp, .cc, .cxx, and .mm.",
+]
 
 
 def _is_within(path: Path, root: Path) -> bool:
@@ -130,6 +141,127 @@ def _plugin_for_rules(
     return max(candidates, key=lambda descriptor: len(descriptor.parent.parts))
 
 
+def _validated_module_rules(rules_path: Path) -> Path:
+    rules = rules_path.resolve()
+    if not rules.is_file():
+        raise ValueError(f"Module Build.cs is not a file: {rules}")
+    if not rules.name.casefold().endswith(".build.cs"):
+        raise ValueError(f"Expected a Module Build.cs file: {rules}")
+    module_name = rules.name[: -len(".Build.cs")]
+    if not module_name:
+        raise ValueError(f"Module Build.cs filename has no module name: {rules}")
+    return rules
+
+
+def _module_record(
+    rules: Path,
+    project_root: Path,
+    module_roots: set[Path],
+    plugin_descriptor: Path | None,
+) -> dict[str, Any]:
+    module_root = rules.parent
+    classified: dict[str, dict[str, list[str]]] = {
+        "headers": {
+            "public": [],
+            "private": [],
+            "unclassified": [],
+        },
+        "cpp": {
+            "public": [],
+            "private": [],
+            "unclassified": [],
+        },
+    }
+    for source in _source_files(module_root):
+        if not _is_within(source, project_root):
+            continue
+        owning_roots = [root for root in module_roots if _is_within(source, root)]
+        if owning_roots and max(
+            owning_roots,
+            key=lambda root: len(root.parts),
+        ) != module_root:
+            continue
+        kind = "headers" if source.suffix.casefold() in HEADER_EXTENSIONS else "cpp"
+        classified[kind][_visibility(source, module_root)].append(
+            _relative(source, project_root)
+        )
+    for kind in classified.values():
+        for paths in kind.values():
+            paths.sort(key=str.casefold)
+
+    return {
+        "module": rules.name[: -len(".Build.cs")],
+        "plugin": plugin_descriptor.stem if plugin_descriptor else None,
+        "plugin_descriptor": (
+            _relative(plugin_descriptor, project_root) if plugin_descriptor else None
+        ),
+        "build_rules": _relative(rules, project_root),
+        **classified,
+    }
+
+
+def _file_count(module_records: Iterable[dict[str, Any]]) -> int:
+    return sum(
+        len(paths)
+        for module in module_records
+        for kind in ("headers", "cpp")
+        for paths in module[kind].values()
+    )
+
+
+def _flatten_sources(module: dict[str, Any], kind: str) -> list[str]:
+    return sorted(
+        (
+            path
+            for paths in module[kind].values()
+            for path in paths
+        ),
+        key=str.casefold,
+    )
+
+
+def list_module_cxx_sources(rules_path: Path) -> dict[str, Any]:
+    rules = _validated_module_rules(rules_path)
+    project_file = find_nearest_uproject(rules)
+    project_root = project_file.parent.resolve()
+    engine_directory = (project_root / "Engine").resolve()
+    if not _is_within(rules, project_root) or _is_within(rules, engine_directory):
+        raise ValueError(f"Module Build.cs is not project-local: {rules}")
+
+    nested_rules = {
+        path.resolve()
+        for path in iter_files(rules.parent, ".Build.cs")
+        if _is_within(path, project_root) and not _is_within(path, engine_directory)
+    }
+    module_roots = {path.parent for path in nested_rules}
+    module_roots.add(rules.parent)
+    module = _module_record(
+        rules,
+        project_root,
+        module_roots,
+        None,
+    )
+    return result_document(
+        "ue_list_module_cxx_sources",
+        {
+            "headers": _flatten_sources(module, "headers"),
+            "cpp": _flatten_sources(module, "cpp"),
+        },
+        [],
+        responsibility=(
+            "List project-local, manually maintained C++ source candidates "
+            "for one explicitly selected Module."
+        ),
+        boundaries=[
+            "The selected Module boundary is derived from physical *.Build.cs ancestry; UBT rules are not evaluated.",
+            "Nested Modules with their own *.Build.cs files are excluded from the selected Module.",
+            "Reported paths are relative to the nearest unique .uproject root.",
+            "Generated-source exclusion uses generated directories and conventional generated filename patterns; file authorship is not inferred from file contents.",
+            "Header extensions are .h, .hh, .hpp, .hxx, .inl, and .ipp; CPP extensions are .cpp, .cc, .cxx, and .mm.",
+        ],
+    )
+
+
 def list_project_cxx_sources(
     project_file: Path,
     descriptor: dict[str, Any],
@@ -190,49 +322,14 @@ def list_project_cxx_sources(
     module_records: list[dict[str, Any]] = []
     module_roots = {rules.parent for rules in build_rules}
     for rules in sorted(build_rules, key=lambda path: normalized(path).casefold()):
-        module_root = rules.parent
         plugin_descriptor = _plugin_for_rules(rules, plugin_descriptors)
-        classified: dict[str, dict[str, list[str]]] = {
-            "headers": {
-                "public": [],
-                "private": [],
-                "unclassified": [],
-            },
-            "cpp": {
-                "public": [],
-                "private": [],
-                "unclassified": [],
-            },
-        }
-        for source in _source_files(module_root):
-            if not _is_within(source, project_root):
-                continue
-            owning_roots = [root for root in module_roots if _is_within(source, root)]
-            if (
-                owning_roots
-                and max(owning_roots, key=lambda root: len(root.parts)) != module_root
-            ):
-                continue
-            kind = "headers" if source.suffix.casefold() in HEADER_EXTENSIONS else "cpp"
-            classified[kind][_visibility(source, module_root)].append(
-                _relative(source, project_root)
-            )
-        for kind in classified.values():
-            for paths in kind.values():
-                paths.sort(key=str.casefold)
-
         module_records.append(
-            {
-                "module": rules.name[: -len(".Build.cs")],
-                "plugin": plugin_descriptor.stem if plugin_descriptor else None,
-                "plugin_descriptor": (
-                    _relative(plugin_descriptor, project_root)
-                    if plugin_descriptor
-                    else None
-                ),
-                "build_rules": _relative(rules, project_root),
-                **classified,
-            }
+            _module_record(
+                rules,
+                project_root,
+                module_roots,
+                plugin_descriptor,
+            )
         )
 
     module_records.sort(
@@ -261,12 +358,6 @@ def list_project_cxx_sources(
             }
         )
 
-    file_count = sum(
-        len(paths)
-        for module in module_records
-        for kind in ("headers", "cpp")
-        for paths in module[kind].values()
-    )
     return result_document(
         "ue_list_project_cxx_sources",
         {
@@ -276,7 +367,7 @@ def list_project_cxx_sources(
                 "descriptor": project_file.name,
             },
             "module_count": len(module_records),
-            "file_count": file_count,
+            "file_count": _file_count(module_records),
             "modules": module_records,
         },
         problems,
@@ -284,12 +375,5 @@ def list_project_cxx_sources(
             "List project-local, manually maintained C++ source candidates "
             "grouped by Module, Plugin, file kind, and visibility."
         ),
-        boundaries=[
-            "Module ownership is derived from physical *.Build.cs ancestry; UBT rules are not evaluated.",
-            "Plugin ownership is derived from project-local .uplugin ancestry, including undeclared or disabled Plugins.",
-            "Engine directories and external additional directories are not scanned.",
-            "Generated-source exclusion uses generated directories and conventional generated filename patterns; file authorship is not inferred from file contents.",
-            "Public, Classes, and Private are physical directory classifications, not effective compiler visibility.",
-            "Header extensions are .h, .hh, .hpp, .hxx, .inl, and .ipp; CPP extensions are .cpp, .cc, .cxx, and .mm.",
-        ],
+        boundaries=_BOUNDARIES,
     )

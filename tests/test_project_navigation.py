@@ -837,6 +837,59 @@ class ProjectNavigationTests(CliTestCase):
         )
         self.assertEqual(by_name["SamplePlugin"]["plugin"], "SamplePlugin")
 
+    def test_module_source_inventory_scans_only_selected_module(self) -> None:
+        nested_root = self.fixture.module_rules.parent / "Nested"
+        write_text(nested_root / "Nested.Build.cs", "// nested rules")
+        write_text(nested_root / "Private" / "Nested.cpp", "// nested source")
+        write_text(
+            self.fixture.module_rules.parent / "Public" / "Ignored.generated.h",
+            "#pragma once",
+        )
+
+        result = self.cli(
+            "ue_list_module_cxx_sources.py",
+            "--rules",
+            str(self.fixture.module_rules),
+        )
+
+        self.assertEqual(result["schema_version"], "ue_list_module_cxx_sources")
+        self.assertEqual(
+            set(result),
+            {"schema_version", "headers", "cpp", "validation", "limits"},
+        )
+        self.assertIn(
+            "Source/SampleGame/Public/SampleActor.h",
+            result["headers"],
+        )
+        self.assertIn(
+            "Source/SampleGame/Private/SampleActor.cpp",
+            result["cpp"],
+        )
+        all_paths = [*result["headers"], *result["cpp"]]
+        self.assertFalse(any("Nested" in path for path in all_paths))
+        self.assertFalse(any("generated" in path.casefold() for path in all_paths))
+        self.assertEqual(result["headers"], sorted(result["headers"], key=str.casefold))
+        self.assertEqual(result["cpp"], sorted(result["cpp"], key=str.casefold))
+
+    def test_module_source_inventory_scans_selected_plugin_module(self) -> None:
+        result = self.cli(
+            "ue_list_module_cxx_sources.py",
+            "--rules",
+            str(self.fixture.plugin_rules),
+        )
+
+        self.assertEqual(
+            result["headers"],
+            [],
+        )
+        self.assertEqual(
+            result["cpp"],
+            [
+                "Plugins/SamplePlugin/Source/SamplePlugin/Private/"
+                "SamplePluginModule.cpp"
+            ],
+        )
+
     def test_plugin_resolution_keeps_enabled_and_disabled_declarations(self) -> None:
         result = self.cli(
             "ue_resolve_plugins.py",

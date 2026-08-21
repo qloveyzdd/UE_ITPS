@@ -8,7 +8,7 @@ UE ITPS 的目标是：从调用方明确选择的 Unreal Engine 项目或源码
 
 设计原则：
 
-1. **只读**：22 个正式 CLI 不修改项目、Engine、资产、配置或注册表。
+1. **只读**：23 个正式 CLI 不修改项目、Engine、资产、配置或注册表。
 2. **明确选择**：多个候选意味着歧义，不能由工具猜测目标。
 3. **单一职责**：每个 CLI 只回答一个聚焦问题。
 4. **证据优先**：事实尽量携带路径、行号、描述符指针或来源。
@@ -29,8 +29,8 @@ UE ITPS 的目标是：从调用方明确选择的 Unreal Engine 项目或源码
 
 | 类别 | 数量 | 契约 |
 |---|---:|---|
-| 正式只读 CLI | 22 | 稳定 JSON、统一错误信封、纯工具名 `schema_version`、正式 Schema |
-| JSON Schema | 23 | 22 个 CLI Schema，加 1 个公共 Schema |
+| 正式只读 CLI | 23 | 稳定 JSON、统一错误信封、纯工具名 `schema_version`、正式 Schema |
+| JSON Schema | 24 | 23 个 CLI Schema，加 1 个公共 Schema |
 | Lyra 辅助脚本 | 3 | 本地证据采集流程，不属于正式 CLI 契约，可能写入 `.planning/evidence/` |
 
 `LyraStarterGame/` 和 `ExternalProjects/` 是可选参考输入，不是正式工具运行或自动化测试的依赖。
@@ -105,7 +105,7 @@ schemas/
 `schemas/` 使用 JSON Schema Draft 2020-12：
 
 - `common.schema.json` 定义共享 `validation`、`limits`、`request` 和错误文档。
-- 22 个 CLI 各有一份同名 Schema。
+- 23 个 CLI 各有一份同名 Schema。
 - 每个 CLI Schema 使用 `oneOf` 区分领域结果和请求失败结果。
 - `schema_version` 的值固定为不含版本后缀的工具名，并与 Schema 文件名对应。
 
@@ -314,7 +314,7 @@ python -m unittest discover -s tests -v
 - `new_lyra_baseline_fingerprint.ps1` 为选定 Lyra 文件生成 SHA-256 清单与摘要。
 - `archive_lyra_run.ps1` 将运行日志和上下文归档为不可覆盖的证据目录。
 
-它们可能写入 `.planning/evidence/`，其验证、版本和副作用必须单独管理。不得将它们的运行时或资产结论合并进 22 个静态 CLI 的 Schema。
+它们可能写入 `.planning/evidence/`，其验证、版本和副作用必须单独管理。不得将它们的运行时或资产结论合并进 23 个静态 CLI 的 Schema。
 
 ## 10. 扩展规则
 

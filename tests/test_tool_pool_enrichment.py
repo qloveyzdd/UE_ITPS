@@ -85,7 +85,7 @@ class ToolPoolEnrichmentTests(CliTestCase):
 
     def test_new_graph_probes_and_tool_pool_are_deterministic(self) -> None:
         pool = self.cli("ue_list_tools.py")
-        self.assertEqual(pool["tool_count"], 22)
+        self.assertEqual(pool["tool_count"], 23)
         self.assertEqual(pool["schema_version"], "ue_list_tools")
 
         hierarchy = self.cli(

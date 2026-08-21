@@ -13,7 +13,7 @@ UE ITPS 是一套面向 Unreal Engine 工程的只读检查与关系浏览系统
      ▼                                        ▼
 +----------------+                  +----------------------+
 | sourcetools/ue_*.py |             | edittools/ CLI       |
-| 22 个薄 CLI    |                  +----------+-----------+
+| 23 个薄 CLI    |                  +----------+-----------+
 +-------+--------+                             │ Remote Execution
         │                                      ▼
         ▼                           +----------------------+
@@ -96,7 +96,7 @@ UE ITPS 是一套面向 Unreal Engine 工程的只读检查与关系浏览系统
 
 ```text
 .
-├─ sourcetools/              # 22 个正式静态 CLI 及其领域实现
+├─ sourcetools/              # 23 个正式静态 CLI 及其领域实现
 │  └─ ue_project_tools/      # 解析、源码事实、图算法和公共输出组件
 ├─ schemas/                  # 静态 CLI 的公共及逐工具 JSON Schema
 ├─ edittools/                # 运行中 Editor 的独立只读 CLI、运行时适配器与 Schema

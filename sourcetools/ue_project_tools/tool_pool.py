@@ -67,6 +67,13 @@ _TOOLS: tuple[dict[str, Any], ...] = (
         "capabilities": ["source_inventory", "module_ownership"],
     },
     {
+        "name": "ue_list_module_cxx_sources",
+        "category": "source",
+        "entrypoint": "sourcetools/ue_list_module_cxx_sources.py",
+        "inputs": ["rules"],
+        "capabilities": ["source_inventory", "module_ownership"],
+    },
+    {
         "name": "ue_resolve_plugins",
         "category": "plugin",
         "entrypoint": "sourcetools/ue_resolve_plugins.py",

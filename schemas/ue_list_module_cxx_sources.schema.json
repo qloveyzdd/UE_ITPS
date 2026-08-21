@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:schema:ue_list_module_cxx_sources",
+  "title": "ue_list_module_cxx_sources.py result",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/success"
+    },
+    {
+      "allOf": [
+        {
+          "$ref": "urn:ue-itps:schema:common#/$defs/errorDocument"
+        },
+        {
+          "properties": {
+            "schema_version": {
+              "const": "ue_list_module_cxx_sources"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "pathList": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "success": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "headers",
+        "cpp",
+        "validation",
+        "limits"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "ue_list_module_cxx_sources"
+        },
+        "headers": {
+          "$ref": "#/$defs/pathList"
+        },
+        "cpp": {
+          "$ref": "#/$defs/pathList"
+        },
+        "validation": {
+          "$ref": "urn:ue-itps:schema:common#/$defs/validation"
+        },
+        "limits": {
+          "$ref": "urn:ue-itps:schema:common#/$defs/limits"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

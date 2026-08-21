@@ -48,6 +48,10 @@ class EndToEndWorkflowTests(CliTestCase):
                 "--project",
                 str(self.fixture.project),
             ),
+            "ue_list_module_cxx_sources.py": (
+                "--rules",
+                str(self.fixture.module_rules),
+            ),
             "ue_resolve_plugins.py": (
                 "--project",
                 str(self.fixture.project),
