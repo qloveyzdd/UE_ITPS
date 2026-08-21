@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 import re
 from typing import Any
@@ -79,11 +80,11 @@ def _delegate_operations(
 
 
 def inspect_source_function(
-    source_file: Path,
+    source_files: Path | Sequence[Path],
     function_name: str,
     engine_override: Path | None = None,
 ) -> dict[str, Any]:
-    loaded = load_source_context(source_file, engine_override)
+    loaded = load_source_context(source_files, engine_override)
     parts = _callable_parts(loaded)
     relations = {item["usr"]: item for item in _relations(parts, loaded)}
     matches = []

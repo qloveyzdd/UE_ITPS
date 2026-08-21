@@ -652,20 +652,16 @@ void ASampleActor::Helper()""",
             connection.close()
 
     def test_overloaded_function_probe_documents_have_distinct_keys(self) -> None:
-        source_unit = {
-            "source": {"root": "project", "path": "Source/Test.cpp"},
-            "header": {"root": "project", "path": "Source/Test.h"},
-        }
         unit = SourceUnitProbe(
             entry="Source/Test.cpp",
+            unit_paths=("Source/Test.cpp",),
             owner_by_path={},
-            types={"schema_version": "types", "source_unit": source_unit},
-            includes={"schema_version": "includes", "source_unit": source_unit},
-            functions={"schema_version": "functions", "source_unit": source_unit},
+            types={"schema_version": "types"},
+            includes={"schema_version": "includes"},
+            functions={"schema_version": "functions"},
             function_references=[
                 {
                     "schema_version": "references",
-                    "source_unit": source_unit,
                     "selection": {"name": "Overloaded"},
                     "matches": [
                         {
@@ -676,7 +672,6 @@ void ASampleActor::Helper()""",
                 },
                 {
                     "schema_version": "references",
-                    "source_unit": source_unit,
                     "selection": {"name": "Overloaded"},
                     "matches": [
                         {
@@ -687,7 +682,6 @@ void ASampleActor::Helper()""",
                 },
                 {
                     "schema_version": "references",
-                    "source_unit": source_unit,
                     "selection": {"name": "Overloaded"},
                     "matches": [
                         {

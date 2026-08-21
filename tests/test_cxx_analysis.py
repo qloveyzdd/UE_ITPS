@@ -13,7 +13,13 @@ class CxxAnalysisTests(CliTestCase):
         self.assertNotIn("path_roots", result)
         self.assertNotIn("context", result)
         self.assertNotIn("analysis", result)
-        self.assertEqual(result["classes"][0]["name"], "ASampleActor")
+        self.assertNotIn("source_unit", result)
+        self.assertTrue(
+            any(
+                item["qualified_name"] == "Gameplay::Utility"
+                for item in result["free_functions"]
+            )
+        )
         self.assertFalse(
             (self.fixture.project_root / "compile_commands.json").exists()
         )
@@ -157,34 +163,30 @@ class CxxAnalysisTests(CliTestCase):
             ],
         )
 
-    def test_cpp_derives_public_header_as_one_source_unit(self) -> None:
+    def test_single_cpp_does_not_scan_matching_header(self) -> None:
         result = self.cli(
             "ue_list_cxx_includes.py",
             "--source",
             str(self.fixture.source_cpp),
         )
+        self.assertNotIn("source_unit", result)
         self.assertEqual(
-            result["source_unit"]["source"]["path"],
-            "Source/SampleGame/Private/SampleActor.cpp",
-        )
-        self.assertEqual(
-            result["source_unit"]["header"]["path"],
-            "Source/SampleGame/Public/SampleActor.h",
+            {item["spelling"] for item in result["includes"]},
+            {"SampleActor.h", "GameplayTagContainer.h"},
         )
 
-    def test_public_header_derives_private_cpp_bidirectionally(self) -> None:
+    def test_explicit_same_name_source_and_header_are_both_scanned(self) -> None:
         result = self.cli(
             "ue_list_cxx_types.py",
             "--source",
             str(self.fixture.source_header),
+            str(self.fixture.source_cpp),
         )
+        self.assertNotIn("source_unit", result)
+        self.assertEqual(result["classes"][0]["name"], "ASampleActor")
         self.assertEqual(
-            result["source_unit"]["source"]["path"],
-            "Source/SampleGame/Private/SampleActor.cpp",
-        )
-        self.assertEqual(
-            result["source_unit"]["header"]["path"],
-            "Source/SampleGame/Public/SampleActor.h",
+            {item["role"] for item in result["global_variables"]},
+            {"declaration", "definition"},
         )
 
     def test_include_facts_report_engine_provenance_and_generated_header(self) -> None:
@@ -192,9 +194,10 @@ class CxxAnalysisTests(CliTestCase):
             "ue_list_cxx_includes.py",
             "--source",
             str(self.fixture.source_cpp),
+            str(self.fixture.source_header),
         )
         by_spelling = {item["spelling"]: item for item in result["includes"]}
-        self.assertNotIn("SampleActor.h", by_spelling)
+        self.assertIn("SampleActor.h", by_spelling)
         self.assertEqual(
             by_spelling["GameplayTagContainer.h"]["resolution"]["owner"]["kind"],
             "engine_module",
@@ -236,6 +239,7 @@ class CxxAnalysisTests(CliTestCase):
             "ue_list_cxx_includes.py",
             "--source",
             str(self.fixture.source_cpp),
+            str(self.fixture.source_header),
         )
         spellings = {item["spelling"] for item in result["includes"]}
         self.assertIn("Nested.h", spellings)
@@ -246,6 +250,7 @@ class CxxAnalysisTests(CliTestCase):
             "ue_list_cxx_types.py",
             "--source",
             str(self.fixture.source_cpp),
+            str(self.fixture.source_header),
         )
         actor = result["classes"][0]
         self.assertEqual(actor["qualified_name"], "Gameplay::ASampleActor")
@@ -260,6 +265,7 @@ class CxxAnalysisTests(CliTestCase):
             "ue_list_cxx_types.py",
             "--source",
             str(self.fixture.source_cpp),
+            str(self.fixture.source_header),
         )
         self.assertEqual(result["enums"][0]["qualified_name"], "Gameplay::ESampleState")
         self.assertTrue(result["enums"][0]["scoped"])
@@ -397,6 +403,7 @@ class CxxAnalysisTests(CliTestCase):
             "ue_inspect_cxx_function.py",
             "--source",
             str(self.fixture.source_cpp),
+            str(self.fixture.source_header),
             "--function",
             "BeginPlay",
         )
@@ -504,6 +511,7 @@ extern int32 GSampleCount;""",
             "ue_inspect_cxx_function.py",
             "--source",
             str(source),
+            str(header),
             "--function",
             "Run",
         )
@@ -545,14 +553,10 @@ extern int32 GSampleCount;""",
             "--source",
             str(header),
         )
-        self.assertIsNone(result["source_unit"]["source"])
-        self.assertEqual(
-            result["source_unit"]["header"]["path"],
-            "Source/SampleGame/Public/Standalone.h",
-        )
+        self.assertNotIn("source_unit", result)
         self.assertEqual(result["structs"][0]["name"], "FStandalone")
 
-    def test_ambiguous_companion_headers_produce_warning_without_guessing(self) -> None:
+    def test_single_cpp_ignores_all_matching_header_candidates(self) -> None:
         source = write_text(
             self.fixture.project_root
             / "Source"
@@ -575,14 +579,32 @@ extern int32 GSampleCount;""",
             "--source",
             str(source),
         )
-        self.assertIsNone(result["source_unit"]["header"])
-        self.assertEqual(result["validation"]["status"], "warning")
-        self.assertTrue(
-            any(
-                problem["code"] == "source-unit-header-ambiguous"
-                for problem in result["validation"]["problems"]
-            )
+        self.assertNotIn("source_unit", result)
+        self.assertEqual(result["validation"]["status"], "ok")
+
+    def test_two_explicit_files_must_be_opposite_kind_and_same_name(self) -> None:
+        other_header = write_text(
+            self.fixture.source_header.with_name("Other.h"),
+            "#pragma once",
         )
+        invalid_inputs = (
+            (self.fixture.source_header, other_header),
+            (self.fixture.source_cpp, other_header),
+            (
+                self.fixture.source_cpp,
+                self.fixture.source_header,
+                other_header,
+            ),
+        )
+        for sources in invalid_inputs:
+            with self.subTest(sources=sources):
+                arguments = [
+                    "ue_list_cxx_includes.py",
+                    "--source",
+                    *(str(path) for path in sources),
+                ]
+                result = self.cli(*arguments, expected_code=2)
+                self.assert_request_failure(result, kind="input")
 
     def test_all_cxx_tools_reject_unsupported_suffixes(self) -> None:
         wrong = write_text(

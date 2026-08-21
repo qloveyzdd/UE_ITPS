@@ -1,16 +1,17 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 from .source_context import load_source_context, source_result
 
 def list_source_includes(
-    source_file: Path,
+    source_files: Path | Sequence[Path],
     engine_override: Path | None = None,
 ) -> dict[str, Any]:
     loaded = load_source_context(
-        source_file,
+        source_files,
         engine_override,
         load_includes=True,
         load_cpp_analysis=False,
@@ -19,9 +20,8 @@ def list_source_includes(
         "ue_list_cxx_includes",
         loaded,
         {"includes": loaded["includes"]},
-        responsibility="Report non-companion direct include spellings and deterministic filesystem provenance.",
+        responsibility="Report direct include spellings and deterministic filesystem provenance.",
         boundaries=[
-            "The source unit's own companion-header include is represented by source_unit.header and omitted from includes.",
             "Ambiguous, missing, and unresolved-macro includes are moved to validation.",
             "Referenced files are located for provenance but are never recursively read.",
             "Non-generated includes use deterministic filesystem provenance and do not model compiler search-path order.",

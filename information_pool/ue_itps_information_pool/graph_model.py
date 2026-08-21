@@ -20,18 +20,12 @@ from .identity import (
 from .probe_adapter import ProjectProbe, SourceOwner, SourceUnitProbe
 from .storage import json_value
 
-def _source_unit_key(document: dict[str, Any]) -> str:
-    paths = [
-        str(item["path"]).replace("\\", "/")
-        for key in ("source", "header")
-        if (item := document.get("source_unit", {}).get(key))
-        and item.get("root") == "project"
-    ]
-    return "|".join(sorted(paths, key=str.casefold))
+def _source_unit_key(unit: SourceUnitProbe) -> str:
+    return "|".join(sorted(unit.unit_paths, key=str.casefold))
 
 
 def _location(
-    document: dict[str, Any],
+    unit: SourceUnitProbe,
     evidence: dict[str, Any],
 ) -> dict[str, Any]:
     if "root" in evidence and "path" in evidence:
@@ -45,14 +39,16 @@ def _location(
                 else None
             ),
         }
-    unit = str(evidence["unit"])
-    source_key = "header" if unit == "header" else "source"
-    source = document["source_unit"].get(source_key)
-    if source is None:
-        raise ValueError(f"Missing {source_key} for unit evidence")
+    unit_kind = str(evidence["unit"])
+    suffixes = {".h", ".hpp"} if unit_kind == "header" else {".cpp", ".cc"}
+    candidates = [
+        path for path in unit.unit_paths if Path(path).suffix.casefold() in suffixes
+    ]
+    if len(candidates) != 1:
+        raise ValueError(f"Missing unique {unit_kind} path for unit evidence")
     return {
-        "root": str(source["root"]),
-        "path": str(source["path"]).replace("\\", "/"),
+        "root": "project",
+        "path": candidates[0].replace("\\", "/"),
         "line": int(evidence["line"]),
         "end_line": (
             int(evidence["end_line"])
@@ -472,7 +468,7 @@ def _add_type_symbols(graph: Graph, unit: SourceUnitProbe) -> None:
         ("enums", "enum"),
     ):
         for item in document.get(bucket, []):
-            location = _location(document, item["evidence"])
+            location = _location(unit, item["evidence"])
             node_id, canonical = symbol_id(
                 graph.key,
                 kind=kind,
@@ -520,7 +516,7 @@ def _add_type_symbols(graph: Graph, unit: SourceUnitProbe) -> None:
                 for member in item.get("member_anchors", []):
                     if member["kind"] != "variable":
                         continue
-                    member_location = _location(document, member["evidence"])
+                    member_location = _location(unit, member["evidence"])
                     member_qualified = (
                         f"{item['qualified_name']}::{member['name']}"
                     )
@@ -573,7 +569,7 @@ def _add_type_symbols(graph: Graph, unit: SourceUnitProbe) -> None:
                     )
 
     for item in document.get("global_variables", []):
-        location = _location(document, item["evidence"])
+        location = _location(unit, item["evidence"])
         node_id, canonical = symbol_id(
             graph.key,
             kind="global_variable",
@@ -616,7 +612,7 @@ def _add_type_symbols(graph: Graph, unit: SourceUnitProbe) -> None:
 def _add_function_symbols(graph: Graph, unit: SourceUnitProbe) -> None:
     document = unit.functions
     schema = str(document["schema_version"])
-    source_unit = _source_unit_key(document)
+    source_unit = _source_unit_key(unit)
     linkage_by_name = {
         str(item["qualified_name"]): str(item["linkage"])
         for item in unit.types.get("free_functions", [])
@@ -669,7 +665,7 @@ def _add_function_symbols(graph: Graph, unit: SourceUnitProbe) -> None:
         )
         graph.function_ids[(source_unit, str(item["function_id"]))] = node_id
         for role, occurrence in occurrences:
-            location = _location(document, occurrence["evidence"])
+            location = _location(unit, occurrence["evidence"])
             graph.add_occurrence(
                 node_id=node_id,
                 role=role,
@@ -763,7 +759,7 @@ def _add_include_relations(graph: Graph, unit: SourceUnitProbe) -> None:
     document = unit.includes
     schema = str(document["schema_version"])
     for item in document.get("includes", []):
-        location = _location(document, item["evidence"])
+        location = _location(unit, item["evidence"])
         source_file = graph.ensure_file(
             root=location["root"],
             path=location["path"],
@@ -798,28 +794,6 @@ def _add_include_relations(graph: Graph, unit: SourceUnitProbe) -> None:
                 "resolution": item.get("resolution", {}),
             },
         )
-    source = document.get("source_unit", {}).get("source")
-    header = document.get("source_unit", {}).get("header")
-    if source and header:
-        graph.add_relation(
-            source_id=graph.ensure_file(
-                root=str(source["root"]),
-                path=str(source["path"]),
-                owner=unit.owner_by_path.get(str(source["path"])),
-            ),
-            kind="COMPANION",
-            target_id=graph.ensure_file(
-                root=str(header["root"]),
-                path=str(header["path"]),
-                owner=unit.owner_by_path.get(str(header["path"])),
-            ),
-            certainty="resolved",
-            resolution_status="resolved",
-            confidence=1.0,
-            probe_schema=schema,
-        )
-
-
 def _semantic_kind(candidate_kind: str) -> str | None:
     if candidate_kind == "type":
         return "USES_TYPE"
@@ -835,7 +809,7 @@ def _semantic_kind(candidate_kind: str) -> str | None:
 def _add_reference_relations(graph: Graph, unit: SourceUnitProbe) -> None:
     for document in unit.function_references:
         schema = str(document["schema_version"])
-        source_unit = _source_unit_key(document)
+        source_unit = _source_unit_key(unit)
         for match in document.get("matches", []):
             source_id = graph.function_ids.get(
                 (source_unit, str(match["function_id"]))
@@ -845,7 +819,7 @@ def _add_reference_relations(graph: Graph, unit: SourceUnitProbe) -> None:
             for candidate in match.get("external_symbols", []):
                 candidate_kind = str(candidate["kind"])
                 spelling = str(candidate["spelling"])
-                location = _location(document, candidate["evidence"])
+                location = _location(unit, candidate["evidence"])
                 resolution = graph.resolve(
                     candidate_kind,
                     spelling,
@@ -938,7 +912,7 @@ def _delegate_event_resolution(
 def _add_delegate_relations(graph: Graph, unit: SourceUnitProbe) -> None:
     relation_schema = "ue-itps.information-pool.delegate-semantics.v1"
     for document in unit.function_references:
-        source_unit = _source_unit_key(document)
+        source_unit = _source_unit_key(unit)
         for match in document.get("matches", []):
             source_id = graph.function_ids.get(
                 (source_unit, str(match["function_id"]))
@@ -950,7 +924,7 @@ def _add_delegate_relations(graph: Graph, unit: SourceUnitProbe) -> None:
                 event_resolution = _delegate_event_resolution(graph, event)
                 if event_resolution.status != "resolved":
                     continue
-                location = _location(document, operation["evidence"])
+                location = _location(unit, operation["evidence"])
                 properties = {
                     "api": operation["api"],
                     "event": event,

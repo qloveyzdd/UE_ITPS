@@ -50,7 +50,7 @@ UE ITPS 是一套面向 Unreal Engine 工程的只读检查与关系浏览系统
 ### 静态项目检查
 
 1. 调用方通过 `sourcetools/ue_*.py` 传入一个搜索根、项目描述符、构建规则文件或 C++ 源文件。CLI 只负责参数、双语帮助、退出码和 JSON 输出。
-2. `sourcetools/ue_project_tools/` 中对应的领域服务校验入口并限定扫描边界；遇到多个候选项目、Plugin 或伴随源码时返回歧义或警告，不自行猜测目标。
+2. `sourcetools/ue_project_tools/` 中对应的领域服务校验入口并限定扫描边界；遇到多个候选项目或 Plugin 时返回歧义，不自行猜测目标；C++ 文件只按调用方显式传入的一至两个路径解析。
 3. 描述符与版本文件由严格 JSON/Unreal JSON 读取器解析；C++ 与 C# 代码事实分别由 Tree-sitter C++、Tree-sitter C# 提供。UE 宏从本地源码读取并与语法节点组合，委托和生命周期只做保守领域投影；依赖、继承、循环和影响查询使用确定性图算法处理。
 4. 领域结果通过公共组装器补充 `schema_version`、`validation` 和 `limits`，稳定序列化到 stdout。调用失败、扫描阻断和带警告的完成状态通过不同退出码表达。
 5. 消费方用 `schemas/` 下同名 JSON Schema 校验结果，并根据 `limits` 判断这些静态事实不能证明的运行时语义。
@@ -65,7 +65,7 @@ UE ITPS 是一套面向 Unreal Engine 工程的只读检查与关系浏览系统
 ### 信息池构建与查询
 
 1. `information_pool/build_information_pool.py` 要求输入工程处于明确的 Git 提交，并确认工程子树和信息池位置符合构建约束。
-2. `probe_adapter.scan_project()` 复用核心静态探针，对项目结构和 C++ 源码单元并行扫描；源码内容哈希用于复用缓存。
+2. `probe_adapter.scan_project()` 复用核心静态探针，对项目结构和项目清单中的 C++ 文件逐个并行扫描；源码内容哈希用于复用缓存。
 3. `build_graph_model()` 将探针文档归一化为稳定节点、出现位置、语义关系和关系证据，再写入隔离的候选 SQLite 数据库。
 4. 候选库通过 SQLite 完整性、外键、数量、证据链和全文索引验证后，构建器再次确认 Git 修订未变化，将数据库移入 `snapshots/`，最后通过 [`information_pool/ue_itps_information_pool/manifest.py`](../information_pool/ue_itps_information_pool/manifest.py) 原子替换池目录中的激活清单。
 5. [`information_pool/query_information_pool.py`](../information_pool/query_information_pool.py) 从激活或指定历史快照执行搜索、继承、影响、调用者、循环、最短路径、测试范围与快照差异查询，并输出 JSON。
@@ -84,7 +84,7 @@ UE ITPS 是一套面向 Unreal Engine 工程的只读检查与关系浏览系统
 | Tree-sitter C++ 前端 | [`sourcetools/ue_project_tools/cpp_frontend.py`](../sourcetools/ue_project_tools/cpp_frontend.py) | 独立解析显式源码，输出类型、函数、继承、调用候选、变量、include、局部宏和 Module 注册语法事实。 |
 | Tree-sitter C# 前端 | [`sourcetools/ue_project_tools/syntax_tree.py`](../sourcetools/ue_project_tools/syntax_tree.py) | 投影 Build.cs、Target.cs 和普通 C# 的声明、调用与位置事实。 |
 | `DependencyGraph` | [`sourcetools/ue_project_tools/dependency_graph.py`](../sourcetools/ue_project_tools/dependency_graph.py) | 保存确定性的类型依赖节点与边，支持循环、继承和反向影响等图查询。 |
-| `list_source_types()` 源码单元入口 | [`sourcetools/ue_project_tools/source_unit.py`](../sourcetools/ue_project_tools/source_unit.py) | 从一个显式 C++ 文件及唯一可推导伴随文件组装类型、成员和声明锚点结果。 |
+| `list_source_types()` C++ 文件入口 | [`sourcetools/ue_project_tools/source_unit.py`](../sourcetools/ue_project_tools/source_unit.py) | 从一至两个显式 C++ 文件组装类型、成员和声明锚点结果，不自动查找配对文件。 |
 | `EditorSession` | [`edittools/ue_editor_tools/remote_client.py`](../edittools/ue_editor_tools/remote_client.py) | 发现、选择并串行连接目标 Editor 会话，将结构化操作分派到 Editor 进程。 |
 | `scan_gameplay_messages()` | [`edittools/ue_editor_tools/scanner.py`](../edittools/ue_editor_tools/scanner.py) | 分批扫描 Blueprint 消息节点，归并静态 Channel、动态连接与 Tag 引用者。 |
 | `ProjectProbe` / `SourceUnitProbe` | [`information_pool/ue_itps_information_pool/probe_adapter.py`](../information_pool/ue_itps_information_pool/probe_adapter.py) | 定义信息池构建所消费的项目级与源码单元级探针结果，并承载缓存和并行扫描元数据。 |

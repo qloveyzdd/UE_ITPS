@@ -85,14 +85,17 @@ class EndToEndWorkflowTests(CliTestCase):
             "ue_list_cxx_includes.py": (
                 "--source",
                 str(self.fixture.source_cpp),
+                str(self.fixture.source_header),
             ),
             "ue_list_cxx_types.py": (
                 "--source",
                 str(self.fixture.source_cpp),
+                str(self.fixture.source_header),
             ),
             "ue_inspect_cxx_function.py": (
                 "--source",
                 str(self.fixture.source_cpp),
+                str(self.fixture.source_header),
                 "--function",
                 "BeginPlay",
             ),

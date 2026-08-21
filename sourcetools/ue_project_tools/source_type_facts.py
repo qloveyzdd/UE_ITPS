@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -110,10 +111,10 @@ def _compound(
 
 
 def list_source_types(
-    source_file: Path,
+    source_files: Path | Sequence[Path],
     engine_override: Path | None = None,
 ) -> dict[str, Any]:
-    loaded = load_source_context(source_file, engine_override)
+    loaded = load_source_context(source_files, engine_override)
     model = loaded["cpp_model"]
     unit_files = {
         str(path.resolve()).replace("\\", "/").casefold()

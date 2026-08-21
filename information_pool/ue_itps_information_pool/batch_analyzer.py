@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 import sys
@@ -18,7 +19,7 @@ from ue_project_tools import source_type_facts  # noqa: E402
 from ue_project_tools.source_context import load_source_context  # noqa: E402
 
 
-ANALYZER_VERSION = "ue-itps.information-pool.batch-analyzer.v4-tree-sitter-cpp"
+ANALYZER_VERSION = "ue-itps.information-pool.batch-analyzer.v5-explicit-cxx-files"
 
 
 @dataclass
@@ -31,12 +32,12 @@ class BatchDocuments:
 
 
 def analyze_source_unit(
-    source_file: Path,
+    source_files: Path | Sequence[Path],
     *,
     engine_override: Path | None = None,
 ) -> BatchDocuments:
     loaded = load_source_context(
-        source_file,
+        source_files,
         engine_override,
         load_includes=True,
         load_cpp_analysis=True,
@@ -60,15 +61,15 @@ def analyze_source_unit(
             module.load_source_context = shared_loader
 
         types_document = source_type_facts.list_source_types(
-            source_file,
+            source_files,
             engine_override,
         )
         includes_document = source_include_facts.list_source_includes(
-            source_file,
+            source_files,
             engine_override,
         )
         functions_document = source_function_index.list_source_functions(
-            source_file,
+            source_files,
             engine_override,
         )
 
@@ -91,7 +92,7 @@ def analyze_source_unit(
         )
         references = [
             source_function_references.inspect_source_function(
-                source_file,
+                source_files,
                 function_name,
                 engine_override=engine_override,
             )

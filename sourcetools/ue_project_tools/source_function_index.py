@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -98,10 +99,10 @@ def _callable_parts(loaded: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def list_source_functions(
-    source_file: Path,
+    source_files: Path | Sequence[Path],
     engine_override: Path | None = None,
 ) -> dict[str, Any]:
-    loaded = load_source_context(source_file, engine_override)
+    loaded = load_source_context(source_files, engine_override)
     parts = _callable_parts(loaded)
     relations = {item["usr"]: item for item in _relations(parts, loaded)}
     functions = []

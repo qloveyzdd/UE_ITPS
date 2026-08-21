@@ -73,18 +73,18 @@ python sourcetools/ue_list_module_cxx_sources.py --rules D:/Projects/MyGame/Sour
 
 结果分别提供 Engine 定位证据、Module 声明与规则对应关系、Target 类型及其直接声明或从项目内基类继承的 `ExtraModuleNames`、按 Module 和可见性组织的项目 C++ 源文件清单，以及单个 Module 的 `pairs`、`header_only`、`cpp_only` 文件列表。存在多个配对候选时，冲突组只报告在 `validation.problems` 中。
 
-### 检查一个 C++ 源码单元
+### 检查 C++ 文件
 
-以下命令直接解析显式选择的源码及唯一可推导的同名伴随文件，不需要 `compile_commands.json`。
+以下命令直接解析一至两个显式选择的文件，不需要 `compile_commands.json`。传入两个文件时，必须是主名相同的一份 `.cpp/.cc` 和一份 `.h/.hpp`；工具不会自动查找配对文件。
 
 ```bash
 python sourcetools/ue_list_cxx_includes.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp
-python sourcetools/ue_list_cxx_types.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp
-python sourcetools/ue_inspect_cxx_function.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp --function BeginPlay
+python sourcetools/ue_list_cxx_types.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp D:/Projects/MyGame/Source/MyGame/Public/MyActor.h
+python sourcetools/ue_inspect_cxx_function.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp D:/Projects/MyGame/Source/MyGame/Public/MyActor.h --function BeginPlay
 python sourcetools/ue_inspect_module_entry.py --rules D:/Projects/MyGame/Source/MyGame/MyGame.Build.cs
 ```
 
-结果包含 Tree-sitter UE C++ grammar 观察到的 include、类型、函数、继承和调用候选，并将 `UCLASS`、`UPROPERTY`、`UFUNCTION`、`GENERATED_BODY`、模块注册和 `_API` 标记解析为明确语法节点。`TEXT`、`LOCTEXT`、`UE_LOG` 等表达式宏保留为标准 C++ 调用表达式；工具不再改写送入解析器的源码。工具只输出显式选择的文件和唯一可推导的同名伴随文件中的事实，不递归输出 include 或被调用函数的内容。调用目标、重载和声明配对属于语法候选，不是编译器语义绑定。
+结果包含 Tree-sitter UE C++ grammar 观察到的 include、类型、函数、继承和调用候选，并将 `UCLASS`、`UPROPERTY`、`UFUNCTION`、`GENERATED_BODY`、模块注册和 `_API` 标记解析为明确语法节点。`TEXT`、`LOCTEXT`、`UE_LOG` 等表达式宏保留为标准 C++ 调用表达式；工具不再改写送入解析器的源码。工具只输出显式选择文件中的事实，不递归输出 include 或被调用函数的内容。调用目标、重载和声明配对属于语法候选，不是编译器语义绑定。
 
 ### 分析项目内 C++ 关系
 

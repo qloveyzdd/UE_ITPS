@@ -26,7 +26,6 @@
       "type": "object",
       "required": [
         "schema_version",
-        "source_unit",
         "selection",
         "match_count",
         "matches",
@@ -36,9 +35,6 @@
       "properties": {
         "schema_version": {
           "const": "ue_inspect_cxx_function"
-        },
-        "source_unit": {
-          "type": "object"
         },
         "selection": {
           "type": "object",

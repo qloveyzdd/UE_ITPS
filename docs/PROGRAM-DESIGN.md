@@ -247,19 +247,18 @@ Module 入口工具从 Build.cs 确定 Module 边界，报告：
 
 ## 7. C++ 源码模型
 
-三个 C++ CLI 接受 `.h`、`.hpp`、`.cpp` 和 `.cc`。
+三个 C++ CLI 通过同一个 `--source` 接受一至两个 `.h`、`.hpp`、`.cpp` 或 `.cc` 文件。
 
-伴随文件选择：
+显式文件选择：
 
-1. 同目录同名、相反类型文件。
-2. 常规 `Private ↔ Public/Classes` 同名映射。
-3. 唯一候选组成源码单元。
-4. 没有候选时只扫描选中文件。
-5. 多个候选时不选择，并返回 warning。
+1. 单文件输入只扫描该文件，不查找任何配对文件。
+2. 双文件输入必须由一份 `.cpp/.cc` 和一份 `.h/.hpp` 组成。
+3. 双文件的文件主名必须相同，路径顺序不限。
+4. 调用方负责保证两个文件属于同一个 UE 项目。
 
 职责分离：
 
-- include 工具只报告直接 include、条件和物理来源；伴随头文件 include 由 `source_unit.header` 表示。
+- include 工具报告所有显式文件中的直接 include、条件和物理来源，包括源文件对显式头文件的 include。
 - 类型工具报告类、结构体、枚举、接口候选、成员、全局变量和自由函数锚点。
 - 函数工具只返回指定名称的全部定义、声明关系和外部符号候选。
 
@@ -287,7 +286,7 @@ Module 入口工具从 Build.cs 确定 Module 边界，报告：
 | `test_cli_contracts.py` | 16 | 公共 CLI、Schema、帮助、错误信封、退出码、严格 JSON |
 | `test_project_navigation.py` | 34 | 项目级发现、导航、Engine、Plugin、路径和源码清单 |
 | `test_build_and_module.py` | 20 | `.uplugin`、规则、C# 函数和 Module 生命周期 |
-| `test_cxx_analysis.py` | 18 | 源码单元、include、类型、接口、函数和符号 |
+| `test_cxx_analysis.py` | 19 | 显式文件输入、include、类型、接口、函数和符号 |
 | `test_end_to_end_workflow.py` | 3 | 全部 CLI 导航、重复扫描确定性和只读性 |
 | `test_tool_pool_enrichment.py` | 6 | Tree-sitter 前端、工具池和图算法扩展 |
 

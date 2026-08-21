@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -44,40 +45,32 @@ def _source_unit_kind(path: Path) -> str:
     return "header" if path.suffix.casefold() in _HEADER_SUFFIXES else "cpp"
 
 
-def _automatic_companions(
-    source: Path, source_owner: dict[str, Any] | None
-) -> list[Path]:
-    companion_suffixes = (
-        _CPP_SUFFIXES
-        if source.suffix.casefold() in _HEADER_SUFFIXES
-        else _HEADER_SUFFIXES
+def _validated_source_files(
+    source_files: Path | Sequence[Path],
+) -> tuple[Path | None, Path | None]:
+    requested = (
+        [source_files]
+        if isinstance(source_files, Path)
+        else list(source_files)
     )
-    candidate_bases = [source.parent / source.stem]
-    if source_owner is not None:
-        module_root = Path(source_owner["root"]).resolve()
-        try:
-            relative = source.relative_to(module_root)
-        except ValueError:
-            relative = None
-        if relative is not None and relative.parts:
-            first = relative.parts[0].casefold()
-            tail = relative.parts[1:]
-            if first == "private":
-                candidate_bases.extend(
-                    module_root / directory / Path(*tail).with_suffix("")
-                    for directory in ("Public", "Classes")
-                )
-            elif first in {"public", "classes"}:
-                candidate_bases.append(
-                    module_root / "Private" / Path(*tail).with_suffix("")
-                )
-    candidates = {
-        candidate.resolve()
-        for base in candidate_bases
-        for suffix in companion_suffixes
-        if (candidate := base.with_suffix(suffix)).is_file()
-    }
-    return sorted(candidates, key=lambda path: normalized(path).casefold())
+    if not 1 <= len(requested) <= 2:
+        raise ValueError("Expected one or two explicitly selected source files")
+    selected = [
+        _validated_file(path, _SOURCE_SUFFIXES, "Source file")
+        for path in requested
+    ]
+    sources = [path for path in selected if path.suffix.casefold() in _CPP_SUFFIXES]
+    headers = [path for path in selected if path.suffix.casefold() in _HEADER_SUFFIXES]
+    if len(selected) == 2:
+        if len(sources) != 1 or len(headers) != 1:
+            raise ValueError(
+                "Two source files must contain one .cpp/.cc file and one .h/.hpp file"
+            )
+        if sources[0].stem.casefold() != headers[0].stem.casefold():
+            raise ValueError(
+                "Explicit source and header files must have the same basename"
+            )
+    return (sources[0] if sources else None, headers[0] if headers else None)
 
 
 def _public_include(
@@ -132,14 +125,18 @@ def _public_include(
 
 
 def load_source_context(
-    source_file: Path,
+    source_files: Path | Sequence[Path],
     engine_override: Path | None = None,
     *,
     load_includes: bool = False,
     load_cpp_analysis: bool = True,
 ) -> dict[str, Any]:
-    source = _validated_file(source_file, _SOURCE_SUFFIXES, "Source file")
-    project = find_nearest_uproject(source)
+    selected_source, selected_header = _validated_source_files(source_files)
+    unit_files = [path for path in (selected_source, selected_header) if path]
+    anchor = selected_source or selected_header
+    if anchor is None:
+        raise ValueError("No C++ source file was selected")
+    project = find_nearest_uproject(anchor)
     descriptor = read_json(project)
     project_root = project.parent.resolve()
     engine_result = resolve_engine(
@@ -151,12 +148,12 @@ def load_source_context(
         if engine_status == "resolved"
         else None
     )
-    if not _is_relative_to(source, project_root) and (
-        engine_root is None or not _is_relative_to(source, engine_root)
+    if not _is_relative_to(anchor, project_root) and (
+        engine_root is None or not _is_relative_to(anchor, engine_root)
     ):
         raise ValueError(
             "Source file must be inside the selected project or resolved Engine: "
-            f"{source}"
+            f"{anchor}"
         )
 
     additional_module_roots, _ = resolve_internal_directories(
@@ -171,18 +168,7 @@ def load_source_context(
         additional_module_roots,
         additional_plugin_roots,
     )
-    source_owner = owner_for_path(source, records)
-    companion_candidates = _automatic_companions(source, source_owner)
-    selected_companion = (
-        companion_candidates[0] if len(companion_candidates) == 1 else None
-    )
-    source_is_header = source.suffix.casefold() in _HEADER_SUFFIXES
-    selected_source = selected_companion if source_is_header else source
-    selected_header = source if source_is_header else selected_companion
-    unit_files = [path for path in (selected_source, selected_header) if path]
-    anchor = selected_source or selected_header
-    if anchor is None:
-        raise ValueError(f"No C++ source unit could be selected for: {source}")
+    source_owner = owner_for_path(anchor, records)
     cpp_model = load_cpp_unit(anchor, unit_files, project_root)
     parsed_files = [
         (
@@ -211,21 +197,8 @@ def load_source_context(
             {
                 "severity": "warning",
                 "code": "source-unit-owner-unresolved",
-                "source": rooted_path(source, project_root, engine_root),
+                "source": rooted_path(anchor, project_root, engine_root),
                 "message": "No enclosing Build.cs source boundary was found",
-            }
-        )
-    if len(companion_candidates) > 1:
-        companion_kind = "source" if source_is_header else "header"
-        problems.append(
-            {
-                "severity": "warning",
-                "code": f"source-unit-{companion_kind}-ambiguous",
-                "candidates": [
-                    rooted_path(candidate, project_root, engine_root)
-                    for candidate in companion_candidates
-                ],
-                "message": f"Multiple automatically derived companion {companion_kind} files were found",
             }
         )
     for diagnostic in cpp_model["diagnostics"]:
@@ -247,21 +220,10 @@ def load_source_context(
     unit_by_key = {
         str(path.resolve()).replace("\\", "/").casefold(): path for path in unit_files
     }
-    header_key = (
-        str(selected_header.resolve()).replace("\\", "/").casefold()
-        if selected_header is not None
-        else None
-    )
     if load_includes:
         for include in cpp_model["includes"]:
             including_file = unit_by_key.get(include["source_file"])
             if including_file is None:
-                continue
-            if include.get("included_file") == header_key or (
-                selected_header is not None
-                and str(include.get("spelling", "")).casefold()
-                == selected_header.name.casefold()
-            ):
                 continue
             fact, problem = _public_include(
                 include,
@@ -275,18 +237,7 @@ def load_source_context(
             if problem is not None:
                 include_problems.append(problem)
 
-    source_fact = (
-        rooted_path(selected_source, project_root, engine_root)
-        if selected_source is not None
-        else None
-    )
-    header_fact = (
-        rooted_path(selected_header, project_root, engine_root)
-        if selected_header is not None
-        else None
-    )
     return {
-        "source_unit": {"source": source_fact, "header": header_fact},
         "includes": includes,
         "include_problems": include_problems,
         "parsed_files": parsed_files,
@@ -312,14 +263,11 @@ def source_result(
 ) -> dict[str, Any]:
     return result_document(
         schema_version,
-        {
-            "source_unit": loaded["source_unit"],
-            **content,
-        },
+        content,
         [*loaded["problems"], *(additional_problems or [])],
         responsibility=responsibility,
         boundaries=[
-            "Only the selected source file and one unambiguous automatically derived companion are emitted.",
+            "Only the one or two explicitly selected source files are read.",
             *boundaries,
             "C++ facts are syntax projections from the selected files; no compiler semantic binding or preprocessing is performed.",
             "Validation ok does not prove runtime behavior.",

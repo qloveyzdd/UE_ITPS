@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""List direct include facts from one explicitly selected C++ source unit."""
+"""List direct include facts from one or two explicitly selected C++ files."""
 
 from pathlib import Path
 
@@ -9,23 +9,29 @@ from ue_project_tools.source_unit import list_source_includes
 
 SCHEMA_VERSION = "ue_list_cxx_includes"
 RESPONSIBILITY = (
-    "Report non-companion direct include spellings and deterministic filesystem provenance."
+    "Report direct include spellings and deterministic filesystem provenance."
 )
 
 
 def main() -> int:
     parser = cli_parser(
-        "列出一个显式选择的 C++ 源码单元中的直接引用事实。",
-        "List direct include facts from one explicitly selected C++ source unit.",
+        "列出一至两个显式选择的 C++ 文件中的直接引用事实。",
+        "List direct include facts from one or two explicitly selected C++ files.",
         schema_version=SCHEMA_VERSION,
         responsibility=RESPONSIBILITY,
     )
-    parser.add_argument("--source", required=True, metavar="FILE", help="显式选择的 .h/.hpp/.cpp/.cc 文件 / Explicitly selected .h/.hpp/.cpp/.cc file")
+    parser.add_argument(
+        "--source",
+        required=True,
+        nargs="+",
+        metavar="FILE",
+        help="一至两个显式文件；两个文件必须为同名源文件和头文件 / One or two explicit files; two files must be a same-basename source and header",
+    )
     parser.add_argument("--engine-root", metavar="PATH", help="显式 Engine 根目录覆盖 / Explicit Engine root override")
     args = parser.parse_args()
     try:
         result = list_source_includes(
-            Path(args.source),
+            [Path(value) for value in args.source],
             engine_override=Path(args.engine_root) if args.engine_root else None,
         )
     except (OSError, ValueError) as exc:

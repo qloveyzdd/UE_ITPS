@@ -20,7 +20,13 @@ def main() -> int:
         schema_version=SCHEMA_VERSION,
         responsibility=RESPONSIBILITY,
     )
-    parser.add_argument("--source", required=True, metavar="FILE", help="显式选择的 .h/.hpp/.cpp/.cc 文件 / Explicitly selected .h/.hpp/.cpp/.cc file")
+    parser.add_argument(
+        "--source",
+        required=True,
+        nargs="+",
+        metavar="FILE",
+        help="一至两个显式文件；两个文件必须为同名源文件和头文件 / One or two explicit files; two files must be a same-basename source and header",
+    )
     parser.add_argument(
         "--function",
         required=True,
@@ -31,7 +37,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         result = inspect_source_function(
-            Path(args.source),
+            [Path(value) for value in args.source],
             args.function,
             engine_override=Path(args.engine_root) if args.engine_root else None,
         )

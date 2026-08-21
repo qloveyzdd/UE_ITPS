@@ -25,9 +25,6 @@ from ue_project_tools.engine import resolve_engine  # noqa: E402
 from ue_project_tools.project_cxx_sources import (  # noqa: E402
     list_project_cxx_sources,
 )
-from ue_project_tools.source_context import _automatic_companions  # noqa: E402
-
-
 SUPPORTED_SUFFIXES = {".h", ".hpp", ".cpp", ".cc"}
 ProgressCallback = Callable[[dict[str, Any]], None]
 
@@ -56,6 +53,7 @@ class SourceJob:
 @dataclass
 class SourceUnitProbe:
     entry: str
+    unit_paths: tuple[str, ...]
     owner_by_path: dict[str, SourceOwner]
     types: dict[str, Any]
     includes: dict[str, Any]
@@ -80,15 +78,6 @@ class ProjectProbe:
 
 def default_worker_count() -> int:
     return min(8, max(1, (os.cpu_count() or 2) - 1))
-
-
-def _project_fact_paths(document: dict[str, Any]) -> list[str]:
-    paths: list[str] = []
-    for key in ("source", "header"):
-        item = document.get("source_unit", {}).get(key)
-        if item and item.get("root") == "project":
-            paths.append(str(item["path"]).replace("\\", "/"))
-    return paths
 
 
 def _unit_hash(project_root: Path, paths: list[str] | tuple[str, ...]) -> str:
@@ -307,12 +296,7 @@ def _run_source_job(job: SourceJob) -> dict[str, Any]:
             else None
         ),
     )
-    actual_paths = tuple(
-        sorted(
-            _project_fact_paths(documents.types) or [job.entry],
-            key=str.casefold,
-        )
-    )
+    actual_paths = job.unit_paths
     wire = {
         "entry": job.entry,
         "unit_paths": list(actual_paths),
@@ -412,34 +396,9 @@ def _source_jobs(
     engine_override: Path | None,
 ) -> list[SourceJob]:
     project_root = project_file.parent
-    covered: set[str] = set()
     jobs: list[SourceJob] = []
     for entry in candidates:
-        if entry in covered:
-            continue
-        owner = owner_by_path[entry]
-        module_root = (
-            project_root / Path(owner.build_rules).parent
-        ).resolve()
-        companions = _automatic_companions(
-            (project_root / entry).resolve(),
-            {"root": str(module_root)},
-        )
-        companion_paths = [
-            path.relative_to(project_root).as_posix()
-            for path in companions
-            if path.is_relative_to(project_root)
-        ]
-        unit_paths = tuple(
-            sorted(
-                [
-                    entry,
-                    *(companion_paths if len(companion_paths) == 1 else []),
-                ],
-                key=str.casefold,
-            )
-        )
-        covered.update(unit_paths)
+        unit_paths = (entry,)
         jobs.append(
             SourceJob(
                 project_file=str(project_file),
@@ -460,9 +419,7 @@ def _source_jobs(
 
 
 def _raw_probe_results(unit: SourceUnitProbe) -> list[dict[str, Any]]:
-    source_unit = "|".join(
-        sorted(_project_fact_paths(unit.types), key=str.casefold)
-    )
+    source_unit = "|".join(sorted(unit.unit_paths, key=str.casefold))
     results: dict[str, dict[str, Any]] = {}
     for probe_kind, selector, document in (
         ("types", "", unit.types),
@@ -506,6 +463,7 @@ def _wire_to_unit(
 ) -> SourceUnitProbe:
     return SourceUnitProbe(
         entry=str(wire["entry"]),
+        unit_paths=tuple(str(path) for path in wire["unit_paths"]),
         owner_by_path=owner_by_path,
         types=wire["types"],
         includes=wire["includes"],

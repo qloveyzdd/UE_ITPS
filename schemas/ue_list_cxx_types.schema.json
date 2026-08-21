@@ -26,7 +26,6 @@
       "type": "object",
       "required": [
         "schema_version",
-        "source_unit",
         "classes",
         "structs",
         "enums",
@@ -40,9 +39,6 @@
       "properties": {
         "schema_version": {
           "const": "ue_list_cxx_types"
-        },
-        "source_unit": {
-          "type": "object"
         },
         "classes": {
           "type": "array",

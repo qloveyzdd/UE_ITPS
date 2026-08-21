@@ -26,7 +26,6 @@
       "type": "object",
       "required": [
         "schema_version",
-        "source_unit",
         "includes",
         "validation",
         "limits"
@@ -34,9 +33,6 @@
       "properties": {
         "schema_version": {
           "const": "ue_list_cxx_includes"
-        },
-        "source_unit": {
-          "type": "object"
         },
         "includes": {
           "type": "array"
