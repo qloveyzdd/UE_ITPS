@@ -39,6 +39,12 @@ __pycache__/
 htmlcov/
 .venv/
 venv/
+node_modules/
+parsers/tree-sitter-ue-cpp/build/
+parsers/tree-sitter-ue-cpp/bindings/python/*.egg-info/
+parsers/tree-sitter-ue-cpp/bindings/python/tree_sitter_ue_cpp/_binding.pdb
+parsers/tree-sitter-ue-cpp/bindings/python/tree_sitter_ue_cpp/binding.lib
+!parsers/tree-sitter-ue-cpp/bindings/python/tree_sitter_ue_cpp/_binding.pyd
 
 # .NET/C# build output used by UE automation tooling
 obj/

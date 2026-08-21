@@ -90,7 +90,7 @@ python sourcetools/ue_read_project_descriptor.py --project D:/Projects/MyGame/My
 ```powershell
 python -m pip install -r requirements.txt
 python -c "import tree_sitter; print('tree-sitter ready')"
-python -c "import tree_sitter_cpp; print('tree-sitter-cpp ready')"
+python -c "import tree_sitter_ue_cpp; print('tree-sitter-ue-cpp ready')"
 ```
 
 用 `Get-Command python` 可确认 PowerShell 当前调用的是哪个解释器。

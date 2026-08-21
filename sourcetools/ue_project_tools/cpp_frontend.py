@@ -6,12 +6,12 @@ import re
 from typing import Any, Iterator
 
 from tree_sitter import Language, Node, Parser
-import tree_sitter_cpp
+import tree_sitter_ue_cpp
 
 from .common import normalized
 
 
-ENGINE = "tree-sitter/cpp"
+ENGINE = "tree-sitter/ue-cpp"
 _TYPE_NODES = {
     "class_specifier": "class",
     "struct_specifier": "struct",
@@ -35,7 +35,6 @@ _CONTROL_NODES = {
     "throw_statement": "throw_expression",
     "return_statement": "return_statement",
 }
-_MACRO_RE = re.compile(rb"\b[A-Z][A-Z0-9_]*\s*\(")
 _INCLUDE_RE = re.compile(
     rb"^[ \t]*#[ \t]*include[ \t]+(?P<value><[^>]+>|\"[^\"]+\"|[^\r\n]+)",
     re.MULTILINE,
@@ -65,16 +64,18 @@ class CppFrontendError(ValueError):
 
 def frontend_version() -> str:
     try:
-        return f"tree-sitter-cpp {package_version('tree-sitter-cpp')}"
+        return f"tree-sitter-ue-cpp {package_version('tree-sitter-ue-cpp')}"
     except Exception:
-        return "tree-sitter-cpp unknown"
+        return "tree-sitter-ue-cpp unknown"
 
 
 def _parser() -> Parser:
     try:
-        return Parser(Language(tree_sitter_cpp.language()))
+        return Parser(Language(tree_sitter_ue_cpp.language()))
     except Exception as exc:
-        raise CppFrontendError(f"Unable to load Tree-sitter C++ grammar: {exc}") from exc
+        raise CppFrontendError(
+            f"Unable to load Tree-sitter UE C++ grammar: {exc}"
+        ) from exc
 
 
 def _normal_key(value: str | Path) -> str:
@@ -111,75 +112,20 @@ def _descendant(node: Node | None, kinds: set[str]) -> Node | None:
     return next((item for item in _walk(node) if item.type in kinds), None)
 
 
-def _balanced_end(source: bytes, opening: int) -> int | None:
-    depth = 0
-    quote: int | None = None
-    escaped = False
-    for index in range(opening, len(source)):
-        value = source[index]
-        if quote is not None:
-            if escaped:
-                escaped = False
-            elif value == 92:
-                escaped = True
-            elif value == quote:
-                quote = None
-            continue
-        if value in {34, 39}:
-            quote = value
-        elif value == 40:
-            depth += 1
-        elif value == 41:
-            depth -= 1
-            if depth == 0:
-                return index + 1
-    return None
-
-
-def _macro_spans(
-    source: bytes,
-    ignored_ranges: list[tuple[int, int]],
-) -> list[tuple[int, int, str]]:
-    spans: list[tuple[int, int, str]] = []
-    cursor = 0
-    while match := _MACRO_RE.search(source, cursor):
-        if any(start <= match.start() < end for start, end in ignored_ranges):
-            cursor = match.end()
-            continue
-        line_start = source.rfind(b"\n", 0, match.start()) + 1
-        if source[line_start : match.start()].lstrip().startswith(b"#"):
-            cursor = match.end()
-            continue
-        opening = source.find(b"(", match.start(), match.end())
-        end = _balanced_end(source, opening)
-        if end is None:
-            cursor = match.end()
-            continue
-        name = source[match.start() : opening].strip().decode("ascii", errors="ignore")
-        spans.append((match.start(), end, name))
-        cursor = end
-    return spans
-
-
-def _sanitize(source: bytes, spans: list[tuple[int, int, str]]) -> bytes:
-    result = bytearray(source)
-    for start, end, _ in spans:
-        for index in range(start, end):
-            if result[index] not in {10, 13}:
-                result[index] = 32
-    result = re.sub(
-        rb"\b[A-Z][A-Z0-9_]*_API\b",
-        lambda match: b" " * len(match.group(0)),
-        bytes(result),
-    )
-    return result
-
-
 def _macros(
-    source: bytes, spans: list[tuple[int, int, str]], file_key: str
+    root: Node, source: bytes, file_key: str
 ) -> list[dict[str, Any]]:
     results = []
-    for start, end, name in spans:
+    for node in _walk(root):
+        if node.type != "ue_macro_invocation":
+            continue
+        head = node.child_by_field_name("head")
+        arguments = node.child_by_field_name("arguments")
+        if head is None or arguments is None:
+            continue
+        start = int(node.start_byte)
+        end = int(arguments.end_byte)
+        name = _text(head, source).split("(", 1)[0].strip()
         expression = source[start:end].decode("utf-8", errors="replace")
         results.append(
             {
@@ -437,21 +383,7 @@ def _function_references(
 def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
     source = path.read_bytes()
     file_key = _normal_key(path)
-    raw_tree = parser.parse(source)
-    ignored_ranges = [
-        (int(node.start_byte), int(node.end_byte))
-        for node in _walk(raw_tree.root_node)
-        if node.type
-        in {
-            "comment",
-            "char_literal",
-            "raw_string_literal",
-            "string_literal",
-        }
-    ]
-    spans = _macro_spans(source, ignored_ranges)
-    sanitized = _sanitize(source, spans)
-    tree = parser.parse(sanitized) if sanitized != source else raw_tree
+    tree = parser.parse(source)
     types: list[dict[str, Any]] = []
     functions: list[dict[str, Any]] = []
     variables: list[dict[str, Any]] = []
@@ -616,7 +548,7 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
         "variables": variables,
         "references": references,
         "includes": _includes(source, file_key),
-        "macros": _macros(source, spans, file_key),
+        "macros": _macros(tree.root_node, source, file_key),
         "diagnostics": diagnostics,
     }
 

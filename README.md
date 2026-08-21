@@ -7,7 +7,7 @@ UE ITPS 是面向 Unreal Engine 项目维护者与 AI Agent 的确定性、只�
 
 ## 当前状态
 
-- 核心静态工具池已形成 22 个正式 CLI、22 份逐工具 Schema 与 1 份公共 Schema；C++ Source 检索以 Tree-sitter C++ 语法树为基座，不依赖编译数据库。
+- 核心静态工具池已形成 22 个正式 CLI、22 份逐工具 Schema 与 1 份公共 Schema；C++ Source 检索以仓库内 `tree-sitter-ue-cpp` 语法树为基座，直接解析原始源码，不依赖编译数据库或宏清洗副本。
 - `edittools/` 已提供 16 个只读工具，覆盖 Gameplay Tag、资产依赖、Blueprint 结构、DataTable、按需 DataAsset 属性、Primary Asset、配置、C++/Blueprint Gameplay Message，以及统一逻辑图谱的构建、校验和差异。
 - `information_pool/` 已能把静态探针结果构建为绑定 Git 提交的不可变 SQLite 快照；`show/` 可在本地浏览语义关系与最短路径；`mcp_connection_pool/` 负责被动发现并选择 UE 5.8 Editor MCP 连接。
 - 当前 Unreal 参考基座为 `LyraStarterGame` + UE 5.8.2。Editor 与多个 PIE Experience 已在本机观察到，但 5.8.2 权威文件指纹、完整 L0/L1 日志以及网络和 Travel 路径仍在重新核验。
@@ -15,7 +15,7 @@ UE ITPS 是面向 Unreal Engine 项目维护者与 AI Agent 的确定性、只�
 
 ## 安装
 
-需要 Python 3.10 或更高版本。描述符、C# 规则和 C++ 源码工具都不要求编译数据库；依赖清单包含 Tree-sitter C++ 和 C# 的预编译语法包。Engine 只在需要定位源码物理来源时解析，不参与 C++ 语法树构建。
+需要 Python 3.10 或更高版本。描述符、C# 规则和 C++ 源码工具都不要求编译数据库；依赖清单包含仓库内的 Tree-sitter UE C++ grammar 和 Tree-sitter C# 语法包。Windows x64 直接使用仓库内的稳定 ABI 绑定，其他平台从随附的生成源码构建。Engine 只在需要定位源码物理来源时解析，不参与 C++ 语法树构建。
 
 ```bash
 git clone https://github.com/qloveyzdd/UE_ITPS.git
@@ -83,7 +83,7 @@ python sourcetools/ue_inspect_cxx_function.py --source D:/Projects/MyGame/Source
 python sourcetools/ue_inspect_module_entry.py --rules D:/Projects/MyGame/Source/MyGame/MyGame.Build.cs
 ```
 
-结果包含 Tree-sitter C++ 观察到的 include、类型、函数、继承和调用候选，并保留 UE 宏与委托的领域投影。工具只输出显式选择的文件和唯一可推导的同名伴随文件中的事实，不递归输出 include 或被调用函数的内容。调用目标、重载和声明配对属于语法候选，不是编译器语义绑定。
+结果包含 Tree-sitter UE C++ grammar 观察到的 include、类型、函数、继承和调用候选，并将 `UCLASS`、`UPROPERTY`、`UFUNCTION`、`GENERATED_BODY`、模块注册和 `_API` 标记解析为明确语法节点。`TEXT`、`LOCTEXT`、`UE_LOG` 等表达式宏保留为标准 C++ 调用表达式；工具不再改写送入解析器的源码。工具只输出显式选择的文件和唯一可推导的同名伴随文件中的事实，不递归输出 include 或被调用函数的内容。调用目标、重载和声明配对属于语法候选，不是编译器语义绑定。
 
 ### 分析项目内 C++ 关系
 
@@ -120,7 +120,7 @@ python sourcetools/ue_analyze_cxx_impact.py --project D:/Projects/MyGame/MyGame.
 python -m unittest discover -s tests -v
 ```
 
-当前核心测试套件共 97 项，覆盖 CLI 与 Schema 契约、项目导航、Module 与构建规则、Tree-sitter C++ 分析、图关系和端到端只读性。测试使用不含编译数据库的临时工程夹具，不依赖本地 Unreal Engine、`LyraStarterGame/` 或 `ExternalProjects/`。
+当前核心测试套件共 102 项，覆盖 CLI 与 Schema 契约、项目导航、Module 与构建规则、Tree-sitter UE C++ grammar、图关系和端到端只读性。测试使用不含编译数据库的临时工程夹具；本地存在 `LyraStarterGame/` 时会额外执行 LyraEditor 原始源码回归，否则该用例跳过。
 
 Editor 工具拥有独立测试套件：
 

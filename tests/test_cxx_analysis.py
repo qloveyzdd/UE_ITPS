@@ -4,7 +4,7 @@ from tests.support import CliTestCase, write_text
 
 
 class CxxAnalysisTests(CliTestCase):
-    def test_tree_sitter_cpp_backend_runs_without_compile_database(self) -> None:
+    def test_tree_sitter_ue_cpp_backend_runs_without_compile_database(self) -> None:
         result = self.cli(
             "ue_list_cxx_types.py",
             "--source",
@@ -12,10 +12,10 @@ class CxxAnalysisTests(CliTestCase):
         )
         self.assertEqual(
             result["analysis"]["syntax_trees"][0]["engine"],
-            "tree-sitter/cpp",
+            "tree-sitter/ue-cpp",
         )
         self.assertIn(
-            "tree-sitter-cpp",
+            "tree-sitter-ue-cpp",
             result["context"]["cpp_analyzer"]["version"],
         )
         self.assertEqual(

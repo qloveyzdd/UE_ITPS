@@ -1,0 +1,3 @@
+[submodule "parsers/tree-sitter-ue-cpp"]
+	path = parsers/tree-sitter-ue-cpp
+	url = https://github.com/qloveyzdd/tree-sitter-ue-cpp.git

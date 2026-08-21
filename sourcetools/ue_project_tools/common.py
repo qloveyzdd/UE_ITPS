@@ -60,7 +60,7 @@ def analysis_engines(tool_name: str) -> list[str]:
     if tool_name in _TREE_SITTER_CSHARP_TOOLS:
         engines.append("tree-sitter/ast-outline+gdep")
     if tool_name in _TREE_SITTER_CPP_TOOLS:
-        engines.append("tree-sitter/cpp")
+        engines.append("tree-sitter/ue-cpp")
     if tool_name in _GRAPH_TOOLS:
         engines.append("gdep-adapted")
     return engines

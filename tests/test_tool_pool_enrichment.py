@@ -25,7 +25,8 @@ class ToolPoolEnrichmentTests(CliTestCase):
         requirements = (REPOSITORY_ROOT / "requirements.txt").read_text(
             encoding="utf-8"
         )
-        self.assertIn("tree-sitter-cpp==0.23.4", requirements)
+        self.assertIn("./parsers/tree-sitter-ue-cpp", requirements)
+        self.assertNotIn("tree-sitter-cpp==", requirements)
         self.assertNotIn("libclang", requirements)
 
     def test_csharp_ast_covers_generics_lambda_and_calls(self) -> None:
