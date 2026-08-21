@@ -9,7 +9,7 @@ UE ITPS 是面向 Unreal Engine 项目维护者与 AI Agent 的确定性、只�
 
 - 核心静态工具池已形成 23 个正式 CLI、23 份逐工具 Schema 与 1 份公共 Schema；C++ Source 检索以仓库内 `tree-sitter-ue-cpp` 语法树为基座，直接解析原始源码，不依赖编译数据库或宏清洗副本。
 - `edittools/` 已提供 16 个只读工具，覆盖 Gameplay Tag、资产依赖、Blueprint 结构、DataTable、按需 DataAsset 属性、Primary Asset、配置、C++/Blueprint Gameplay Message，以及统一逻辑图谱的构建、校验和差异。
-- `information_pool/` 已能把静态探针结果构建为绑定 Git 提交的不可变 SQLite 快照；`show/` 可在本地浏览语义关系与最短路径；`mcp_connection_pool/` 负责被动发现并选择 UE 5.8 Editor MCP 连接。
+- `information_pool/` 第一阶段把 `.uproject`、`.uplugin`、Target、模块规则、C++ 文件和 Include 归一为带证据的文件级 SQLite 图谱；`show/` 在本地逐层浏览这些文件关系；`mcp_connection_pool/` 负责被动发现并选择 UE 5.8 Editor MCP 连接。
 - 当前 Unreal 参考基座为 `LyraStarterGame` + UE 5.8.2。Editor 与多个 PIE Experience 已在本机观察到，但 5.8.2 权威文件指纹、完整 L0/L1 日志以及网络和 Travel 路径仍在重新核验。
 - UE 5.6.1 的架构与运行资料只保留为历史对照，不自动视为 UE 5.8.2 的当前事实。长期信任治理系统尚未进入实现阶段，当前重点仍是建立可复现的 Lyra 架构和最小运行边界。
 
@@ -96,11 +96,22 @@ python sourcetools/ue_analyze_cxx_impact.py --project D:/Projects/MyGame/MyGame.
 
 结果可用于检查项目内类依赖与循环、查询继承关系，以及反向追踪某个类型的静态影响范围。这些关系是保守的静态证据，不是完整编译器符号表或运行时调用图。
 
+### 建立并查看文件知识图谱
+
+```bash
+python information_pool/build_file_graph.py --project D:/Projects/MyGame/MyGame.uproject --output D:/Graphs/MyGame.sqlite3
+cd show
+npm install
+npm run dev
+```
+
+页面打开后选择生成的 SQLite 文件。第一阶段只处理静态文件、模块和直接 Include，不包含资产、Editor 现场状态、历史快照或运行时语义。
+
 ## 相关组件
 
-- [`information_pool/`](information_pool/)：将确定性探针结果构建为绑定 Git 提交的不可变 SQLite 快照，并提供搜索、层级、影响、调用者、循环、最短路径和差异查询。
+- [`information_pool/`](information_pool/)：从明确选择的 UE 项目构建第一阶段文件级 SQLite 知识图谱。
 - [`edittools/`](edittools/)：连接运行中的 Unreal Editor，读取 Gameplay Tag、资产引用、Blueprint 和 Gameplay Message 事实；其前置条件和命令见 [`edittools/README.md`](edittools/README.md)。
-- [`show/`](show/)：在本地浏览工程信息池 SQLite 快照中的语义关系，不上传或修改数据库。
+- [`show/`](show/)：在本地浏览文件图谱、上下游依赖和关系证据，不上传或修改数据库。
 - [`schemas/`](schemas/)：23 个正式 CLI Schema 和 1 个公共 Schema，均采用 JSON Schema Draft 2020-12。
 - [`docs/PROGRAM-DESIGN.md`](docs/PROGRAM-DESIGN.md)：公共契约、内部边界、测试策略和扩展规则。
 
@@ -129,10 +140,13 @@ Editor 工具拥有独立测试套件：
 python -m unittest discover -s edittools/tests -t edittools -v
 ```
 
-Editor、按需 DataAsset 属性、配置和 Gameplay Message 事实可先由 `edittools/ue_build_knowledge_graph.py` 合并为统一
-逻辑图谱，再通过信息池构建命令的 `--knowledge-graph` 参数写入同一个不可变 SQLite 快照。
-正式图谱遵循“项目差异优先”：Map 只作为资产和逻辑配置目标，不采集 World Partition 外部分包中的 Actor 或 Component；
-Blueprint 只投影静态可达的语义节点和已实现声明；DataAsset 只持久化相对本类或父类默认对象发生变化的属性。
+文件图谱与浏览器测试：
+
+```bash
+python -m unittest discover -s information_pool/tests -v
+cd show
+npm test
+```
 
 ## 能力边界
 
