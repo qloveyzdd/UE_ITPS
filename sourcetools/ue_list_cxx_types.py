@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""List declaration anchors from one or two explicitly selected C++ files."""
+"""List definitions and members created by one or two selected C++ files."""
 
 from pathlib import Path
 
@@ -10,14 +10,14 @@ from ue_project_tools.source_unit import list_source_types
 SCHEMA_VERSION = "ue_list_cxx_types"
 RESPONSIBILITY = (
     "Index class, struct, enum, interface-candidate, global-variable, "
-    "free-function, and class/struct member anchors."
+    "free-function, and member definitions created by selected files."
 )
 
 
 def main() -> int:
     parser = cli_parser(
-        "列出一至两个显式选择的 C++ 文件中的类型事实。",
-        "List declaration anchors from one or two explicitly selected C++ files.",
+        "列出一至两个显式选择的 C++ 文件所创建的定义与成员。",
+        "List definitions and members created by one or two explicitly selected C++ files.",
         schema_version=SCHEMA_VERSION,
         responsibility=RESPONSIBILITY,
     )

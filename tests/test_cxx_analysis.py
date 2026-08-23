@@ -14,11 +14,19 @@ class CxxAnalysisTests(CliTestCase):
         self.assertNotIn("context", result)
         self.assertNotIn("analysis", result)
         self.assertNotIn("source_unit", result)
+        self.assertEqual(result["classes"], [])
         self.assertTrue(
             any(
                 item["qualified_name"] == "Gameplay::Utility"
                 for item in result["free_functions"]
             )
+        )
+        self.assertEqual(
+            {item["qualified_name"] for item in result["member_functions"]},
+            {
+                "Gameplay::ASampleActor::BeginPlay",
+                "Gameplay::ASampleActor::Helper",
+            },
         )
         self.assertFalse(
             (self.fixture.project_root / "compile_commands.json").exists()
@@ -190,7 +198,7 @@ class CxxAnalysisTests(CliTestCase):
         self.assertEqual(result["classes"][0]["name"], "ASampleActor")
         self.assertEqual(
             {item["role"] for item in result["global_variables"]},
-            {"declaration", "definition"},
+            {"definition"},
         )
 
     def test_include_facts_report_engine_provenance_and_generated_header(self) -> None:
@@ -269,6 +277,15 @@ class CxxAnalysisTests(CliTestCase):
         members = {item["name"]: item for item in actor["member_anchors"]}
         self.assertIn("UFUNCTION()", members["BeginPlay"]["macros"])
         self.assertIn("UPROPERTY()", members["Count"]["macros"])
+        member_functions = {
+            item["name"]: item for item in result["member_functions"]
+        }
+        self.assertEqual(set(member_functions), {"BeginPlay", "Helper"})
+        self.assertEqual(member_functions["BeginPlay"]["owner"], "ASampleActor")
+        self.assertEqual(
+            member_functions["BeginPlay"]["qualified_name"],
+            "Gameplay::ASampleActor::BeginPlay",
+        )
 
     def test_type_facts_keep_roles_linkage_and_enum_shape(self) -> None:
         result = self.cli(
@@ -279,21 +296,17 @@ class CxxAnalysisTests(CliTestCase):
         )
         self.assertEqual(result["enums"][0]["qualified_name"], "Gameplay::ESampleState")
         self.assertTrue(result["enums"][0]["scoped"])
-        globals_by_role = {
-            item["role"]: item
-            for item in result["global_variables"]
-        }
-        self.assertEqual(globals_by_role["definition"]["linkage"], "external")
-        functions_by_role = {
-            item["role"]: item
-            for item in result["free_functions"]
-        }
+        self.assertEqual(len(result["global_variables"]), 1)
+        self.assertEqual(result["global_variables"][0]["role"], "definition")
+        self.assertEqual(result["global_variables"][0]["linkage"], "external")
+        self.assertEqual(len(result["free_functions"]), 1)
+        self.assertEqual(result["free_functions"][0]["role"], "definition")
         self.assertEqual(
-            functions_by_role["definition"]["qualified_name"],
+            result["free_functions"][0]["qualified_name"],
             "Gameplay::Utility",
         )
 
-    def test_type_facts_only_report_standalone_forward_declarations(self) -> None:
+    def test_type_facts_exclude_forward_declarations_and_type_references(self) -> None:
         header = write_text(
             self.fixture.project_root
             / "Source"
@@ -327,16 +340,51 @@ class CxxAnalysisTests(CliTestCase):
 
         self.assertEqual(
             {item["qualified_name"] for item in result["classes"]},
-            {
-                "UExisting",
-                "UExported",
-                "FOwner",
-                "FOwner::FNested",
-            },
+            {"FOwner"},
         )
+        self.assertEqual(result["enums"], [])
         self.assertEqual(
-            {item["qualified_name"] for item in result["enums"]},
-            {"EMode"},
+            {item["name"] for item in result["classes"][0]["member_anchors"]},
+            {"Type", "Raw", "Current", "Resolve"},
+        )
+
+    def test_type_facts_report_inline_member_function_definitions(self) -> None:
+        header = write_text(
+            self.fixture.project_root
+            / "Source"
+            / "SampleGame"
+            / "Public"
+            / "InlineMember.h",
+            """
+            #pragma once
+            class FInlineMember
+            {
+            public:
+                UFUNCTION()
+                void Execute() {}
+            };
+            """,
+        )
+
+        result = self.cli(
+            "ue_list_cxx_types.py",
+            "--source",
+            str(header),
+        )
+
+        self.assertEqual(
+            result["member_functions"],
+            [
+                {
+                    "name": "Execute",
+                    "namespace": None,
+                    "qualified_name": "FInlineMember::Execute",
+                    "owner": "FInlineMember",
+                    "signature": "void Execute()",
+                    "macros": ["UFUNCTION()"],
+                    "evidence": {"unit": "header", "line": 6},
+                }
+            ],
         )
 
     def test_template_fields_and_initializers_emit_only_declared_names(self) -> None:

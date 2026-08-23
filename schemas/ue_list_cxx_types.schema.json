@@ -32,6 +32,7 @@
         "interface_candidates",
         "global_variables",
         "free_functions",
+        "member_functions",
         "unresolved_declarations",
         "validation",
         "limits"
@@ -74,6 +75,12 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/freeFunctionAnchor"
+          }
+        },
+        "member_functions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/memberFunctionDefinition"
           }
         },
         "unresolved_declarations": {
@@ -165,7 +172,7 @@
           "type": ["string", "null"]
         },
         "role": {
-          "enum": ["declaration", "definition"]
+          "const": "definition"
         },
         "base_types": {
           "type": "array",
@@ -224,7 +231,7 @@
           "type": ["string", "null"]
         },
         "role": {
-          "enum": ["declaration", "definition"]
+          "const": "definition"
         },
         "scoped": {
           "type": "boolean"
@@ -309,7 +316,7 @@
           "minLength": 1
         },
         "role": {
-          "enum": ["declaration", "definition"]
+          "const": "definition"
         },
         "linkage": {
           "enum": ["internal", "external"]
@@ -355,10 +362,54 @@
           "minLength": 1
         },
         "role": {
-          "enum": ["declaration", "definition"]
+          "const": "definition"
         },
         "linkage": {
           "enum": ["internal", "external"]
+        },
+        "evidence": {
+          "$ref": "#/$defs/unitEvidence"
+        }
+      },
+      "additionalProperties": false
+    },
+    "memberFunctionDefinition": {
+      "type": "object",
+      "required": [
+        "name",
+        "namespace",
+        "qualified_name",
+        "owner",
+        "signature",
+        "macros",
+        "evidence"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "namespace": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "qualified_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "signature": {
+          "type": "string",
+          "minLength": 1
+        },
+        "macros": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
         "evidence": {
           "$ref": "#/$defs/unitEvidence"

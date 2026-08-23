@@ -84,7 +84,7 @@ python sourcetools/ue_inspect_cxx_function.py --source D:/Projects/MyGame/Source
 python sourcetools/ue_inspect_module_entry.py --rules D:/Projects/MyGame/Source/MyGame/MyGame.Build.cs
 ```
 
-结果包含 Tree-sitter UE C++ grammar 观察到的 include、类型、函数、继承和调用候选，并将 `UCLASS`、`UPROPERTY`、`UFUNCTION`、`GENERATED_BODY`、模块注册和 `_API` 标记解析为明确语法节点。`TEXT`、`LOCTEXT`、`UE_LOG` 等表达式宏保留为标准 C++ 调用表达式；工具不再改写送入解析器的源码。工具只输出显式选择文件中的事实，不递归输出 include 或被调用函数的内容。调用目标、重载和声明配对属于语法候选，不是编译器语义绑定。
+结果包含 Tree-sitter UE C++ grammar 观察到的 include、类型、函数、继承和调用候选，并将 `UCLASS`、`UPROPERTY`、`UFUNCTION`、`GENERATED_BODY`、模块注册和 `_API` 标记解析为明确语法节点。类型工具只把显式文件定义的类型、全局变量、自由函数及成员函数定义作为实体输出；前置声明、`extern`、函数原型和单纯引用不算作文件创建的实体。`TEXT`、`LOCTEXT`、`UE_LOG` 等表达式宏保留为标准 C++ 调用表达式；工具不再改写送入解析器的源码。工具只输出显式选择文件中的事实，不递归输出 include 或被调用函数的内容。调用目标、重载和声明配对属于语法候选，不是编译器语义绑定。
 
 ### 分析项目内 C++ 关系
 

@@ -127,7 +127,7 @@ search root
 
 selected .h/.hpp/.cpp/.cc
 ├─ direct includes
-├─ type and declaration anchors
+├─ locally created definitions and members
 └─ selected function name
 ```
 
@@ -259,7 +259,7 @@ Module 入口工具从 Build.cs 确定 Module 边界，报告：
 职责分离：
 
 - include 工具报告所有显式文件中的直接 include、条件和物理来源，包括源文件对显式头文件的 include。
-- 类型工具报告类、结构体、枚举、接口候选、成员、全局变量和自由函数锚点。
+- 类型工具报告显式文件定义的类、结构体、枚举、接口候选、全局变量、自由函数和成员函数，以及这些类型直接声明的成员；前置声明、`extern`、函数原型和引用不作为文件创建的实体。
 - 函数工具只返回指定名称的全部定义、声明关系和外部符号候选。
 
 任何 C++ 工具都不会递归读取 include，不会跟踪被调用函数，也不会建立编译器级符号 ID。声明配对、调用目标和类型关系均为受支持语法范围内的稳定候选。

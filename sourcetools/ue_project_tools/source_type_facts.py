@@ -110,6 +110,22 @@ def _compound(
     }
 
 
+def _member_function(
+    item: dict[str, Any],
+    macros: list[dict[str, Any]],
+    text_by_file: dict[str, str],
+) -> dict[str, Any]:
+    return {
+        "name": item["name"],
+        "namespace": item["namespace"],
+        "qualified_name": item["qualified_name"],
+        "owner": item["owner"],
+        "signature": item["signature"],
+        "macros": _adjacent_macros(item, macros, text_by_file),
+        "evidence": _evidence(item),
+    }
+
+
 def list_source_types(
     source_files: Path | Sequence[Path],
     engine_override: Path | None = None,
@@ -129,12 +145,13 @@ def list_source_types(
     classes = [
         _compound(item, macros, text_by_file)
         for item in types
-        if item["kind"] == "class"
+        if item["kind"] == "class" and item["role"] == "definition"
     ]
     structs = [
         _compound(item, macros, text_by_file)
         for item in types
         if item["kind"] in {"struct", "union"}
+        and item["role"] == "definition"
     ]
     enums = [
         {
@@ -149,7 +166,7 @@ def list_source_types(
             "evidence": _evidence(item),
         }
         for item in types
-        if item["kind"] == "enum"
+        if item["kind"] == "enum" and item["role"] == "definition"
     ]
     interface_candidates = []
     known_names = {item["name"] for item in [*classes, *structs]}
@@ -189,7 +206,7 @@ def list_source_types(
             "evidence": _evidence(item),
         }
         for item in model["variables"]
-        if item["file"] in unit_files
+        if item["file"] in unit_files and item["role"] == "definition"
     ]
     free_functions = [
         {
@@ -202,7 +219,16 @@ def list_source_types(
             "evidence": _evidence(item),
         }
         for item in model["functions"]
-        if item["file"] in unit_files and item["kind"] == "free_function"
+        if item["file"] in unit_files
+        and item["kind"] == "free_function"
+        and item["role"] == "definition"
+    ]
+    member_functions = [
+        _member_function(item, macros, text_by_file)
+        for item in model["functions"]
+        if item["file"] in unit_files
+        and item["kind"] == "method"
+        and item["role"] == "definition"
     ]
 
     def sort_key(item: dict[str, Any]) -> tuple[str, int, str]:
@@ -219,6 +245,7 @@ def list_source_types(
         interface_candidates,
         globals_,
         free_functions,
+        member_functions,
     ):
         group.sort(key=sort_key)
     return source_result(
@@ -231,11 +258,14 @@ def list_source_types(
             "interface_candidates": interface_candidates,
             "global_variables": globals_,
             "free_functions": free_functions,
+            "member_functions": member_functions,
             "unresolved_declarations": [],
         },
-        responsibility="Index Tree-sitter C++ declarations and definitions.",
+        responsibility="Index Tree-sitter C++ definitions and members created by the selected files.",
         boundaries=[
-            "Declaration identity, roles, members, and linkage are syntax projections rather than compiler semantic facts.",
+            "Forward declarations, extern variable declarations, and function prototypes are excluded.",
+            "Referenced types, variables, and functions are not emitted as entities created by the selected files.",
+            "Definition identity, members, and linkage are syntax projections rather than compiler semantic facts.",
             "UE reflection macros are read from local source text and attached by source adjacency.",
         ],
     )
