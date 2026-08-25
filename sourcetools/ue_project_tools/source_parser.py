@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import re
 from typing import Any
 
 from .common import iter_files, normalized
@@ -24,20 +23,22 @@ _MODULE_RULE_KINDS = {
 
 def _rule_annotation(operation: dict[str, Any]) -> dict[str, str] | None:
     if operation["kind"] == "invocation":
-        callee = str(operation.get("callee", ""))
-        match = re.search(
-            r"(?:^|[.>])(?P<member>[A-Za-z_]\w*)\."
-            r"(?P<action>AddRange|Add|Remove|RemoveAll)$",
-            callee,
-        )
-        if match and match.group("member") in _MODULE_RULE_KINDS:
+        path = [str(item) for item in operation.get("callee_path", [])]
+        member = path[-2] if len(path) >= 2 else ""
+        action = str(operation.get("member_name") or "")
+        if member in _MODULE_RULE_KINDS and action in {
+            "AddRange",
+            "Add",
+            "Remove",
+            "RemoveAll",
+        }:
             return {
-                "kind": _MODULE_RULE_KINDS[match.group("member")],
-                "member": match.group("member"),
-                "action": match.group("action"),
+                "kind": _MODULE_RULE_KINDS[member],
+                "member": member,
+                "action": action,
             }
     else:
-        target = str(operation.get("target", "")).split(".")[-1]
+        target = str(operation.get("target_name") or "")
         if target in _MODULE_RULE_KINDS:
             return {
                 "kind": _MODULE_RULE_KINDS[target],
@@ -101,7 +102,10 @@ def parse_rule_file(path: Path, required_base_type: str) -> dict[str, Any]:
     while pending:
         changed = False
         for item in list(pending):
-            if any(base.split("<", 1)[0] in known_bases for base in item["base_types"]):
+            if any(
+                str(base.get("name") or "") in known_bases
+                for base in item.get("base_type_facts", [])
+            ):
                 selected.append(item)
                 base_resolution[item["name"]] = "confirmed"
                 known_bases.add(item["name"])
@@ -147,7 +151,7 @@ def parse_rule_file(path: Path, required_base_type: str) -> dict[str, Any]:
             for operation in method["operations"]:
                 if operation["kind"] != "invocation":
                     continue
-                callee = str(operation["callee"]).split(".")[-1]
+                callee = str(operation.get("member_name") or "")
                 if callee in method_names and callee != method["name"]:
                     calls.append(
                         {

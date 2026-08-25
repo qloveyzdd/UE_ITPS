@@ -13,18 +13,17 @@ _MODULE_DEPENDENCY_SETTINGS = {
     "DynamicallyLoadedModuleNames": "dynamically_loaded_modules",
 }
 
+
 def _is_empty_literal_add_range(
     operation: dict[str, Any],
-    source_lines: list[str],
 ) -> bool:
     rule = operation.get("rule", {})
     arguments = operation.get("arguments", [])
     if rule.get("action") != "AddRange" or len(arguments) != 1:
         return False
     evaluation = arguments[0].get("evaluation", {})
-    return (
-        evaluation.get("status") == "literal"
-        and not evaluation.get("literal_values")
+    return evaluation.get("status") == "literal" and not evaluation.get(
+        "literal_values"
     )
 
 
@@ -41,7 +40,7 @@ def _rules_class_problems(
             "path": facts["path"],
             "required_base_type": base_type,
             "message": f"No class derived from {base_type} was found in the selected file",
-        }
+        },
     ]
 
 
@@ -51,29 +50,27 @@ def _target_rules_problems(facts: dict[str, Any]) -> list[dict[str, Any]]:
     return [
         *facts.get("problems", []),
         *[
-        {
-            "severity": "warning",
-            "code": "target-rules-base-unresolved",
-            "path": facts["path"],
-            "class_name": rules_class["name"],
-            "base_types": list(rules_class["base_types"]),
-            "message": (
-                "The filename and TargetInfo constructor identify a local Target "
-                "candidate, but its TargetRules inheritance cannot be confirmed "
-                "from the selected file"
-            ),
-        }
-        for rules_class in facts["rules_classes"]
-        if rules_class.get("base_resolution") == "unresolved"
+            {
+                "severity": "warning",
+                "code": "target-rules-base-unresolved",
+                "path": facts["path"],
+                "class_name": rules_class["name"],
+                "base_types": list(rules_class["base_types"]),
+                "message": (
+                    "The filename and TargetInfo constructor identify a local Target "
+                    "candidate, but its TargetRules inheritance cannot be confirmed "
+                    "from the selected file"
+                ),
+            }
+            for rules_class in facts["rules_classes"]
+            if rules_class.get("base_resolution") == "unresolved"
         ],
     ]
 
 
 def _reachable_method_names(rules_class: dict[str, Any]) -> set[str]:
     roots = {
-        method["name"]
-        for method in rules_class["methods"]
-        if method["is_constructor"]
+        method["name"] for method in rules_class["methods"] if method["is_constructor"]
     }
     graph: dict[str, set[str]] = {}
     for call in rules_class["same_file_calls"]:
@@ -118,9 +115,7 @@ def _project_target_rules_class(rules_class: dict[str, Any]) -> dict[str, Any]:
             "functions": [
                 {
                     "name": str(method["name"]),
-                    "signature": " ".join(
-                        str(method["signature"]).split()
-                    ),
+                    "signature": " ".join(str(method["signature"]).split()),
                     "is_constructor": bool(method["is_constructor"]),
                     "has_body": bool(method["has_body"]),
                     "evidence": {
@@ -169,7 +164,6 @@ def inspect_target_rules(path: Path) -> dict[str, Any]:
 def _project_module_rules_class(
     rules_class: dict[str, Any],
     path: str,
-    source_lines: list[str],
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     reachable = _reachable_method_names(rules_class)
     methods = [
@@ -200,10 +194,9 @@ def _project_module_rules_class(
                 if module_name not in seen[dependency_kind]:
                     seen[dependency_kind].add(module_name)
                     dependencies[dependency_kind].append(module_name)
-            if (
-                evaluation.get("status") != "literal"
-                and not _is_empty_literal_add_range(operation, source_lines)
-            ):
+            if evaluation.get(
+                "status"
+            ) != "literal" and not _is_empty_literal_add_range(operation):
                 problems.append(
                     {
                         "severity": "warning",
@@ -230,12 +223,8 @@ def _project_module_rules_class(
 
 def inspect_module_rules(path: Path) -> dict[str, Any]:
     facts = parse_rule_file(path, "ModuleRules")
-    source_lines = Path(facts["path"]).read_text(
-        encoding="utf-8-sig",
-        errors="replace",
-    ).splitlines()
     projected = [
-        _project_module_rules_class(rules_class, facts["path"], source_lines)
+        _project_module_rules_class(rules_class, facts["path"])
         for rules_class in facts["rules_classes"]
     ]
     content = {
@@ -243,11 +232,7 @@ def inspect_module_rules(path: Path) -> dict[str, Any]:
     }
     problems = [
         *_rules_class_problems(facts, "ModuleRules"),
-        *[
-            problem
-            for _, class_problems in projected
-            for problem in class_problems
-        ],
+        *[problem for _, class_problems in projected for problem in class_problems],
     ]
     return result_document(
         "ue_inspect_module_rules",

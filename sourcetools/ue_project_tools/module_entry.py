@@ -25,31 +25,6 @@ def _validated_rules_path(rules_path: Path) -> tuple[Path, str]:
     return rules, module_name
 
 
-def _macro_arguments(tokens: list[str]) -> list[str]:
-    try:
-        opening = tokens.index("(")
-    except ValueError:
-        return []
-    depth = 0
-    current: list[str] = []
-    arguments: list[str] = []
-    for token in tokens[opening + 1 :]:
-        if token in {"(", "[", "{"}:
-            depth += 1
-        elif token in {")", "]", "}"}:
-            if token == ")" and depth == 0:
-                if current:
-                    arguments.append("".join(current).strip())
-                break
-            depth -= 1
-        if token == "," and depth == 0:
-            arguments.append("".join(current).strip())
-            current = []
-        else:
-            current.append(token)
-    return arguments
-
-
 def registration_macros_for_source(
     source: Path,
     project_root: Path,
@@ -67,15 +42,16 @@ def registration_macros_for_source(
             or macro["name"] not in _SUPPORTED_REGISTRATION_MACROS
         ):
             continue
-        arguments = _macro_arguments(list(macro["tokens"]))
-        module_class = arguments[0] if arguments else None
-        module_name = arguments[1] if len(arguments) > 1 else None
-        if (
-            module_name
-            and len(module_name) >= 2
-            and module_name[0] == module_name[-1] == '"'
-        ):
-            module_name = module_name[1:-1]
+        arguments = list(macro.get("arguments", []))
+        module_class = str(arguments[0].get("expression", "")) if arguments else None
+        module_name = None
+        if len(arguments) > 1:
+            literal_values = list(arguments[1].get("literal_values", []))
+            module_name = (
+                str(literal_values[0])
+                if literal_values
+                else str(arguments[1].get("expression", ""))
+            )
         results.append(
             {
                 "macro": macro["name"],
@@ -114,9 +90,7 @@ def inspect_module_entry(
     for source in iter_files(module_root, ".cpp"):
         registrations = [
             item
-            for item in registration_macros_for_source(
-                source, project_root
-            )
+            for item in registration_macros_for_source(source, project_root)
             if str(item.get("module_name", "")).casefold() == module_name.casefold()
         ]
         if not registrations:

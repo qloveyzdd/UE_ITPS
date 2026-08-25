@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass, field
-import re
 from typing import Any, Iterable
 
 
@@ -44,18 +43,15 @@ _IGNORED_TYPES = {
     "TOptional",
     "std",
 }
-_TYPE_NAME = re.compile(r"\b[A-Za-z_]\w*(?:::[A-Za-z_]\w*)*\b")
 
 
-def type_names(expression: str) -> list[str]:
-    """Return candidate dependency types, including nested template arguments."""
-    cleaned = re.sub(
-        r"\b(?:class|struct|enum|const|volatile|typename)\b", " ", expression
-    )
+def type_names(references: Iterable[str]) -> list[str]:
+    """Project structured frontend type references to dependency candidates."""
     results = []
-    for match in _TYPE_NAME.finditer(cleaned):
-        value = match.group(0)
-        short = value.split("::")[-1]
+    for value in references:
+        short = str(value).rsplit("::", 1)[-1]
+        if not short:
+            continue
         if short in _IGNORED_TYPES or short[0].islower():
             continue
         if short not in results:

@@ -70,6 +70,35 @@ void UThing::Run()
         self.assertEqual(unsubscribe["operation"], "unsubscribe")
         self.assertIsNone(unsubscribe["payload_type"])
 
+    def test_structured_macro_and_nested_template_arguments(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            project = root / "Sample.uproject"
+            project.write_text(json.dumps({"FileVersion": 3}), encoding="utf-8")
+            source = root / "Source" / "Sample" / "Private" / "Sample.cpp"
+            source.parent.mkdir(parents=True)
+            source.write_text(
+                """
+UE_DEFINE_GAMEPLAY_TAG_COMMENT(
+    FCommonTags::TAG_Test,
+    "Game.Message.Structured",
+    "Regression coverage");
+void UThing::Send()
+{
+    TEnvelope<FPayload> Payload;
+    Router.BroadcastMessage<TEnvelope<FPayload>>(
+        FCommonTags::TAG_Test, Payload);
+}
+""",
+                encoding="utf-8",
+            )
+            result = scan_cxx_gameplay_messages(project)
+
+        self.assertEqual(result["message_operation_count"], 1)
+        operation = result["operations"][0]
+        self.assertEqual(operation["channel"]["tag"], "Game.Message.Structured")
+        self.assertEqual(operation["payload_type"], "TEnvelope<FPayload>")
+
 
 if __name__ == "__main__":
     unittest.main()

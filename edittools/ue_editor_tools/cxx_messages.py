@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import re
 import sys
 from typing import Any
 
@@ -15,25 +14,33 @@ from ue_project_tools.cpp_frontend import load_cpp_unit  # noqa: E402
 from ue_project_tools.project_graph import project_cpp_files  # noqa: E402
 
 
-_TAG_LITERAL = re.compile(r'"([A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)+)"')
-_TAG_DEFINE = re.compile(
-    r"UE_DEFINE_GAMEPLAY_TAG(?:_STATIC)?\s*\(\s*([A-Za-z_]\w*)\s*,\s*\"([^\"]+)\""
-)
-_TEMPLATE = re.compile(r"(?:RegisterListener|BroadcastMessage)\s*<\s*([^>]+)\s*>")
+def _tag_definition(macro: dict[str, Any]) -> tuple[str, str] | None:
+    if not str(macro.get("name", "")).startswith("UE_DEFINE_GAMEPLAY_TAG"):
+        return None
+    arguments = list(macro.get("arguments", []))
+    if len(arguments) < 2:
+        return None
+    symbol = str(arguments[0].get("expression", "")).strip()
+    literal_values = list(arguments[1].get("literal_values", []))
+    if not symbol or not literal_values:
+        return None
+    return symbol, str(literal_values[0])
 
 
-def _tag_definitions(text: str) -> dict[str, str]:
-    return {match.group(1): match.group(2) for match in _TAG_DEFINE.finditer(text)}
-
-
-def _channel(expression: str, known: dict[str, str]) -> dict[str, Any]:
-    literal = _TAG_LITERAL.search(expression)
-    if literal:
-        return {"status": "static", "tag": literal.group(1), "expression": expression}
-    simple = expression.strip().lstrip("&*")
+def _channel(argument: dict[str, Any] | None, known: dict[str, str]) -> dict[str, Any]:
+    expression = str(argument.get("expression", "")) if argument else ""
+    literal_values = list(argument.get("literal_values", [])) if argument else []
+    if literal_values:
+        return {
+            "status": "static",
+            "tag": str(literal_values[0]),
+            "expression": expression,
+        }
+    path = [str(item) for item in argument.get("name_path", [])] if argument else []
+    simple = "::".join(path)
     if simple in known:
         return {"status": "static", "tag": known[simple], "expression": expression}
-    leaf = simple.rsplit("::", 1)[-1]
+    leaf = path[-1] if path else ""
     if leaf in known:
         return {"status": "static", "tag": known[leaf], "expression": expression}
     return {"status": "unresolved", "tag": None, "expression": expression}
@@ -43,7 +50,9 @@ def _symbol_types(
     function: dict[str, Any], references: dict[str, Any]
 ) -> dict[str, str]:
     return {
-        str(item["name"]): str(item["type_expression"])
+        str(item["name"]): str(
+            item.get("type", {}).get("expression") or item["type_expression"]
+        )
         for item in [
             *function.get("parameter_facts", []),
             *references.get("local_variables", []),
@@ -53,28 +62,33 @@ def _symbol_types(
 
 
 def _callback_payload_type(
-    expression: str,
+    argument: dict[str, Any],
     current_function: dict[str, Any],
     definitions_by_name: dict[str, list[dict[str, Any]]],
 ) -> str | None:
-    callback_name = expression.strip().lstrip("&*").rsplit("::", 1)[-1]
+    path = [str(item) for item in argument.get("name_path", [])]
+    callback_name = path[-1] if path else ""
     candidates = definitions_by_name.get(callback_name, [])
     current_owner = current_function.get("owner")
     same_owner = [item for item in candidates if item.get("owner") == current_owner]
-    selected = same_owner[0] if len(same_owner) == 1 else candidates[0] if len(candidates) == 1 else None
+    selected = (
+        same_owner[0]
+        if len(same_owner) == 1
+        else candidates[0]
+        if len(candidates) == 1
+        else None
+    )
     if selected is None:
         return None
     parameters = selected.get("parameter_facts", [])
-    return str(parameters[1]["type_expression"]) if len(parameters) > 1 else None
-
-
-def _clean_type(value: str | None) -> str | None:
-    if not value:
-        return None
-    cleaned = re.sub(r"\bconst\b", "", value)
-    cleaned = re.sub(r"[&*]", "", cleaned)
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    return cleaned or None
+    return (
+        str(
+            parameters[1].get("type", {}).get("expression")
+            or parameters[1]["type_expression"]
+        )
+        if len(parameters) > 1
+        else None
+    )
 
 
 def scan_cxx_gameplay_messages(project_file: Path) -> dict[str, Any]:
@@ -100,20 +114,24 @@ def scan_cxx_gameplay_messages(project_file: Path) -> dict[str, Any]:
         ).as_posix()
         for path in paths
     }
-    text_by_file: dict[str, str] = {}
+    local_tags: dict[str, dict[str, str]] = {}
     global_tag_values: dict[str, set[str]] = {}
-    for path in paths:
-        key = str(path.resolve()).replace("\\", "/").casefold()
-        text = path.read_text(encoding="utf-8-sig", errors="replace")
-        text_by_file[key] = text
-        for name, tag in _tag_definitions(text).items():
-            global_tag_values.setdefault(name, set()).add(tag)
+    model = load_cpp_unit(paths[0], paths, root)
+    for macro in model["macros"]:
+        definition = _tag_definition(macro)
+        if definition is None:
+            continue
+        name, tag = definition
+        file_tags = local_tags.setdefault(str(macro["file"]), {})
+        file_tags[name] = tag
+        file_tags[name.rsplit("::", 1)[-1]] = tag
+        global_tag_values.setdefault(name, set()).add(tag)
+        global_tag_values.setdefault(name.rsplit("::", 1)[-1], set()).add(tag)
     global_tags = {
         name: next(iter(values))
         for name, values in global_tag_values.items()
         if len(values) == 1
     }
-    model = load_cpp_unit(paths[0], paths, root)
     definitions = [
         item for item in model["functions"] if item.get("role") == "definition"
     ]
@@ -137,7 +155,7 @@ def scan_cxx_gameplay_messages(project_file: Path) -> dict[str, Any]:
         relative = relative_by_file.get(file_key, file_key)
         known_tags = {
             **global_tags,
-            **_tag_definitions(text_by_file.get(file_key, "")),
+            **local_tags.get(file_key, {}),
         }
         references = model["references"].get(function["usr"], {})
         variable_types = _symbol_types(function, references)
@@ -156,20 +174,30 @@ def scan_cxx_gameplay_messages(project_file: Path) -> dict[str, Any]:
             if kind is None:
                 continue
             arguments = [str(item) for item in call.get("arguments", [])]
+            argument_details = list(call.get("argument_details", []))
             channel = (
-                _channel(arguments[0], known_tags)
-                if arguments
+                _channel(argument_details[0], known_tags)
+                if argument_details
                 else {"status": "unresolved", "tag": None, "expression": ""}
             )
-            template = _TEMPLATE.search(str(call.get("expression", "")))
-            payload_type = template.group(1).strip() if template else None
+            template_arguments = list(call.get("template_arguments", []))
+            payload_type = str(template_arguments[0]) if template_arguments else None
             if payload_type is None and kind == "publish" and len(arguments) > 1:
-                payload_type = variable_types.get(
-                    arguments[1].strip().lstrip("&*")
+                payload_path = (
+                    [str(item) for item in argument_details[1].get("name_path", [])]
+                    if len(argument_details) > 1
+                    else []
                 )
-            if payload_type is None and kind == "subscribe" and len(arguments) > 1:
+                payload_type = variable_types.get(
+                    payload_path[-1] if payload_path else ""
+                )
+            if (
+                payload_type is None
+                and kind == "subscribe"
+                and len(argument_details) > 1
+            ):
                 payload_type = _callback_payload_type(
-                    arguments[-1], function, definitions_by_name
+                    argument_details[-1], function, definitions_by_name
                 )
             operations.append(
                 {
@@ -178,7 +206,7 @@ def scan_cxx_gameplay_messages(project_file: Path) -> dict[str, Any]:
                     "signature": str(function.get("signature", "")),
                     "callee": callee,
                     "channel": channel,
-                    "payload_type": _clean_type(payload_type),
+                    "payload_type": payload_type,
                     "payload_expression": arguments[1]
                     if kind == "publish" and len(arguments) > 1
                     else None,

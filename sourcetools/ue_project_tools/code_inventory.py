@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import re
 from typing import Any, Iterable
 
 from .common import iter_files, normalized, result_document
@@ -73,9 +72,7 @@ def inspect_modules(
     search_roots = [source_root, project_root / "Platforms", *additional_roots]
     problems: list[dict[str, Any]] = []
 
-    rules_by_module, discovered_module_names = discover_module_build_rules(
-        search_roots
-    )
+    rules_by_module, discovered_module_names = discover_module_build_rules(search_roots)
 
     valid_declarations: list[tuple[int, dict[str, Any], str, str]] = []
     declaration_indices_by_module: dict[str, list[int]] = {}
@@ -230,13 +227,19 @@ def inspect_modules(
                             dependencies.append(dependency)
                         dependency_graph.add_node(target, kind="module", file="")
                         dependency_graph.add_edge(
-                            str(module["name"]), target,
-                            kind=str(rule["kind"]), file=normalized(rules_path),
+                            str(module["name"]),
+                            target,
+                            kind=str(rule["kind"]),
+                            file=normalized(rules_path),
                             line=int(operation["location"]["line"]),
                         )
         module["declared_dependencies"] = sorted(
             dependencies,
-            key=lambda item: (item["name"].casefold(), item["kind"], item["evidence"]["line"]),
+            key=lambda item: (
+                item["name"].casefold(),
+                item["kind"],
+                item["evidence"]["line"],
+            ),
         )
 
     for module_key in sorted(
@@ -279,13 +282,25 @@ def inspect_modules(
     )
 
 
-_TARGET_TYPE_EXPRESSION = re.compile(
-    r"(?:[A-Za-z_]\w*\.)*TargetType\.(?P<name>[A-Za-z_]\w*)"
-)
-_TARGET_TYPE_SETTING = re.compile(r"(?:(?:this|base)\.)?Type")
-_EXTRA_MODULE_MUTATION = re.compile(
-    r"(?:(?:this|base)\.)?ExtraModuleNames\.(?P<action>Add|AddRange)"
-)
+def _is_target_type_setting(operation: dict[str, Any]) -> bool:
+    path = [str(item) for item in operation.get("target_path", [])]
+    return path in (["Type"], ["this", "Type"], ["base", "Type"])
+
+
+def _target_type_value(operation: dict[str, Any]) -> str | None:
+    path = [str(item) for item in operation.get("value_path", [])]
+    if len(path) >= 2 and path[-2] == "TargetType":
+        return path[-1]
+    return None
+
+
+def _extra_module_action(operation: dict[str, Any]) -> str | None:
+    path = [str(item) for item in operation.get("callee_path", [])]
+    if len(path) < 2 or path[-2] != "ExtraModuleNames":
+        return None
+    if path[:-2] not in ([], ["this"], ["base"]):
+        return None
+    return path[-1] if path[-1] in {"Add", "AddRange"} else None
 
 
 def _reachable_target_methods(rules_class: dict[str, Any]) -> list[dict[str, Any]]:
@@ -321,18 +336,11 @@ def _direct_target_declarations(
 
     for method in _reachable_target_methods(rules_class):
         for operation in method["operations"]:
-            if (
-                operation["kind"] == "assignment"
-                and _TARGET_TYPE_SETTING.fullmatch(
-                    str(operation.get("target", ""))
-                )
-            ):
+            if operation["kind"] == "assignment" and _is_target_type_setting(operation):
                 saw_target_type_assignment = True
-                match = _TARGET_TYPE_EXPRESSION.fullmatch(
-                    str(operation.get("value_expression", "")).strip()
-                )
-                if match:
-                    target_types.append(match.group("name"))
+                target_type = _target_type_value(operation)
+                if target_type:
+                    target_types.append(target_type)
                 else:
                     problems.append(
                         {
@@ -340,9 +348,7 @@ def _direct_target_declarations(
                             "code": "target-type-unresolved",
                             "path": normalized(path),
                             "line": int(operation["location"]["line"]),
-                            "expression": str(
-                                operation.get("value_expression", "")
-                            ),
+                            "expression": str(operation.get("value_expression", "")),
                             "message": (
                                 "Target Type is assigned from an expression that "
                                 "cannot be resolved statically"
@@ -353,10 +359,8 @@ def _direct_target_declarations(
 
             if operation["kind"] != "invocation":
                 continue
-            mutation = _EXTRA_MODULE_MUTATION.fullmatch(
-                str(operation.get("callee", ""))
-            )
-            if mutation is None:
+            action = _extra_module_action(operation)
+            if action is None:
                 continue
             evaluation = operation.get("evaluation", {})
             if evaluation.get("status") == "literal":
@@ -400,11 +404,10 @@ def _direct_target_declarations(
 
 
 def _target_base_name(rules_class: dict[str, Any]) -> str | None:
-    base_types = list(rules_class.get("base_types", []))
+    base_types = list(rules_class.get("base_type_facts", []))
     if not base_types:
         return None
-    expression = str(base_types[0]).split("<", 1)[0]
-    return expression.rsplit(".", 1)[-1]
+    return str(base_types[0].get("name") or "") or None
 
 
 def _resolve_target_values(
@@ -468,9 +471,7 @@ def _resolve_target_values(
         inferred_fields.append("target_type")
 
     inherited_modules = (
-        list(base_values["extra_module_names"])
-        if base_values is not None
-        else []
+        list(base_values["extra_module_names"]) if base_values is not None else []
     )
     if inherited_modules:
         inferred_fields.append("extra_module_names")

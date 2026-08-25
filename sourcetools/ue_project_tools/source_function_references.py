@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from pathlib import Path
-import re
 from typing import Any
 
 from .source_context import load_source_context, source_result
@@ -23,9 +22,7 @@ def _delegate_operations(
     function: dict[str, Any], references: dict[str, Any]
 ) -> list[dict[str, Any]]:
     symbol_types = {
-        str(item["name"]): re.sub(
-            r"\s*[*&]+\s*$", "", str(item["type_expression"])
-        ).split("::")[-1]
+        str(item["name"]): str(item.get("type", {}).get("name") or "")
         for item in function.get("parameter_facts", [])
     }
     results = []
@@ -33,15 +30,15 @@ def _delegate_operations(
         api = str(call.get("target_name") or "")
         if api in {"Broadcast", "Execute", "ExecuteIfBound"}:
             operation = "publish"
-        elif re.match(r"^(?:Add|Bind|Create)", api):
+        elif api.startswith(("Add", "Bind", "Create")):
             operation = "subscribe"
         else:
             continue
-        segments = [part for part in str(call["callee"]).split(".") if part]
+        segments = [str(part) for part in call.get("callee_path", [])]
         if len(segments) < 2:
             continue
         event_name = segments[-2]
-        root = segments[-3] if len(segments) >= 3 else None
+        root = segments[0] if len(segments) >= 2 else None
         owner_type = (
             symbol_types.get(root or "")
             or str(function.get("owner") or "").split("::")[-1]

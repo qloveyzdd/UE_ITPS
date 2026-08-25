@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import re
 from typing import Any
 
 from .common import result_document
@@ -49,66 +48,46 @@ def _evidence(location: dict[str, Any]) -> dict[str, int]:
     return result
 
 
-def _primary_type_name(type_expression: str) -> str | None:
-    expression = re.sub(r"(?:\?|\[\])+$", "", type_expression.strip())
-    expression = expression.split("<", 1)[0].strip()
-    identifiers = re.findall(r"[A-Za-z_]\w*", expression)
-    return identifiers[-1] if identifiers else None
-
-
 def _external_types(
     parsed: dict[str, Any],
     class_item: dict[str, Any],
     method: dict[str, Any],
     parameters: list[dict[str, str]],
 ) -> list[str]:
-    local_types = {
-        str(item["name"])
-        for item in parsed["classes"]
-    }
+    local_types = {str(item["name"]) for item in parsed["classes"]}
     locals_and_parameters = [
         *parameters,
         *method.get("local_variables", []),
     ]
-    shadowed_names = {
-        str(item["name"])
-        for item in locals_and_parameters
-    }
+    shadowed_names = {str(item["name"]) for item in locals_and_parameters}
     referenced_names = set(method.get("referenced_names", []))
-    candidates = [
-        str(item["type_expression"])
-        for item in locals_and_parameters
-    ]
+    candidates = [dict(item.get("type", {})) for item in locals_and_parameters]
     candidates.extend(
-        str(field["type_expression"])
+        dict(field.get("type", {}))
         for field in class_item["fields"]
-        if (
-            field["name"] in referenced_names
-            and field["name"] not in shadowed_names
-        )
+        if (field["name"] in referenced_names and field["name"] not in shadowed_names)
     )
     bound_names = {
         *shadowed_names,
         *(str(field["name"]) for field in class_item["fields"]),
     }
     invocation_receivers = {
-        str(operation.get("callee", "")).replace("::", ".").split(".", 1)[0]
+        str(operation.get("callee_path", [""])[0])
         for operation in method["operations"]
         if operation["kind"] == "invocation"
-        and "." in str(operation.get("callee", "")).replace("::", ".")
+        and len(operation.get("callee_path", [])) > 1
     }
     candidates.extend(
-        str(name)
-        for name in method.get("qualified_references", [])
-        if name not in bound_names
-        and name not in invocation_receivers
+        {"expression": str(path[0]), "name": str(path[0])}
+        for path in method.get("qualified_reference_paths", [])
+        if path and path[0] not in bound_names and path[0] not in invocation_receivers
     )
     return sorted(
         {
-            type_expression
-            for type_expression in candidates
+            str(type_fact.get("expression") or "")
+            for type_fact in candidates
             if (
-                (primary := _primary_type_name(type_expression))
+                (primary := str(type_fact.get("name") or ""))
                 and primary not in local_types
                 and primary.casefold() not in _BUILTIN_TYPES
                 and primary[0].isupper()
@@ -125,13 +104,19 @@ def _symbol_types(
     parameters: list[dict[str, str]],
 ) -> dict[str, str]:
     result = {
-        str(field["name"]): str(field["type_expression"])
+        str(field["name"]): str(
+            field.get("type", {}).get("expression") or field["type_expression"]
+        )
         for field in class_item["fields"]
     }
     for item in parameters:
-        result[str(item["name"])] = str(item["type_expression"])
+        result[str(item["name"])] = str(
+            item.get("type", {}).get("expression") or item["type_expression"]
+        )
     for item in method.get("local_variables", []):
-        result[str(item["name"])] = str(item["type_expression"])
+        result[str(item["name"])] = str(
+            item.get("type", {}).get("expression") or item["type_expression"]
+        )
     return result
 
 
@@ -140,18 +125,16 @@ def _external_methods(
     method: dict[str, Any],
     parameters: list[dict[str, str]],
 ) -> list[str]:
-    local_methods = {
-        str(item["name"])
-        for item in class_item["methods"]
-    }
+    local_methods = {str(item["name"]) for item in class_item["methods"]}
     symbol_types = _symbol_types(class_item, method, parameters)
     results: list[str] = []
     for operation in method["operations"]:
         if operation["kind"] != "invocation":
             continue
-        callee = str(operation.get("callee", "")).replace("::", ".")
-        segments = callee.split(".")
-        method_name = segments[-1]
+        segments = [str(item) for item in operation.get("callee_path", [])]
+        if not segments:
+            continue
+        method_name = str(operation.get("member_name") or segments[-1])
         receivers = segments[:-1]
         if not receivers and method_name not in local_methods:
             continue
@@ -162,11 +145,7 @@ def _external_methods(
             receiver_type = symbol_types.get(receivers[0])
             if receiver_type:
                 remaining_receivers = receivers[1:]
-        if (
-            receiver_type is None
-            and len(receivers) >= 2
-            and receivers[0] == "this"
-        ):
+        if receiver_type is None and len(receivers) >= 2 and receivers[0] == "this":
             receiver_type = symbol_types.get(receivers[1])
             if receiver_type:
                 remaining_receivers = receivers[2:]
@@ -186,7 +165,7 @@ def _external_methods(
             if receiver_type
             and receiver_type.casefold() not in _BUILTIN_TYPES
             and receiver_type != "var"
-            else callee
+            else ".".join(segments)
         )
         expression = f"{public_callee}({arguments})"
         if expression not in results:
@@ -214,11 +193,7 @@ def _match(
     return {
         "function_id": f"{owner}::{signature}",
         "function": {
-            "kind": (
-                "constructor"
-                if method["is_constructor"]
-                else "method"
-            ),
+            "kind": ("constructor" if method["is_constructor"] else "method"),
             "owner": owner,
             "name": str(method["name"]),
             "signature": signature,

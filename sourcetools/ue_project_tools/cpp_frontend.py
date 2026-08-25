@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from importlib.metadata import version as package_version
+import json
 from pathlib import Path
 import re
 from typing import Any, Iterator
@@ -35,9 +36,7 @@ _CONTROL_NODES = {
     "throw_statement": "throw_expression",
     "return_statement": "return_statement",
 }
-_TOKEN_RE = re.compile(
-    r'::|->|\.\.\.|"(?:\\.|[^"\\])*"|[A-Za-z_]\w*|\d+|[^\s]'
-)
+_TOKEN_RE = re.compile(r'::|->|\.\.\.|"(?:\\.|[^"\\])*"|[A-Za-z_]\w*|\d+|[^\s]')
 _PRIMITIVE_TYPES = {
     "auto",
     "bool",
@@ -125,24 +124,122 @@ def _descendant(node: Node | None, kinds: set[str]) -> Node | None:
     return next((item for item in _walk(node) if item.type in kinds), None)
 
 
-def _macros(
-    root: Node, source: bytes, file_key: str
-) -> list[dict[str, Any]]:
+def _string_literals(node: Node | None, source: bytes) -> list[str]:
+    if node is None:
+        return []
+    results: list[str] = []
+    for current in _walk(node):
+        if current.type != "string_literal":
+            continue
+        raw = _text(current, source).strip()
+        opening = raw.find('"')
+        if opening < 0:
+            continue
+        literal = raw[opening:]
+        try:
+            value = str(json.loads(literal))
+        except (json.JSONDecodeError, TypeError):
+            value = literal[1:-1] if literal.endswith('"') else literal[1:]
+        if value not in results:
+            results.append(value)
+    return results
+
+
+def _cpp_name_path(node: Node | None, source: bytes) -> list[str]:
+    if node is None:
+        return []
+    if node.type in {
+        "identifier",
+        "field_identifier",
+        "namespace_identifier",
+        "type_identifier",
+        "this",
+    }:
+        value = _text(node, source).strip()
+        return [value] if value else []
+    if node.type == "destructor_name":
+        name = next(iter(node.named_children), None)
+        value = _text(name, source).strip() if name is not None else ""
+        return [f"~{value}"] if value else []
+    if node.type in {"operator_name", "literal_operator_name"}:
+        value = _canonical_cpp(_text(node, source))
+        return [value] if value else []
+    if node.type in {"template_method", "template_function", "template_type"}:
+        name = node.child_by_field_name("name")
+        if name is None and node.named_children:
+            name = node.named_children[0]
+        return _cpp_name_path(name, source)
+    if node.type in {"field_expression", "qualified_identifier"}:
+        left = node.child_by_field_name("argument") or node.child_by_field_name("scope")
+        right = node.child_by_field_name("field") or node.child_by_field_name("name")
+        return [*_cpp_name_path(left, source), *_cpp_name_path(right, source)]
+    if node.type == "call_expression":
+        return _cpp_name_path(node.child_by_field_name("function"), source)
+    if len(node.named_children) == 1:
+        return _cpp_name_path(node.named_children[0], source)
+    return []
+
+
+def _template_arguments(node: Node | None, source: bytes) -> list[str]:
+    if node is None:
+        return []
+    arguments = node.child_by_field_name("arguments")
+    if arguments is None or arguments.type != "template_argument_list":
+        return []
+    return [_compact(_text(child, source)) for child in arguments.named_children]
+
+
+def _callee_fact(node: Node, source: bytes) -> dict[str, Any]:
+    target = node
+    receiver = None
+    if node.type == "field_expression":
+        receiver = node.child_by_field_name("argument")
+        target = node.child_by_field_name("field") or node
+        receiver_kind = "member"
+    elif node.type == "qualified_identifier":
+        receiver = node.child_by_field_name("scope")
+        target = node.child_by_field_name("name") or node
+        receiver_kind = "scope"
+    else:
+        receiver_kind = None
+    path = _cpp_name_path(node, source)
+    return {
+        "path": path,
+        "receiver": _canonical_cpp(_text(receiver, source))
+        if receiver is not None
+        else None,
+        "receiver_kind": receiver_kind,
+        "target_name": path[-1] if path else _compact(_text(target, source)),
+        "template_arguments": _template_arguments(target, source),
+    }
+
+
+def _macros(root: Node, source: bytes, file_key: str) -> list[dict[str, Any]]:
     results = []
     for node in _walk(root):
         if node.type != "ue_macro_invocation":
             continue
-        head = node.child_by_field_name("head")
-        arguments = node.child_by_field_name("arguments")
-        if head is None or arguments is None:
+        name_node = node.child_by_field_name("head")
+        arguments_node = node.child_by_field_name("arguments")
+        if name_node is None or arguments_node is None:
             continue
         start = int(node.start_byte)
-        end = int(arguments.end_byte)
-        name = _text(head, source).split("(", 1)[0].strip()
+        end = int(arguments_node.end_byte)
+        head = _text(name_node, source).rstrip()
+        name = head[:-1].strip() if head.endswith("(") else head
         expression = source[start:end].decode("utf-8", errors="replace")
+        arguments = [
+            {
+                "expression": _compact(_text(argument, source)),
+                "literal_values": _string_literals(argument, source),
+            }
+            for argument in arguments_node.named_children
+            if argument.type == "ue_macro_argument"
+        ]
         results.append(
             {
                 "name": name,
+                "arguments": arguments,
                 "tokens": _TOKEN_RE.findall(expression),
                 "expression": re.sub(r"\s+", "", expression),
                 "file": file_key,
@@ -197,9 +294,9 @@ def _includes(root: Node, source: bytes, file_key: str) -> list[dict[str, Any]]:
     return results
 
 
-def _name_from_declarator(node: Node | None, source: bytes) -> tuple[str, str]:
+def _declarator_name_path(node: Node | None, source: bytes) -> list[str]:
     if node is None:
-        return "", ""
+        return []
     current = node
     while current.type in {
         "function_declarator",
@@ -213,21 +310,149 @@ def _name_from_declarator(node: Node | None, source: bytes) -> tuple[str, str]:
         if child is None:
             break
         current = child
-    raw = _compact(_text(current, source))
-    raw = re.sub(r"^[*&\s]+", "", raw)
-    raw = re.sub(r"\s*::\s*", "::", raw)
-    raw = re.sub(r"<.*>$", "", raw)
-    name = raw.rsplit("::", 1)[-1]
-    return name, raw
+    return _cpp_name_path(current, source)
 
 
-def _parameter_facts(function_declarator: Node, source: bytes) -> list[dict[str, str]]:
+def _name_from_declarator(node: Node | None, source: bytes) -> tuple[str, str]:
+    path = _declarator_name_path(node, source)
+    return (path[-1], "::".join(path)) if path else ("", "")
+
+
+def _declarator_modifiers(node: Node | None, source: bytes) -> tuple[str, str]:
+    prefix: list[str] = []
+    suffix: list[str] = []
+    current = node
+    while current is not None:
+        child = current.child_by_field_name("declarator")
+        if current.type in {"pointer_declarator", "abstract_pointer_declarator"}:
+            prefix.append("*")
+        elif current.type in {
+            "reference_declarator",
+            "reference_field_declarator",
+            "abstract_reference_declarator",
+        }:
+            token = next(
+                (
+                    _text(item, source)
+                    for item in current.children
+                    if not item.is_named and _text(item, source) in {"&", "&&"}
+                ),
+                "&",
+            )
+            prefix.append(token)
+        elif current.type == "array_declarator":
+            size = current.child_by_field_name("size")
+            suffix.append(
+                f"[{_compact(_text(size, source)) if size is not None else ''}]"
+            )
+        if child is None:
+            break
+        current = child
+    return "".join(prefix), "".join(reversed(suffix))
+
+
+def _type_references(node: Node | None, source: bytes) -> list[str]:
+    if node is None:
+        return []
+    results: list[str] = []
+
+    def visit(current: Node) -> None:
+        if current.type == "qualified_identifier":
+            value = "::".join(_cpp_name_path(current, source))
+            if value and value not in results:
+                results.append(value)
+            name = current.child_by_field_name("name")
+            if name is not None and name.type in {"template_type", "template_function"}:
+                arguments = name.child_by_field_name("arguments")
+                if arguments is not None:
+                    for child in arguments.named_children:
+                        visit(child)
+            return
+        if current.type in {"template_type", "template_function"}:
+            name = current.child_by_field_name("name")
+            value = "::".join(_cpp_name_path(name, source))
+            if value and value not in results:
+                results.append(value)
+            arguments = current.child_by_field_name("arguments")
+            if arguments is not None:
+                for child in arguments.named_children:
+                    visit(child)
+            return
+        if current.type in {
+            "type_identifier",
+            "primitive_type",
+            "sized_type_specifier",
+        }:
+            value = _compact(_text(current, source))
+            if value and value not in results:
+                results.append(value)
+            return
+        for child in current.named_children:
+            visit(child)
+
+    visit(node)
+    return results
+
+
+def _type_fact(node: Node | None, source: bytes) -> dict[str, Any]:
+    expression = _canonical_cpp(_text(node, source)) if node is not None else ""
+    references = _type_references(node, source)
+    primary = references[0] if references else None
+    return {
+        "expression": expression,
+        "name": primary.rsplit("::", 1)[-1] if primary else None,
+        "qualified_name": primary,
+        "references": references,
+    }
+
+
+def _storage_classes(node: Node, source: bytes) -> list[str]:
+    return [
+        _text(child, source)
+        for child in node.named_children
+        if child.type == "storage_class_specifier"
+    ]
+
+
+def _is_scoped_enum(node: Node, source: bytes) -> bool:
+    name = node.child_by_field_name("name")
+    for child in node.children:
+        if name is not None and child.start_byte >= name.start_byte:
+            break
+        if not child.is_named and _text(child, source) in {"class", "struct"}:
+            return True
+    return False
+
+
+def _leading_macro_expressions(
+    node: Node, macros_by_start: dict[int, dict[str, Any]]
+) -> list[str]:
+    results: list[str] = []
+    current = node.prev_named_sibling
+    while current is not None:
+        if current.type == "comment":
+            current = current.prev_named_sibling
+            continue
+        if current.type != "ue_macro_invocation":
+            break
+        macro = macros_by_start.get(int(current.start_byte))
+        if macro is not None:
+            results.append(str(macro["expression"]))
+        current = current.prev_named_sibling
+    results.reverse()
+    return results
+
+
+def _parameter_facts(function_declarator: Node, source: bytes) -> list[dict[str, Any]]:
     parameters = function_declarator.child_by_field_name("parameters")
     if parameters is None:
         return []
     results = []
     for parameter in parameters.named_children:
-        if parameter.type not in {"parameter_declaration", "optional_parameter_declaration"}:
+        if parameter.type not in {
+            "parameter_declaration",
+            "optional_parameter_declaration",
+        }:
             continue
         declarator = parameter.child_by_field_name("declarator")
         name, _ = _name_from_declarator(declarator, source)
@@ -240,44 +465,51 @@ def _parameter_facts(function_declarator: Node, source: bytes) -> list[dict[str,
             if parameter.field_name_for_child(index) == "default_value":
                 continue
             specifiers.append(child)
+        base_type = _type_fact(parameter.child_by_field_name("type"), source)
         type_expression = _canonical_cpp(
             " ".join(_text(child, source) for child in specifiers)
         )
-        if declarator is not None:
-            name_nodes = [
-                child
-                for child in _walk(declarator)
-                if child.type in {"identifier", "field_identifier"}
-                and _text(child, source) == name
-            ]
-            if name_nodes:
-                name_node = name_nodes[-1]
-                declarator_text = (
-                    source[declarator.start_byte : name_node.start_byte]
-                    + source[name_node.end_byte : declarator.end_byte]
-                ).decode("utf-8", errors="replace")
-            else:
-                declarator_text = _text(declarator, source)
-            type_expression = _canonical_cpp(
-                f"{type_expression} {declarator_text}"
-            )
-        results.append({"name": name, "type_expression": type_expression})
+        prefix, suffix = _declarator_modifiers(declarator, source)
+        type_expression = _canonical_cpp(f"{type_expression}{prefix}{suffix}")
+        results.append(
+            {
+                "name": name,
+                "type_expression": type_expression,
+                "type": base_type,
+            }
+        )
     return results
 
 
 def _base_types(node: Node, source: bytes) -> list[str]:
-    clause = next((child for child in node.named_children if child.type == "base_class_clause"), None)
+    clause = next(
+        (child for child in node.named_children if child.type == "base_class_clause"),
+        None,
+    )
     if clause is None:
         return []
     results = []
     for child in clause.named_children:
         if child.type in {"access_specifier", "virtual"}:
             continue
-        value = _compact(_text(child, source))
-        value = re.sub(r"^(?:public|protected|private|virtual)\s+", "", value)
+        value = _canonical_cpp(_text(child, source))
         if value and value not in results:
             results.append(value)
     return results
+
+
+def _base_type_facts(node: Node, source: bytes) -> list[dict[str, Any]]:
+    clause = next(
+        (child for child in node.named_children if child.type == "base_class_clause"),
+        None,
+    )
+    if clause is None:
+        return []
+    return [
+        _type_fact(child, source)
+        for child in clause.named_children
+        if child.type != "access_specifier"
+    ]
 
 
 def _type_expression(declaration: Node, source: bytes) -> str:
@@ -333,13 +565,13 @@ def _function_fact(
     owners: tuple[str, ...],
     role: str,
 ) -> dict[str, Any] | None:
-    name, raw_name = _name_from_declarator(function_declarator, source)
-    if not name:
+    name_path = _declarator_name_path(function_declarator, source)
+    if not name_path:
         return None
-    explicit_prefix = raw_name.rsplit("::", 1)[0] if "::" in raw_name else ""
+    name = name_path[-1]
     owner_parts = list(owners)
-    if explicit_prefix:
-        prefix_parts = [part for part in explicit_prefix.split("::") if part]
+    if len(name_path) > 1:
+        prefix_parts = name_path[:-1]
         if namespaces and prefix_parts[: len(namespaces)] == list(namespaces):
             prefix_parts = prefix_parts[len(namespaces) :]
         owner_parts = prefix_parts
@@ -350,7 +582,11 @@ def _function_fact(
     parameter_text = ", ".join(
         f"{item['type_expression']} {item['name']}".strip() for item in parameters
     )
-    declaration_text = _compact(_text(node, source).split("{", 1)[0]).rstrip(";")
+    body = node.child_by_field_name("body")
+    declaration_end = body.start_byte if body is not None else node.end_byte
+    declaration_text = _compact(
+        source[node.start_byte : declaration_end].decode("utf-8", errors="replace")
+    ).rstrip(";")
     qualifiers = _function_qualifiers(node, function_declarator, source)
     identity = "|".join(
         (
@@ -372,6 +608,7 @@ def _function_fact(
         "parameters": parameter_text,
         "parameter_facts": parameters,
         "signature": declaration_text or _compact(_text(function_declarator, source)),
+        "return_type": _type_fact(node.child_by_field_name("type"), source),
         "qualifiers": qualifiers,
         "role": role,
         "linkage": "internal" if "static" in qualifiers else "external",
@@ -381,10 +618,6 @@ def _function_fact(
         "start_offset": int(node.start_byte),
         "end_offset": int(node.end_byte),
     }
-
-
-def _variable_type(value: str) -> str:
-    return re.sub(r"\s*[*&]+\s*$", "", value).split("::")[-1].strip()
 
 
 def _function_addresses(arguments: Node | None, source: bytes) -> list[dict[str, str]]:
@@ -424,7 +657,7 @@ def _function_references(
     local_variables: list[dict[str, str]] = []
     identifier_references: list[dict[str, Any]] = []
     variable_types = {
-        str(item["name"]): _variable_type(str(item["type_expression"]))
+        str(item["name"]): str(item.get("type", {}).get("name") or "")
         for item in fact.get("parameter_facts", [])
         if item.get("name")
     }
@@ -443,9 +676,12 @@ def _function_references(
             )
         if current.type == "declaration":
             type_expression = _type_expression(current, source)
-            type_name = _variable_type(type_expression)
-            if type_name and type_name not in _PRIMITIVE_TYPES and re.search(r"[A-Z]", type_name):
-                symbols.append({"kind": "type", "spelling": type_name, "line": _line(current)})
+            type_fact = _type_fact(current.child_by_field_name("type"), source)
+            type_name = str(type_fact.get("name") or "")
+            if type_name and type_name not in _PRIMITIVE_TYPES:
+                symbols.append(
+                    {"kind": "type", "spelling": type_name, "line": _line(current)}
+                )
             for declarator in _declarators(current):
                 if _function_declarator(declarator) is not None:
                     continue
@@ -453,7 +689,11 @@ def _function_references(
                 if name and type_name:
                     variable_types[name] = type_name
                     local_variables.append(
-                        {"name": name, "type_expression": type_expression}
+                        {
+                            "name": name,
+                            "type_expression": type_expression,
+                            "type": type_fact,
+                        }
                     )
         if current.type != "call_expression":
             continue
@@ -463,9 +703,23 @@ def _function_references(
             continue
         raw_callee = _compact(_text(callee_node, source))
         callee = re.sub(r"\s*(?:->|\.)\s*", ".", raw_callee)
-        target_name = re.sub(r"<.*>$", "", callee.rsplit(".", 1)[-1].rsplit("::", 1)[-1])
+        callee_fact = _callee_fact(callee_node, source)
+        target_name = str(callee_fact["target_name"])
         arguments = (
             [_compact(_text(child, source)) for child in arguments_node.named_children]
+            if arguments_node is not None
+            else []
+        )
+        argument_details = (
+            [
+                {
+                    "expression": _compact(_text(child, source)),
+                    "syntax_kind": child.type,
+                    "literal_values": _string_literals(child, source),
+                    "name_path": _cpp_name_path(child, source),
+                }
+                for child in arguments_node.named_children
+            ]
             if arguments_node is not None
             else []
         )
@@ -475,8 +729,13 @@ def _function_references(
             {
                 "callee": callee,
                 "raw_callee": raw_callee,
+                "callee_path": callee_fact["path"],
+                "receiver": callee_fact["receiver"],
+                "receiver_kind": callee_fact["receiver_kind"],
                 "expression": _compact(_text(current, source)),
                 "arguments": arguments,
+                "argument_details": argument_details,
+                "template_arguments": callee_fact["template_arguments"],
                 "function_addresses": _function_addresses(arguments_node, source),
                 "target_name": target_name,
                 "target_owner": None,
@@ -498,6 +757,8 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
     source = path.read_bytes()
     file_key = _normal_key(path)
     tree = parser.parse(source)
+    macros = _macros(tree.root_node, source, file_key)
+    macros_by_start = {int(item["start_offset"]): item for item in macros}
     types: list[dict[str, Any]] = []
     functions: list[dict[str, Any]] = []
     variables: list[dict[str, Any]] = []
@@ -537,18 +798,23 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                             "declaration",
                         )
                         if function is not None:
+                            function["macros"] = _leading_macro_expressions(
+                                child, macros_by_start
+                            )
                             functions.append(function)
                             methods.append(
                                 {
                                     "name": function["name"],
                                     "signature": function["signature"],
                                     "role": "declaration",
+                                    "macros": function["macros"],
                                     "line": _line(child),
                                     "end_line": _end_line(child),
                                 }
                             )
                         continue
                     type_expression = _type_expression(child, source)
+                    type_fact = _type_fact(child.child_by_field_name("type"), source)
                     for declarator in _declarators(child):
                         field_name, _ = _name_from_declarator(declarator, source)
                         if field_name:
@@ -556,8 +822,14 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                                 {
                                     "name": field_name,
                                     "type_expression": type_expression,
+                                    "type": type_fact,
+                                    "macros": _leading_macro_expressions(
+                                        child, macros_by_start
+                                    ),
                                     "line": _line(child),
                                     "end_line": _end_line(child),
+                                    "start_offset": int(child.start_byte),
+                                    "end_offset": int(child.end_byte),
                                 }
                             )
             types.append(
@@ -570,9 +842,11 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                     "qualified_name": qualified,
                     "role": "definition" if body is not None else "declaration",
                     "base_types": _base_types(node, source),
+                    "base_type_facts": _base_type_facts(node, source),
                     "fields": fields,
                     "methods": methods,
-                    "scoped": kind == "enum" and bool(re.search(r"\benum\s+(?:class|struct)\b", _text(node, source))),
+                    "scoped": kind == "enum" and _is_scoped_enum(node, source),
+                    "macros": _leading_macro_expressions(node, macros_by_start),
                     "file": file_key,
                     "line": _line(node),
                     "end_line": _end_line(node),
@@ -586,7 +860,9 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                         visit(child, namespaces, (*owners, name))
                         continue
                     nested_types = [
-                        item for item in child.named_children if item.type in _TYPE_NODES
+                        item
+                        for item in child.named_children
+                        if item.type in _TYPE_NODES
                     ]
                     if nested_types and not _declarators(child):
                         for nested in nested_types:
@@ -600,11 +876,16 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                 node, declarator, source, file_key, namespaces, owners, "definition"
             )
             if function is not None:
+                function["macros"] = _leading_macro_expressions(node, macros_by_start)
                 functions.append(function)
-                references[function["usr"]] = _function_references(node, function, source)
+                references[function["usr"]] = _function_references(
+                    node, function, source
+                )
             return
         if node.type in {"declaration", "field_declaration"}:
-            direct_types = [child for child in node.named_children if child.type in _TYPE_NODES]
+            direct_types = [
+                child for child in node.named_children if child.type in _TYPE_NODES
+            ]
             if direct_types:
                 for child in direct_types:
                     visit(child, namespaces, owners)
@@ -612,14 +893,24 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
             declarator = _function_declarator(node)
             if declarator is not None:
                 function = _function_fact(
-                    node, declarator, source, file_key, namespaces, owners, "declaration"
+                    node,
+                    declarator,
+                    source,
+                    file_key,
+                    namespaces,
+                    owners,
+                    "declaration",
                 )
                 if function is not None:
+                    function["macros"] = _leading_macro_expressions(
+                        node, macros_by_start
+                    )
                     functions.append(function)
                 return
             if not owners:
-                declaration_text = _compact(_text(node, source))
                 type_expression = _type_expression(node, source)
+                type_fact = _type_fact(node.child_by_field_name("type"), source)
+                storage_classes = _storage_classes(node, source)
                 for item in _declarators(node):
                     name, _ = _name_from_declarator(item, source)
                     if not name:
@@ -631,11 +922,20 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                             "name": name,
                             "qualified_name": qualified,
                             "type_expression": type_expression,
-                            "role": "declaration" if re.search(r"\bextern\b", declaration_text) else "definition",
-                            "linkage": "internal" if re.search(r"\bstatic\b", declaration_text) else "external",
+                            "type": type_fact,
+                            "role": "declaration"
+                            if "extern" in storage_classes
+                            else "definition",
+                            "linkage": "internal"
+                            if "static" in storage_classes
+                            else "external",
+                            "storage_classes": storage_classes,
+                            "macros": _leading_macro_expressions(node, macros_by_start),
                             "file": file_key,
                             "line": _line(node),
                             "end_line": _end_line(node),
+                            "start_offset": int(node.start_byte),
+                            "end_offset": int(node.end_byte),
                         }
                     )
             return
@@ -662,12 +962,14 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
         "variables": variables,
         "references": references,
         "includes": _includes(tree.root_node, source, file_key),
-        "macros": _macros(tree.root_node, source, file_key),
+        "macros": macros,
         "diagnostics": diagnostics,
     }
 
 
-def _deduplicate(items: list[dict[str, Any]], keys: tuple[str, ...]) -> list[dict[str, Any]]:
+def _deduplicate(
+    items: list[dict[str, Any]], keys: tuple[str, ...]
+) -> list[dict[str, Any]]:
     unique = {tuple(item.get(key) for key in keys): item for item in items}
     return list(unique.values())
 
@@ -695,20 +997,21 @@ def _finalize_references(model: dict[str, Any]) -> None:
         for call in references.get("call_details", []):
             callee = str(call["callee"])
             target_name = str(call.get("target_name") or "")
-            segments = [part for part in callee.split(".") if part]
-            root = segments[0].split("::", 1)[0] if len(segments) > 1 else ""
+            segments = [str(part) for part in call.get("callee_path", [])]
+            root = segments[0] if len(segments) > 1 else ""
             owner_type = call.get("variable_types", {}).get(root)
             owner_key = str(function.get("owner") or "").rsplit("::", 1)[-1]
             if owner_type:
                 resolved_owner = str(owner_type).rsplit("::", 1)[-1]
-            elif len(segments) == 1 and "::" in callee:
-                resolved_owner = callee.rsplit("::", 1)[0].rsplit("::", 1)[-1]
+            elif call.get("receiver_kind") == "scope" and len(segments) >= 2:
+                resolved_owner = segments[-2]
             elif len(segments) == 1 and methods.get((owner_key, target_name)):
                 resolved_owner = owner_key
             else:
                 resolved_owner = ""
-            method = methods.get((resolved_owner, target_name)) if resolved_owner else None
-            free = free_functions.get((str(function.get("namespace") or ""), target_name))
+            free = free_functions.get(
+                (str(function.get("namespace") or ""), target_name)
+            )
             if resolved_owner:
                 call["target_owner"] = resolved_owner
                 symbols.append(
@@ -738,7 +1041,7 @@ def _finalize_references(model: dict[str, Any]) -> None:
             for address in call.get("function_addresses", []):
                 symbol = {
                     "kind": "callback_target"
-                    if re.match(r"^(?:Add|Bind|Create)", target_name)
+                    if target_name.startswith(("Add", "Bind", "Create"))
                     else "function_address",
                     "spelling": address["qualified_name"],
                     "line": int(call["line"]),
@@ -776,7 +1079,11 @@ def _finalize_references(model: dict[str, Any]) -> None:
             )
         references["external_symbols"] = sorted(
             _deduplicate(symbols, ("kind", "spelling", "owner_type", "line")),
-            key=lambda item: (int(item["line"]), str(item["kind"]), str(item["spelling"])),
+            key=lambda item: (
+                int(item["line"]),
+                str(item["kind"]),
+                str(item["spelling"]),
+            ),
         )
         for call in references.get("call_details", []):
             call.pop("raw_callee", None)
@@ -818,7 +1125,9 @@ def load_cpp_unit(
                 str(item.get("role") or ""),
             )
         )
-    model["includes"].sort(key=lambda item: (item["source_file"], item["line"], item["spelling"]))
+    model["includes"].sort(
+        key=lambda item: (item["source_file"], item["line"], item["spelling"])
+    )
     model["macros"].sort(key=lambda item: (item["file"], item["line"], item["name"]))
     model["diagnostic_error_count"] = sum(
         int(item["severity"]) >= 3 for item in model["diagnostics"]
@@ -870,7 +1179,9 @@ def syntax_projection(model: dict[str, Any], path: Path) -> dict[str, Any]:
                 "has_body": item["role"] == "definition",
                 "location": {"line": item["line"]},
                 "calls": model["references"].get(item["usr"], {}).get("calls", []),
-                "controls": model["references"].get(item["usr"], {}).get("controls", []),
+                "controls": model["references"]
+                .get(item["usr"], {})
+                .get("controls", []),
             }
             for item in functions
         ],

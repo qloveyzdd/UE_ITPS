@@ -18,54 +18,7 @@ def _evidence(item: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _macro_expression(item: dict[str, Any]) -> str:
-    return str(item.get("expression") or item["name"])
-
-
-def _adjacent_macros(
-    item: dict[str, Any],
-    macros: list[dict[str, Any]],
-    text_by_file: dict[str, str],
-) -> list[str]:
-    file_key = str(item["file"])
-    line = int(item["line"])
-    source_lines = text_by_file.get(file_key, "").splitlines()
-    candidates = [
-        macro
-        for macro in macros
-        if macro["file"] == file_key
-        and int(macro["end_line"]) < line
-        and macro["name"]
-        in {
-            "UCLASS",
-            "USTRUCT",
-            "UENUM",
-            "UINTERFACE",
-            "UFUNCTION",
-            "UPROPERTY",
-            "UDELEGATE",
-        }
-    ]
-    results: list[dict[str, Any]] = []
-    cursor_line = line
-    for macro in reversed(candidates):
-        end_line = int(macro["end_line"])
-        if any(
-            source_lines[index - 1].strip()
-            for index in range(end_line + 1, cursor_line)
-            if 0 < index <= len(source_lines)
-        ):
-            break
-        results.append(macro)
-        cursor_line = int(macro["line"])
-    return [_macro_expression(item) for item in reversed(results)]
-
-
-def _member_anchors(
-    item: dict[str, Any],
-    macros: list[dict[str, Any]],
-    text_by_file: dict[str, str],
-) -> list[dict[str, Any]]:
+def _member_anchors(item: dict[str, Any]) -> list[dict[str, Any]]:
     members = []
     for field in item.get("fields", []):
         projection = {**field, "file": item["file"]}
@@ -74,7 +27,7 @@ def _member_anchors(
                 "kind": "variable",
                 "name": field["name"],
                 "type_expression": field["type_expression"],
-                "macros": _adjacent_macros(projection, macros, text_by_file),
+                "macros": list(field.get("macros", [])),
                 "evidence": _evidence(projection),
             }
         )
@@ -85,18 +38,14 @@ def _member_anchors(
                 "kind": "function",
                 "name": method["name"],
                 "signature": method["signature"],
-                "macros": _adjacent_macros(projection, macros, text_by_file),
+                "macros": list(method.get("macros", [])),
                 "evidence": _evidence(projection),
             }
         )
     return sorted(members, key=lambda member: member["evidence"]["line"])
 
 
-def _compound(
-    item: dict[str, Any],
-    macros: list[dict[str, Any]],
-    text_by_file: dict[str, str],
-) -> dict[str, Any]:
+def _compound(item: dict[str, Any]) -> dict[str, Any]:
     return {
         "name": item["name"],
         "namespace": item["namespace"],
@@ -104,24 +53,20 @@ def _compound(
         "owner": item["owner"],
         "role": item["role"],
         "base_types": item["base_types"],
-        "macros": _adjacent_macros(item, macros, text_by_file),
-        "member_anchors": _member_anchors(item, macros, text_by_file),
+        "macros": list(item.get("macros", [])),
+        "member_anchors": _member_anchors(item),
         "evidence": _evidence(item),
     }
 
 
-def _member_function(
-    item: dict[str, Any],
-    macros: list[dict[str, Any]],
-    text_by_file: dict[str, str],
-) -> dict[str, Any]:
+def _member_function(item: dict[str, Any]) -> dict[str, Any]:
     return {
         "name": item["name"],
         "namespace": item["namespace"],
         "qualified_name": item["qualified_name"],
         "owner": item["owner"],
         "signature": item["signature"],
-        "macros": _adjacent_macros(item, macros, text_by_file),
+        "macros": list(item.get("macros", [])),
         "evidence": _evidence(item),
     }
 
@@ -136,22 +81,16 @@ def list_source_types(
         str(path.resolve()).replace("\\", "/").casefold()
         for path, _ in loaded["parsed_files"]
     }
-    text_by_file = {
-        str(path.resolve()).replace("\\", "/").casefold(): parsed["text"]
-        for path, parsed in loaded["parsed_files"]
-    }
-    macros = [item for item in model["macros"] if item["file"] in unit_files]
     types = [item for item in model["types"] if item["file"] in unit_files]
     classes = [
-        _compound(item, macros, text_by_file)
+        _compound(item)
         for item in types
         if item["kind"] == "class" and item["role"] == "definition"
     ]
     structs = [
-        _compound(item, macros, text_by_file)
+        _compound(item)
         for item in types
-        if item["kind"] in {"struct", "union"}
-        and item["role"] == "definition"
+        if item["kind"] in {"struct", "union"} and item["role"] == "definition"
     ]
     enums = [
         {
@@ -162,7 +101,7 @@ def list_source_types(
             "owner": item["owner"],
             "role": item["role"],
             "scoped": item["scoped"],
-            "macros": _adjacent_macros(item, macros, text_by_file),
+            "macros": list(item.get("macros", [])),
             "evidence": _evidence(item),
         }
         for item in types
@@ -202,7 +141,7 @@ def list_source_types(
             "type_expression": item["type_expression"],
             "role": item["role"],
             "linkage": item["linkage"],
-            "macros": _adjacent_macros(item, macros, text_by_file),
+            "macros": list(item.get("macros", [])),
             "evidence": _evidence(item),
         }
         for item in model["variables"]
@@ -224,7 +163,7 @@ def list_source_types(
         and item["role"] == "definition"
     ]
     member_functions = [
-        _member_function(item, macros, text_by_file)
+        _member_function(item)
         for item in model["functions"]
         if item["file"] in unit_files
         and item["kind"] == "method"

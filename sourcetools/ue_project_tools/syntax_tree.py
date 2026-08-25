@@ -95,6 +95,115 @@ def _argument_node(node: Node) -> Node:
     return node.named_children[-1] if node.named_children else node
 
 
+def _csharp_name_path(source: bytes, node: Node | None) -> list[str]:
+    if node is None:
+        return []
+    if node.type in {
+        "identifier",
+        "predefined_type",
+        "this_expression",
+        "base_expression",
+    }:
+        value = _text(source, node).strip()
+        return [value] if value else []
+    if node.type == "generic_name":
+        name = next(
+            (child for child in node.named_children if child.type == "identifier"),
+            None,
+        )
+        return _csharp_name_path(source, name)
+    if node.type in {"member_access_expression", "qualified_name"}:
+        left = node.child_by_field_name("expression") or node.child_by_field_name(
+            "left"
+        )
+        right = node.child_by_field_name("name") or node.child_by_field_name("right")
+        return [
+            *_csharp_name_path(source, left),
+            *_csharp_name_path(source, right),
+        ]
+    if node.type == "alias_qualified_name":
+        return [
+            *_csharp_name_path(source, node.child_by_field_name("alias")),
+            *_csharp_name_path(source, node.child_by_field_name("name")),
+        ]
+    if node.type == "conditional_access_expression":
+        condition = node.child_by_field_name("condition")
+        access = node.named_children[-1] if len(node.named_children) > 1 else None
+        return [
+            *_csharp_name_path(source, condition),
+            *_csharp_name_path(source, access),
+        ]
+    if node.type == "member_binding_expression":
+        return _csharp_name_path(source, node.child_by_field_name("name"))
+    if node.type == "invocation_expression":
+        return _csharp_name_path(source, node.child_by_field_name("function"))
+    if node.type in {"nullable_type", "array_type", "pointer_type"}:
+        return _csharp_name_path(source, node.child_by_field_name("type"))
+    if len(node.named_children) == 1:
+        return _csharp_name_path(source, node.named_children[0])
+    return []
+
+
+def _csharp_type_arguments(source: bytes, node: Node | None) -> list[str]:
+    if node is None or node.type != "generic_name":
+        return []
+    arguments = next(
+        (child for child in node.named_children if child.type == "type_argument_list"),
+        None,
+    )
+    return (
+        [_compact(_text(source, child)) for child in arguments.named_children]
+        if arguments is not None
+        else []
+    )
+
+
+def _csharp_expression_fact(source: bytes, node: Node | None) -> dict[str, Any]:
+    if node is None:
+        return {
+            "path": [],
+            "name": None,
+            "receiver": None,
+            "type_arguments": [],
+        }
+    target = node
+    receiver = None
+    if node.type == "member_access_expression":
+        receiver = node.child_by_field_name("expression")
+        target = node.child_by_field_name("name") or node
+    elif node.type == "member_binding_expression":
+        target = node.child_by_field_name("name") or node
+    elif node.type == "alias_qualified_name":
+        receiver = node.child_by_field_name("alias")
+        target = node.child_by_field_name("name") or node
+    path = _csharp_name_path(source, node)
+    return {
+        "path": path,
+        "name": path[-1] if path else None,
+        "receiver": _compact(_text(source, receiver)) if receiver is not None else None,
+        "type_arguments": _csharp_type_arguments(source, target),
+    }
+
+
+def _csharp_type_fact(source: bytes, node: Node | None) -> dict[str, Any]:
+    expression = _compact(_text(source, node))
+    path = _csharp_name_path(source, node)
+    generic = (
+        next(
+            (current for current in _walk(node) if current.type == "generic_name"),
+            None,
+        )
+        if node is not None
+        else None
+    )
+    return {
+        "expression": expression,
+        "path": path,
+        "name": path[-1] if path else None,
+        "type_arguments": _csharp_type_arguments(source, generic),
+    }
+
+
 def _control_contexts(source: bytes, node: Node) -> list[dict[str, Any]]:
     contexts: list[dict[str, Any]] = []
     current = node.parent
@@ -156,6 +265,7 @@ def _operation(source: bytes, node: Node) -> dict[str, Any] | None:
         )
     if node.type == "invocation_expression":
         function = node.child_by_field_name("function")
+        callee_fact = _csharp_expression_fact(source, function)
         arguments_node = node.child_by_field_name("arguments")
         arguments = []
         for raw_argument in (
@@ -176,6 +286,10 @@ def _operation(source: bytes, node: Node) -> dict[str, Any] | None:
         return {
             "kind": "invocation",
             "callee": _compact(_text(source, function)).replace("?.", "."),
+            "callee_path": callee_fact["path"],
+            "member_name": callee_fact["name"],
+            "receiver": callee_fact["receiver"],
+            "type_arguments": callee_fact["type_arguments"],
             "arguments": arguments,
             "evaluation": {
                 "status": (
@@ -192,6 +306,8 @@ def _operation(source: bytes, node: Node) -> dict[str, Any] | None:
     if node.type == "assignment_expression":
         left = node.child_by_field_name("left")
         right = node.child_by_field_name("right")
+        target_fact = _csharp_expression_fact(source, left)
+        value_fact = _csharp_expression_fact(source, right)
         operator = next(
             (
                 _text(source, child)
@@ -203,8 +319,12 @@ def _operation(source: bytes, node: Node) -> dict[str, Any] | None:
         return {
             "kind": "assignment",
             "target": _compact(_text(source, left)),
+            "target_path": target_fact["path"],
+            "target_name": target_fact["name"],
             "operator": operator,
             "value_expression": _compact(_text(source, right)),
+            "value_path": value_fact["path"],
+            "value_name": value_fact["name"],
             "evaluation": _evaluation(source, right or node),
             **common,
         }
@@ -221,7 +341,15 @@ def _parameters(source: bytes, node: Node | None) -> list[dict[str, str]]:
         name = _text(source, parameter.child_by_field_name("name")).strip()
         type_expression = _compact(_text(source, parameter.child_by_field_name("type")))
         if name and type_expression:
-            results.append({"name": name, "type_expression": type_expression})
+            results.append(
+                {
+                    "name": name,
+                    "type_expression": type_expression,
+                    "type": _csharp_type_fact(
+                        source, parameter.child_by_field_name("type")
+                    ),
+                }
+            )
     return results
 
 
@@ -253,6 +381,7 @@ def _variables(source: bytes, root: Node, statement_type: str) -> list[dict[str,
                     {
                         "name": name,
                         "type_expression": type_expression,
+                        "type": _csharp_type_fact(source, type_node),
                         "location": _location(statement),
                     }
                 )
@@ -288,6 +417,7 @@ def _method(source: bytes, node: Node) -> dict[str, Any]:
     operations.sort(key=lambda item: item[0])
     referenced_names = []
     qualified_references = []
+    qualified_reference_paths = []
     if body is not None:
         for descendant in _walk(body):
             if descendant.type == "identifier":
@@ -295,9 +425,12 @@ def _method(source: bytes, node: Node) -> dict[str, Any]:
                 if value not in referenced_names:
                     referenced_names.append(value)
             if descendant.type == "member_access_expression":
-                root = _text(source, descendant).replace("?.", ".").split(".", 1)[0]
+                path = _csharp_name_path(source, descendant)
+                root = path[0] if path else ""
                 if root and root not in qualified_references:
                     qualified_references.append(root)
+                if path and path not in qualified_reference_paths:
+                    qualified_reference_paths.append(path)
     return {
         "name": name,
         "parameters": _compact(parameters_text),
@@ -319,6 +452,7 @@ def _method(source: bytes, node: Node) -> dict[str, Any]:
         ),
         "referenced_names": referenced_names,
         "qualified_references": qualified_references,
+        "qualified_reference_paths": qualified_reference_paths,
         "operations": [item for _, item in operations],
     }
 
@@ -346,6 +480,15 @@ def parse_csharp_model(text: str) -> dict[str, Any]:
             if base_list is not None
             else []
         )
+        base_type_facts = (
+            [
+                _csharp_type_fact(source, child)
+                for child in base_list.named_children
+                if _text(source, child).strip()
+            ]
+            if base_list is not None
+            else []
+        )
         body = node.child_by_field_name("body")
         members = body.named_children if body is not None else []
         methods = [
@@ -361,6 +504,7 @@ def parse_csharp_model(text: str) -> dict[str, Any]:
                 "kind": "class" if node.type == "class_declaration" else "struct",
                 "name": name,
                 "base_types": bases,
+                "base_type_facts": base_type_facts,
                 "location": _location(node),
                 "fields": fields,
                 "methods": methods,

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import re
 from typing import Any
 
 from .cpp_frontend import CppFrontendError, load_cpp_unit
@@ -32,18 +31,17 @@ def project_cpp_files(project_root: Path) -> list[Path]:
 
 
 def _resolved_type_names(
-    expression: str,
+    references: list[str],
     source_name: str,
     known: set[str],
     short_index: dict[str, list[str]],
 ) -> list[str]:
     resolved: list[str] = []
-    for candidate in type_names(expression):
+    for candidate in type_names(references):
         explicit = [
             name
-            for name in short_index.get(candidate, [])
-            if "::" in name
-            and re.search(rf"(?<!\w){re.escape(name)}(?!\w)", expression)
+            for name in references
+            if name in known and name.rsplit("::", 1)[-1] == candidate
         ]
         target = explicit[0] if len(explicit) == 1 else None
         scope = source_name.rsplit("::", 1)[0] if "::" in source_name else ""
@@ -107,11 +105,13 @@ def build_project_graph(
                 "name": item["name"],
                 "qualified_name": item["qualified_name"],
                 "base_types": item["base_types"],
+                "base_type_facts": item.get("base_type_facts", []),
                 "type_references": [
                     {
                         "kind": "field",
                         "name": field["name"],
                         "type_expression": field["type_expression"],
+                        "type_names": list(field.get("type", {}).get("references", [])),
                         "location": {"line": field["line"]},
                     }
                     for field in item["fields"]
@@ -137,7 +137,10 @@ def build_project_graph(
                 {
                     "severity": "error",
                     "code": "project-tree-sitter-cpp-syntax-error",
-                    "path": Path(diagnostic["file"]).resolve().relative_to(project_root).as_posix(),
+                    "path": Path(diagnostic["file"])
+                    .resolve()
+                    .relative_to(project_root)
+                    .as_posix(),
                     "line": diagnostic["line"],
                     "message": diagnostic["message"],
                 }
@@ -155,9 +158,10 @@ def build_project_graph(
     for path, item in all_types:
         source = item["qualified_name"]
         base_types: list[str] = []
-        for base in item["base_types"]:
-            resolved = _resolved_type_names(base, source, known, short_index)
-            base_types.extend(resolved or type_names(base))
+        for base in item["base_type_facts"]:
+            references = [str(value) for value in base.get("references", [])]
+            resolved = _resolved_type_names(references, source, known, short_index)
+            base_types.extend(resolved or type_names(references))
         graph.add_node(
             source,
             kind=item["kind"],
@@ -169,8 +173,11 @@ def build_project_graph(
         for item in parsed["syntax"]["types"]:
             path = item.get("_path", parsed["path"])
             source = item["qualified_name"]
-            for base in item["base_types"]:
-                for target in _resolved_type_names(base, source, known, short_index):
+            for base in item["base_type_facts"]:
+                references = [str(value) for value in base.get("references", [])]
+                for target in _resolved_type_names(
+                    references, source, known, short_index
+                ):
                     graph.add_edge(
                         source,
                         target,
@@ -180,7 +187,10 @@ def build_project_graph(
                     )
             for reference in item["type_references"]:
                 for target in _resolved_type_names(
-                    reference["type_expression"], source, known, short_index
+                    [str(value) for value in reference["type_names"]],
+                    source,
+                    known,
+                    short_index,
                 ):
                     graph.add_edge(
                         source,
