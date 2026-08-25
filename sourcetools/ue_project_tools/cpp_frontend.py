@@ -86,6 +86,23 @@ def _compact(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
+def _canonical_cpp(value: str) -> str:
+    """Normalize one syntax-derived C++ fragment without changing its tokens."""
+    tokens = _TOKEN_RE.findall(value)
+    result = ""
+    previous = ""
+    for token in tokens:
+        if (
+            previous
+            and (previous[-1].isalnum() or previous[-1] == "_")
+            and (token[0].isalnum() or token[0] == "_")
+        ):
+            result += " "
+        result += token
+        previous = token
+    return result
+
+
 def _line(node: Node) -> int:
     return int(node.start_point.row) + 1
 
@@ -214,13 +231,36 @@ def _parameter_facts(function_declarator: Node, source: bytes) -> list[dict[str,
             continue
         declarator = parameter.child_by_field_name("declarator")
         name, _ = _name_from_declarator(declarator, source)
-        type_node = parameter.child_by_field_name("type")
-        type_expression = _compact(_text(type_node, source)) if type_node else ""
+        specifiers = []
+        for index, child in enumerate(parameter.children):
+            if not child.is_named or child == declarator:
+                continue
+            if child.type in {"ue_parameter_macro", "ue_parameter_modifier"}:
+                continue
+            if parameter.field_name_for_child(index) == "default_value":
+                continue
+            specifiers.append(child)
+        type_expression = _canonical_cpp(
+            " ".join(_text(child, source) for child in specifiers)
+        )
         if declarator is not None:
-            declarator_text = _compact(_text(declarator, source))
-            if name:
-                declarator_text = re.sub(rf"\b{re.escape(name)}\b", "", declarator_text)
-            type_expression = _compact(f"{type_expression} {declarator_text}")
+            name_nodes = [
+                child
+                for child in _walk(declarator)
+                if child.type in {"identifier", "field_identifier"}
+                and _text(child, source) == name
+            ]
+            if name_nodes:
+                name_node = name_nodes[-1]
+                declarator_text = (
+                    source[declarator.start_byte : name_node.start_byte]
+                    + source[name_node.end_byte : declarator.end_byte]
+                ).decode("utf-8", errors="replace")
+            else:
+                declarator_text = _text(declarator, source)
+            type_expression = _canonical_cpp(
+                f"{type_expression} {declarator_text}"
+            )
         results.append({"name": name, "type_expression": type_expression})
     return results
 
@@ -257,6 +297,33 @@ def _function_declarator(node: Node) -> Node | None:
     return _descendant(node, {"function_declarator"})
 
 
+def _function_qualifiers(
+    node: Node, function_declarator: Node, source: bytes
+) -> list[str]:
+    values: set[str] = set()
+    parameters = function_declarator.child_by_field_name("parameters")
+    for child in function_declarator.named_children:
+        if parameters is not None and child.start_byte < parameters.end_byte:
+            continue
+        if child.type in {"type_qualifier", "virtual_specifier"}:
+            value = _text(child, source)
+            if value in {"const", "override", "final"}:
+                values.add(value)
+    for child in node.children:
+        if child.end_byte > function_declarator.start_byte:
+            continue
+        value = _text(child, source)
+        if child.type == "storage_class_specifier" and value == "static":
+            values.add(value)
+        elif child.type == "virtual" or value == "virtual":
+            values.add("virtual")
+    return [
+        value
+        for value in ("const", "static", "virtual", "override", "final")
+        if value in values
+    ]
+
+
 def _function_fact(
     node: Node,
     function_declarator: Node,
@@ -281,14 +348,10 @@ def _function_fact(
     qualified_name = "::".join(qualified_parts)
     parameters = _parameter_facts(function_declarator, source)
     parameter_text = ", ".join(
-        _compact(f"{item['type_expression']} {item['name']}") for item in parameters
+        f"{item['type_expression']} {item['name']}".strip() for item in parameters
     )
     declaration_text = _compact(_text(node, source).split("{", 1)[0]).rstrip(";")
-    qualifiers = [
-        value
-        for value in ("const", "static", "virtual", "override", "final")
-        if re.search(rf"\b{value}\b", declaration_text)
-    ]
+    qualifiers = _function_qualifiers(node, function_declarator, source)
     identity = "|".join(
         (
             "method" if owner else "free_function",
@@ -324,6 +387,31 @@ def _variable_type(value: str) -> str:
     return re.sub(r"\s*[*&]+\s*$", "", value).split("::")[-1].strip()
 
 
+def _function_addresses(arguments: Node | None, source: bytes) -> list[dict[str, str]]:
+    results: list[dict[str, str]] = []
+    if arguments is None:
+        return results
+    for argument in arguments.named_children:
+        for current in _walk(argument):
+            if current.type != "pointer_expression":
+                continue
+            spelling = _canonical_cpp(_text(current, source))
+            if not spelling.startswith("&"):
+                continue
+            qualified_name = spelling[1:]
+            if not qualified_name:
+                continue
+            owner, separator, name = qualified_name.rpartition("::")
+            result = {"name": name if separator else qualified_name}
+            if separator:
+                result["owner_type"] = owner
+                result["qualified_name"] = qualified_name
+            else:
+                result["qualified_name"] = qualified_name
+            results.append(result)
+    return results
+
+
 def _function_references(
     node: Node,
     fact: dict[str, Any],
@@ -334,12 +422,18 @@ def _function_references(
     controls: list[dict[str, Any]] = []
     call_details: list[dict[str, Any]] = []
     local_variables: list[dict[str, str]] = []
+    identifier_references: list[dict[str, Any]] = []
     variable_types = {
         str(item["name"]): _variable_type(str(item["type_expression"]))
         for item in fact.get("parameter_facts", [])
         if item.get("name")
     }
-    for current in _walk(node):
+    body = node.child_by_field_name("body") or node
+    for current in _walk(body):
+        if current.type == "identifier":
+            identifier_references.append(
+                {"name": _text(current, source), "line": _line(current)}
+            )
         if current.type in _CONTROL_NODES:
             controls.append(
                 {
@@ -383,6 +477,7 @@ def _function_references(
                 "raw_callee": raw_callee,
                 "expression": _compact(_text(current, source)),
                 "arguments": arguments,
+                "function_addresses": _function_addresses(arguments_node, source),
                 "target_name": target_name,
                 "target_owner": None,
                 "variable_types": dict(variable_types),
@@ -395,7 +490,7 @@ def _function_references(
         "controls": controls,
         "call_details": call_details,
         "local_variables": local_variables,
-        "body_text": _text(node, source),
+        "identifier_references": identifier_references,
     }
 
 
@@ -589,7 +684,11 @@ def _finalize_references(model: dict[str, Any]) -> None:
         if not item.get("owner")
     }
     globals_by_name = {str(item["name"]): item for item in model["variables"]}
-    functions_by_usr = {str(item["usr"]): item for item in model["functions"]}
+    functions_by_usr = {
+        str(item["usr"]): item
+        for item in model["functions"]
+        if item["role"] == "definition"
+    }
     for usr, references in model["references"].items():
         function = functions_by_usr.get(usr, {})
         symbols = list(references.get("external_symbols", []))
@@ -599,13 +698,18 @@ def _finalize_references(model: dict[str, Any]) -> None:
             segments = [part for part in callee.split(".") if part]
             root = segments[0].split("::", 1)[0] if len(segments) > 1 else ""
             owner_type = call.get("variable_types", {}).get(root)
-            if not owner_type and len(segments) > 1 and function.get("owner"):
-                owner_type = str(function["owner"]).rsplit("::", 1)[-1]
             owner_key = str(function.get("owner") or "").rsplit("::", 1)[-1]
-            method = methods.get((str(owner_type or owner_key), target_name))
+            if owner_type:
+                resolved_owner = str(owner_type).rsplit("::", 1)[-1]
+            elif len(segments) == 1 and "::" in callee:
+                resolved_owner = callee.rsplit("::", 1)[0].rsplit("::", 1)[-1]
+            elif len(segments) == 1 and methods.get((owner_key, target_name)):
+                resolved_owner = owner_key
+            else:
+                resolved_owner = ""
+            method = methods.get((resolved_owner, target_name)) if resolved_owner else None
             free = free_functions.get((str(function.get("namespace") or ""), target_name))
-            if owner_type or method:
-                resolved_owner = str(owner_type or method.get("owner") or owner_key).rsplit("::", 1)[-1]
+            if resolved_owner:
                 call["target_owner"] = resolved_owner
                 symbols.append(
                     {
@@ -627,30 +731,49 @@ def _finalize_references(model: dict[str, Any]) -> None:
                 symbols.append(
                     {
                         "kind": "unknown",
-                        "spelling": f"{target_name}()",
+                        "spelling": f"{callee}()",
                         "line": int(call["line"]),
                     }
                 )
-            for argument in call.get("arguments", []):
-                for match in re.finditer(r"&(?P<owner>[A-Za-z_]\w*)::(?P<name>[A-Za-z_]\w*)", str(argument)):
-                    symbols.append(
-                        {
-                            "kind": "callback_target" if re.match(r"^(?:Add|Bind|Create|Register|Subscribe|Listen)", target_name) else "function_address",
-                            "spelling": f"{match.group('owner')}::{match.group('name')}",
-                            "owner_type": match.group("owner"),
-                            "line": int(call["line"]),
-                        }
-                    )
-        body_text = str(references.pop("body_text", ""))
+            for address in call.get("function_addresses", []):
+                symbol = {
+                    "kind": "callback_target"
+                    if re.match(r"^(?:Add|Bind|Create)", target_name)
+                    else "function_address",
+                    "spelling": address["qualified_name"],
+                    "line": int(call["line"]),
+                }
+                if address.get("owner_type"):
+                    symbol["owner_type"] = address["owner_type"]
+                symbols.append(symbol)
+        local_names = {
+            str(item["name"])
+            for item in [
+                *function.get("parameter_facts", []),
+                *references.get("local_variables", []),
+            ]
+            if item.get("name")
+        }
         for name, item in globals_by_name.items():
-            if re.search(rf"\b{re.escape(name)}\b", body_text):
-                symbols.append(
-                    {
-                        "kind": "global_variable",
-                        "spelling": item["qualified_name"],
-                        "line": int(function.get("line", 1)),
-                    }
-                )
+            if name in local_names:
+                continue
+            reference = next(
+                (
+                    candidate
+                    for candidate in references.get("identifier_references", [])
+                    if candidate["name"] == name
+                ),
+                None,
+            )
+            if reference is None:
+                continue
+            symbols.append(
+                {
+                    "kind": "global_variable",
+                    "spelling": item["qualified_name"],
+                    "line": int(reference["line"]),
+                }
+            )
         references["external_symbols"] = sorted(
             _deduplicate(symbols, ("kind", "spelling", "owner_type", "line")),
             key=lambda item: (int(item["line"]), str(item["kind"]), str(item["spelling"])),

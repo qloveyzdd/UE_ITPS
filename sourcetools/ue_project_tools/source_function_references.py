@@ -33,7 +33,7 @@ def _delegate_operations(
         api = str(call.get("target_name") or "")
         if api in {"Broadcast", "Execute", "ExecuteIfBound"}:
             operation = "publish"
-        elif re.match(r"^(?:Add|Bind|Create|Register|Subscribe|Listen)", api):
+        elif re.match(r"^(?:Add|Bind|Create)", api):
             operation = "subscribe"
         else:
             continue
@@ -49,15 +49,12 @@ def _delegate_operations(
         if not owner_type:
             continue
         callback = None
-        for argument in call.get("arguments", []):
-            match = re.search(
-                r"&(?P<owner>[A-Za-z_]\w*)::(?P<name>[A-Za-z_]\w*)", argument
-            )
-            if match:
+        for address in call.get("function_addresses", []):
+            if address.get("owner_type"):
                 callback = {
-                    "owner_type": match.group("owner"),
-                    "name": match.group("name"),
-                    "qualified_name": f"{match.group('owner')}::{match.group('name')}",
+                    "owner_type": address["owner_type"],
+                    "name": address["name"],
+                    "qualified_name": address["qualified_name"],
                 }
                 break
         results.append(
