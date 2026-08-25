@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,22 @@ def add_connection_arguments(parser: argparse.ArgumentParser) -> None:
         default=3.0,
         help="发现 Editor 的秒数，默认 3 / Editor discovery timeout in seconds",
     )
+
+
+def append_dirty_package_warning(
+    problems: list[dict[str, Any]],
+    dirty_packages: Iterable[object],
+    consequence: str,
+) -> None:
+    count = len(list(dirty_packages))
+    if count:
+        problems.append(
+            {
+                "severity": "warning",
+                "code": "dirty-editor-packages",
+                "message": f"Editor has {count} dirty packages; {consequence}",
+            }
+        )
 
 
 def read_json_object(path_value: str) -> dict[str, Any]:

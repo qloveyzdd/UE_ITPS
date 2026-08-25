@@ -8,12 +8,24 @@ import unittest
 
 from jsonschema import Draft202012Validator
 
+from ue_editor_tools.cli import append_dirty_package_warning
+
 
 ROOT = Path(__file__).resolve().parents[2]
 EDITOR_ROOT = ROOT / "edittools"
 
 
 class EditorContractTests(unittest.TestCase):
+    def test_dirty_package_warning_uses_shared_contract(self) -> None:
+        problems: list[dict[str, object]] = []
+        append_dirty_package_warning(
+            problems,
+            ["/Game/One", "/Game/Two"],
+            "the scan reflects live state.",
+        )
+        self.assertEqual(problems[0]["code"], "dirty-editor-packages")
+        self.assertIn("2 dirty packages", str(problems[0]["message"]))
+
     def test_entrypoints_and_schemas_are_one_to_one(self) -> None:
         entrypoints = {path.stem for path in EDITOR_ROOT.glob("ue_*.py")}
         schemas = {

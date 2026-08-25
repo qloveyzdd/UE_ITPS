@@ -1,8 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 import tempfile
 import unittest
+
+from tests.support import ROOT
+
+sys.path.insert(0, str(ROOT / "sourcetools"))
 
 from ue_project_tools.cpp_frontend import load_cpp_unit
 from ue_project_tools.project_graph import build_project_graph

@@ -47,19 +47,6 @@ def find_nearest_uproject(source: Path) -> Path:
     )
 
 
-def select_uproject(project: str | None, search_root: str) -> tuple[Path, list[Path]]:
-    search_input = Path(project or search_root).expanduser()
-    candidates = discover_uprojects(search_input)
-    if not candidates:
-        raise RuntimeError("No .uproject file found")
-    if len(candidates) > 1:
-        formatted = "\n".join(f"  - {normalized(path)}" for path in candidates)
-        raise RuntimeError(
-            f"Multiple .uproject files found; pass --project explicitly:\n{formatted}"
-        )
-    return candidates[0], candidates
-
-
 def discovery_result(root: Path) -> dict[str, object]:
     candidates = discover_uprojects(root.expanduser())
     status = (

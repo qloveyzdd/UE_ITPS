@@ -55,24 +55,3 @@ def resolve_project_context(
         engine_root=Path(str(result["engine_root"])).resolve(),
         engine_version=str(result.get("version") or "unknown"),
     )
-
-
-def validate_engine_root(value: str) -> tuple[Path, str]:
-    root = Path(value).expanduser().resolve()
-    build_file = root / "Engine" / "Build" / "Build.version"
-    if not build_file.is_file():
-        raise ValueError(
-            f"Engine root does not contain Engine/Build/Build.version: {root}"
-        )
-    build = read_json(build_file)
-    parts = [
-        build.get("MajorVersion"),
-        build.get("MinorVersion"),
-        build.get("PatchVersion"),
-    ]
-    version = (
-        ".".join(str(item) for item in parts)
-        if all(isinstance(item, int) for item in parts)
-        else "unknown"
-    )
-    return root, version

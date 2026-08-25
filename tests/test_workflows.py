@@ -51,6 +51,14 @@ class ProjectWorkflowTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0)
             self.assertEqual(sources["modules"][0]["module"], "Sample")
 
+            completed, dependencies = run_cli(
+                "sourcetools/ue_analyze_cxx_dependencies.py",
+                "--project",
+                fixture.project,
+            )
+            self.assertEqual(completed.returncode, 0)
+            self.assertEqual(dependencies["validation"]["status"], "ok")
+
     def test_selected_build_and_source_workflow(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = create_fixture(Path(directory))

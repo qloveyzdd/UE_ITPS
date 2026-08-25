@@ -1,24 +1,14 @@
 #!/usr/bin/env python3
-from pathlib import Path
-from ue_project_tools.common import cli_error_document, cli_parser, json_text
+from ue_project_tools.common import (
+    cli_error_document,
+    cli_parser,
+    json_text,
+    project_root_from_input,
+)
 from ue_project_tools.project_graph import hierarchy_result
 
 SCHEMA_VERSION = "ue_query_cxx_hierarchy"
 RESPONSIBILITY = "Report the project-local inheritance neighborhood of one C++ type."
-
-
-def _root(value: str) -> Path:
-    path = Path(value).resolve()
-    if path.suffix.casefold() == ".uproject":
-        if not path.is_file():
-            raise ValueError(f"Project descriptor is not a file: {path}")
-        root = path.parent
-    else:
-        root = path
-    if not root.is_dir():
-        raise ValueError(f"Project root is not a directory: {root}")
-    return root
-
 
 def main() -> int:
     parser = cli_parser(
@@ -43,7 +33,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         result = hierarchy_result(
-            _root(args.project),
+            project_root_from_input(args.project),
             args.class_name,
         )
     except (OSError, ValueError) as exc:

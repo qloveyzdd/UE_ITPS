@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from ue_editor_tools.cli import READ_ONLY_BOUNDARIES, add_connection_arguments
+from ue_editor_tools.cli import (
+    READ_ONLY_BOUNDARIES,
+    add_connection_arguments,
+    append_dirty_package_warning,
+)
 from ue_editor_tools.content_scanner import scan_asset_graph
 from ue_editor_tools.contracts import parser, result_document, write_json
 from ue_editor_tools.remote_client import EditorSession, editor_identity
@@ -60,15 +64,11 @@ def main() -> int:
     except (OSError, RuntimeError, ValueError) as exc:
         cli.error(str(exc))
     problems = []
-    dirty = list(facts.get("editor_state", {}).get("dirty_packages", []))
-    if dirty:
-        problems.append(
-            {
-                "severity": "warning",
-                "code": "dirty-editor-packages",
-                "message": f"Editor has {len(dirty)} dirty packages; asset metadata reflects live state.",
-            }
-        )
+    append_dirty_package_warning(
+        problems,
+        facts.get("editor_state", {}).get("dirty_packages", []),
+        "asset metadata reflects live state.",
+    )
     write_json(
         result_document(
             SCHEMA_VERSION,

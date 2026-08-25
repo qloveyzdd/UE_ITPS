@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """Read Modules and Plugins from one explicit .uplugin descriptor."""
 
-from pathlib import Path
-
-from ue_project_tools.common import cli_parser, json_text
+from ue_project_tools.common import cli_parser, run_single_path_tool
 from ue_project_tools.plugin_descriptor import read_plugin_descriptor
 
 
@@ -27,13 +25,7 @@ def main() -> int:
         metavar="FILE",
         help=".uplugin 文件路径 / Path to one .uplugin file",
     )
-    args = parser.parse_args()
-    try:
-        result = read_plugin_descriptor(Path(args.plugin))
-    except (OSError, ValueError) as exc:
-        parser.error(str(exc))
-    print(json_text(result), end="")
-    return 1 if result["validation"]["status"] == "error" else 0
+    return run_single_path_tool(parser, "plugin", read_plugin_descriptor)
 
 
 if __name__ == "__main__":

@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """Index TargetRules classes, variables, and functions in one Target.cs file."""
 
-from pathlib import Path
-
-from ue_project_tools.common import cli_parser, json_text
+from ue_project_tools.common import cli_parser, run_single_path_tool
 from ue_project_tools.rule_source import inspect_target_rules
 
 
@@ -27,13 +25,7 @@ def main() -> int:
         metavar="FILE",
         help="Target.cs 文件路径 / Path to one Target.cs file",
     )
-    args = parser.parse_args()
-    try:
-        result = inspect_target_rules(Path(args.target))
-    except (OSError, ValueError) as exc:
-        parser.error(str(exc))
-    print(json_text(result), end="")
-    return 1 if result["validation"]["status"] == "error" else 0
+    return run_single_path_tool(parser, "target", inspect_target_rules)
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ import json
 import os
 from pathlib import Path
 import sys
-from typing import Any, Iterable, NoReturn
+from typing import Any, Callable, Iterable, NoReturn
 
 
 SKIP_DIRS = {
@@ -148,6 +148,20 @@ def cli_parser(
     )
 
 
+def run_single_path_tool(
+    parser: BilingualArgumentParser,
+    argument: str,
+    operation: Callable[[Path], dict[str, Any]],
+) -> int:
+    args = parser.parse_args()
+    try:
+        result = operation(Path(getattr(args, argument)))
+    except (OSError, ValueError) as exc:
+        parser.error(str(exc))
+    sys.stdout.write(json_text(result))
+    return 1 if result["validation"]["status"] == "error" else 0
+
+
 def validation_result(problems: list[dict[str, Any]]) -> dict[str, Any]:
     severities = {str(problem.get("severity")) for problem in problems}
     status = (
@@ -224,6 +238,17 @@ def cli_error_document(
 
 def normalized(path: Path) -> str:
     return str(path.resolve()).replace("\\", "/")
+
+
+def project_root_from_input(value: str) -> Path:
+    path = Path(value).resolve()
+    if path.suffix.casefold() == ".uproject":
+        if not path.is_file():
+            raise ValueError(f"Project descriptor is not a file: {path}")
+        return path.parent
+    if not path.is_dir():
+        raise ValueError(f"Project root is not a directory: {path}")
+    return path
 
 
 def _reject_json_constant(value: str) -> Any:

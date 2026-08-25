@@ -154,18 +154,6 @@ def owner_for_path(
     return max(candidates, key=lambda item: len(item["root"].parts))
 
 
-def public_owner(owner: dict[str, Any] | None) -> dict[str, Any] | None:
-    if owner is None:
-        return None
-    result: dict[str, Any] = {
-        "kind": owner["kind"],
-        "module": owner["name"],
-    }
-    if owner.get("plugin"):
-        result["plugin"] = owner["plugin"]
-    return result
-
-
 def include_owner(owner: dict[str, Any] | None) -> dict[str, Any] | None:
     if owner is None:
         return None
