@@ -16,7 +16,7 @@ python -m unittest discover -s tests -v
 python -m unittest discover -s edittools/tests -t edittools -v
 ```
 
-测试不连接真实 Editor；它验证 CLI/Schema 契约、配置扫描和知识图谱合并。`ue_scan_cxx_gameplay_messages.py` 当前因遗留导入缺失被标记为预期失败，修复产品实现后应移除该标记。
+测试不连接真实 Editor；它验证 CLI/Schema 契约、配置扫描、C++ Gameplay Message 扫描和知识图谱合并。
 
 ## 文件图谱与连接池
 
@@ -39,6 +39,6 @@ npm test
 ## 验收标准
 
 - 核心、文件图谱、连接池和页面测试全部通过。
-- Editor 测试除已登记的单个预期失败外全部通过。
+- Editor 测试全部通过。
 - 测试不修改仓库内工程或资产。
 - 文档中的工具数量、命令和能力边界与代码一致。

@@ -14,11 +14,12 @@ python edittools/ue_editor_inspect_blueprint.py --node-id <node-id> --asset /Gam
 
 ```bash
 python edittools/ue_scan_config_graph.py --project D:/Projects/MyGame/MyGame.uproject
+python edittools/ue_scan_cxx_gameplay_messages.py --project D:/Projects/MyGame/MyGame.uproject
 python edittools/ue_build_knowledge_graph.py --input facts.json > graph.json
 python edittools/ue_validate_knowledge_graph.py --input graph.json
 ```
 
-每个公开 CLI 在 `edittools/schemas/` 有同名 Schema。当前 `ue_scan_cxx_gameplay_messages.py` 依赖已移除的核心解析模块，不能正常导入；这是已登记的产品缺口，不应作为可用命令调用。
+每个公开 CLI 在 `edittools/schemas/` 有同名 Schema。
 
 测试命令：
 

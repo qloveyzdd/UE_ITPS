@@ -197,6 +197,7 @@ def _name_from_declarator(node: Node | None, source: bytes) -> tuple[str, str]:
             break
         current = child
     raw = _compact(_text(current, source))
+    raw = re.sub(r"^[*&\s]+", "", raw)
     raw = re.sub(r"\s*::\s*", "::", raw)
     raw = re.sub(r"<.*>$", "", raw)
     name = raw.rsplit("::", 1)[-1]
@@ -332,6 +333,7 @@ def _function_references(
     calls: list[dict[str, Any]] = []
     controls: list[dict[str, Any]] = []
     call_details: list[dict[str, Any]] = []
+    local_variables: list[dict[str, str]] = []
     variable_types = {
         str(item["name"]): _variable_type(str(item["type_expression"]))
         for item in fact.get("parameter_facts", [])
@@ -356,6 +358,9 @@ def _function_references(
                 name, _ = _name_from_declarator(declarator, source)
                 if name and type_name:
                     variable_types[name] = type_name
+                    local_variables.append(
+                        {"name": name, "type_expression": type_expression}
+                    )
         if current.type != "call_expression":
             continue
         callee_node = current.child_by_field_name("function")
@@ -389,6 +394,7 @@ def _function_references(
         "calls": calls,
         "controls": controls,
         "call_details": call_details,
+        "local_variables": local_variables,
         "body_text": _text(node, source),
     }
 

@@ -11,7 +11,6 @@ from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parents[2]
 EDITOR_ROOT = ROOT / "edittools"
-BROKEN_CXX_CLI = EDITOR_ROOT / "ue_scan_cxx_gameplay_messages.py"
 
 
 class EditorContractTests(unittest.TestCase):
@@ -30,10 +29,8 @@ class EditorContractTests(unittest.TestCase):
                 self.assertEqual(schema["$schema"], "https://json-schema.org/draft/2020-12/schema")
                 Draft202012Validator.check_schema(schema)
 
-    def test_supported_entrypoints_expose_help(self) -> None:
+    def test_every_entrypoint_exposes_help(self) -> None:
         for path in sorted(EDITOR_ROOT.glob("ue_*.py")):
-            if path == BROKEN_CXX_CLI:
-                continue
             with self.subTest(cli=path.name):
                 completed = subprocess.run(
                     [sys.executable, str(path), "--help"],
@@ -45,19 +42,6 @@ class EditorContractTests(unittest.TestCase):
                 )
                 self.assertEqual(completed.returncode, 0, completed.stderr)
                 self.assertIn("usage:", completed.stdout)
-
-    @unittest.expectedFailure
-    def test_cxx_message_entrypoint_is_importable(self) -> None:
-        completed = subprocess.run(
-            [sys.executable, str(BROKEN_CXX_CLI), "--help"],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            timeout=15,
-        )
-        self.assertEqual(completed.returncode, 0, completed.stderr)
-
 
 if __name__ == "__main__":
     unittest.main()

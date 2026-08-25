@@ -61,10 +61,6 @@ python sourcetools/ue_inspect_cxx_function.py --source D:/Projects/MyGame/Source
 
 各子组件的使用方式见 [Editor 工具](edittools/README.md)、[文件图谱](information_pool/README.md)、[连接池](mcp_connection_pool/README.md) 和 [本地浏览器](show/README.md)。
 
-## 当前已知限制
-
-`edittools/ue_scan_cxx_gameplay_messages.py` 仍依赖已从核心解析器移除的 `source_declarations` 和 `source_operations`，当前不能导入。新测试将它标记为预期失败，其余 Editor CLI 仍执行契约验证。本次仅重建测试和文档，没有改动产品实现。
-
 ## 许可证
 
 仓库尚未声明项目级许可证。第三方许可信息见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 和 `LICENSES/`。
