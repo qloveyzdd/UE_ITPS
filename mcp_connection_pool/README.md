@@ -1,52 +1,16 @@
-# MCP 连接池
+# UE MCP 连接池
 
-这是一个与现有工具池、工程信息池和源码扫描 Worker 完全独立的被动连接目录。
+`mcp_connection_pool/` 是被动连接目录：它只检查宿主已经暴露的 MCP 连接，不启动、停止、重连或管理外部进程。
 
-当前只注册一个目标 Provider：`ue5.8-editor`。连接池只读取宿主已经暴露的 MCP 工具清单，不启动、不重连、不关闭 MCP，也不运行 Unreal Editor 或任何外部命令。
+当前唯一 Provider 是 `ue5.8-editor`。匹配条件包括：
 
-当前本地参考基座为 `E:/UE_ITPS/LyraStarterGame/LyraStarterGame.uproject` + **UE 5.8.2**。工程显式启用 `AIAssistant`、`ToolsetRegistry` 与 `AllToolsets`；连接池仍按 `5.8.*` 契约匹配，不把补丁版本写死为 5.8.2。
+- Unreal Engine 5.8；
+- 只读访问声明；
+- Asset Registry、Blueprint 和 Blueprint Graph 能力；
+- 调用方指定时，连接绑定的 `.uproject` 必须一致。
 
-## 使用方式
+解析结果为 `available`、`missing`、`incompatible`、`ambiguous` 或 `unhealthy`。多个兼容连接不会被静默选择。
 
-宿主负责把当前可见的 MCP 工具名和可信元数据转换成连接记录：
-
-```python
-from mcp_connection_pool import (
-    ExternalMcpConnectionPool,
-    UE58_PROVIDER_ID,
-    connections_from_tool_inventory,
-    get_provider_requirement,
-)
-
-def discover():
-    return connections_from_tool_inventory(
-        host_tool_names,
-        metadata_by_server=host_mcp_metadata,
-    )
-
-pool = ExternalMcpConnectionPool(discover)
-requirement = get_provider_requirement(
-    UE58_PROVIDER_ID,
-    project_file="E:/Games/MyGame/MyGame.uproject",
-)
-result = pool.resolve(requirement)
-```
-
-每次 `resolve()` 都重新读取宿主清单。未发现连接时返回 `missing` 和可重试的用户提示；用户在外部启动并连接 MCP 后，再次调用即可继续。
-
-连接只有同时满足以下条件才会变成 `available`：
-
-- Provider 为 `ue5.8-editor` 或类型为 `unreal-editor`。
-- Engine 版本为 `5.8.*`。
-- 声明只读访问。
-- 提供 Asset Registry、Blueprint 和 Blueprint Graph 能力。
-- 请求指定工程时，连接声明的 `.uproject` 与目标一致。
-- 连接当前健康，且没有第二个同样兼容的连接。
-
-连接池只负责发现与选择，不负责执行 MCP 工具。工具调用必须由宿主在选中连接后完成。
-
-## 验证
-
-```powershell
-python -m unittest discover -s mcp_connection_pool/tests -v
+```bash
+python -m unittest discover -s mcp_connection_pool/tests -t . -v
 ```

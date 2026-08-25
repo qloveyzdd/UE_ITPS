@@ -1,94 +1,27 @@
-# UE Editor Tools
+# Editor 与离线检查工具
 
-`edittools` 是一组面向运行中 Unreal Editor 的确定性、只读工具。它们通过 UE 自带的 Python Remote Execution、Toolset Registry、Gameplay Tags Toolset、Asset Registry 和 Blueprint Tools 获取编辑器事实，不依赖 Lyra 的路径、标签或类型。
+`edittools/` 提供 16 个 CLI，用于读取已连接 Unreal Editor 的资产与 Blueprint 现场状态，以及处理配置、C++ Gameplay Message 和统一知识图谱。
 
-## 前置条件
+实时 Editor 命令必须通过 `--node-id` 精确选择节点；工具只读，不保存、编译或修改资产。先列出当前会话：
 
-- 当前第一版以 UE 5.8.2 验证。
-- 在目标项目中启用 `Python Editor Script Plugin`。
-- 在 `项目设置 → 插件 → Python` 中启用 `Enable Remote Execution?`。
-- 同一个 Editor 的命令连接会由工具自动串行化。
-
-## 工具
-
-```powershell
-python edittools/ue_editor_list_sessions.py --project D:/Game/Game.uproject
-python edittools/ue_editor_list_gameplay_tags.py --node-id NODE_ID --parent-tag Gameplay.Message
-python edittools/ue_editor_find_tag_referencers.py --node-id NODE_ID --tag Gameplay.Message.Example
-python edittools/ue_editor_inspect_blueprint.py --node-id NODE_ID --asset /Game/BP_Example
-python edittools/ue_editor_scan_gameplay_messages.py --node-id NODE_ID --root /Game --tag Gameplay.Message.FromCode
-python edittools/ue_editor_export_message_graph.py --input message-scan.json
-python edittools/ue_editor_export_asset_graph.py --node-id NODE_ID --root /Game
-python edittools/ue_editor_scan_blueprint_structure.py --node-id NODE_ID --root /Game
-python edittools/ue_editor_scan_data_tables.py --node-id NODE_ID --root /Game
-python edittools/ue_editor_scan_data_assets.py --node-id NODE_ID --asset /Game/DA_Experience --property default_pawn_data
-python edittools/ue_editor_scan_primary_assets.py --node-id NODE_ID
-python edittools/ue_scan_cxx_gameplay_messages.py --project D:/Game/Game.uproject
-python edittools/ue_scan_config_graph.py --project D:/Game/Game.uproject
+```bash
+python edittools/ue_editor_list_sessions.py
+python edittools/ue_editor_list_gameplay_tags.py --node-id <node-id>
+python edittools/ue_editor_inspect_blueprint.py --node-id <node-id> --asset /Game/BP_Sample
 ```
 
-先使用 `--project` 运行 `ue_editor_list_sessions.py`，获取目标项目对应 Editor 的 `node_id`，再把该值传给实时下游工具。下游工具只按 `node_id` 精确连接；节点不存在或已经失效时会直接失败。远程通信客户端已经内置，因此下游工具不再需要传入项目或 Engine 路径。
+离线命令直接读取明确输入：
 
-所有 Editor 工具只读取现场状态，不保存、编译或修改资产。扫描结果若包含未保存的脏包，图谱导出默认拒绝；只有显式传入 `--allow-dirty` 才会继续。
-
-`ue_editor_scan_gameplay_messages.py` 会自动查询 Blueprint 中发现的静态 Channel。对于只在 C++ 中出现的消息 Channel，可重复传入 `--tag`，把代码图谱已经识别出的 Tag 一并用于资产引用者查询。
-
-`ue_editor_scan_data_assets.py` 只读取显式传入的 DataAsset 和顶层属性，不执行项目级发现。它同时支持原生 DataAsset 实例和 Blueprint 派生 DataAsset 的生成类默认对象。原始证据保留请求属性的观察值，统一图谱只接收相对本类 CDO 或父类 CDO 不同的属性；无法取得默认基线时不会猜测差异。属性名应先从 C++ 类型或 Blueprint 结构工具获得；UE Python 不能可靠枚举任意 DataAsset 的全部 UPROPERTY。被引用的 UObject（包括内嵌子对象）只保存稳定路径和类身份，不递归展开其内部属性。
-
-## 消息关系
-
-扫描器输出 Blueprint 中的发布和订阅操作、Channel、PayloadType、MatchType、Pin 类型和值以及直接连接。Channel 分为：
-
-- `static`：未连接且存在明确 Gameplay Tag 默认值。
-- `dynamic`：Channel Pin 有输入连接，保留直接连线证据。
-- `unresolved`：既没有可解析默认值，也没有可解释的静态 Tag。
-
-图谱导出使用 `PUBLISHES_EVENT`、`SUBSCRIBES_EVENT`、`USES_TYPE`、`REFERENCES` 和 `CONTAINS` 关系。UE 5.8 Python 不暴露 NodeGuid/GraphGuid，因此以项目、资产、Graph 和节点对象路径生成快照内的确定性标识。
-
-## 逻辑知识图谱
-
-新增采集器覆盖 Asset Registry 直接依赖、Blueprint 类型结构、DataTable 行、按需 DataAsset 属性、
-Primary Asset、项目本地配置和 C++ Gameplay Message。Map 作为普通资产以及配置或 Primary Asset 的目标进入
-图谱；工具不会枚举 Map 内的 Actor、Component、Transform、World Partition Actor Descriptor
-或 External Actor，这些属于场景组装而非逻辑相关性。
-
-Blueprint 原始证据保留物理节点清单，统一图谱只写入从执行入口或结果节点静态可达的语义节点，并排除 Entry、Result、Knot、Tunnel 等结构节点以及未实现的继承函数和事件。该投影表示编辑器中可见的静态连接，不声称覆盖动态调用或运行时可达性。
-
-建议把各工具输出保存为独立 JSON，再统一构建：
-
-```powershell
-python edittools/ue_build_knowledge_graph.py `
-  --input asset-graph.json `
-  --input blueprint-structure.json `
-  --input data-tables.json `
-  --input data-assets.json `
-  --input primary-assets.json `
-  --input config-graph.json `
-  --input cxx-messages.json `
-  --input blueprint-messages.json > knowledge-graph.json
-
-python edittools/ue_validate_knowledge_graph.py --input knowledge-graph.json
-python edittools/ue_diff_knowledge_graph.py --current knowledge-graph.json --previous previous-graph.json
+```bash
+python edittools/ue_scan_config_graph.py --project D:/Projects/MyGame/MyGame.uproject
+python edittools/ue_build_knowledge_graph.py --input facts.json > graph.json
+python edittools/ue_validate_knowledge_graph.py --input graph.json
 ```
 
-统一图谱按项目、实体种类和明确路径生成稳定 ID，合并资产、DataAsset 属性、类、Tag、Payload、
-DataTable Row、Primary Asset 和配置项，并为每条关系保留源码位置或 Editor 对象路径证据。输入含未保存脏包时，
-构建器默认拒绝；只有显式使用 `--allow-dirty` 才会继续。
+每个公开 CLI 在 `edittools/schemas/` 有同名 Schema。当前 `ue_scan_cxx_gameplay_messages.py` 依赖已移除的核心解析模块，不能正常导入；这是已登记的产品缺口，不应作为可用命令调用。
 
-统一图谱也可以作为现有信息池的附加证据：
+测试命令：
 
-```powershell
-python information_pool/build_information_pool.py `
-  --project D:/Game/Game.uproject `
-  --pool data/Game `
-  --knowledge-graph knowledge-graph.json
-```
-
-信息池会尝试把明确匹配的 C++ 类型和函数归一到现有静态符号，其余逻辑实体作为稳定节点写入
-同一个不可变 SQLite 快照。
-
-## 测试
-
-```powershell
+```bash
 python -m unittest discover -s edittools/tests -t edittools -v
 ```

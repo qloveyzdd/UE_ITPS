@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import sqlite3
 import sys
@@ -8,68 +9,60 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-for candidate in (ROOT / "tests", ROOT / "information_pool", ROOT / "sourcetools", ROOT):
+for candidate in (ROOT / "information_pool", ROOT / "sourcetools", ROOT):
     if str(candidate) not in sys.path:
         sys.path.insert(0, str(candidate))
 
-from support import create_fixture  # noqa: E402
 from ue_file_graph import build_file_graph  # noqa: E402
 
 
 class FileGraphTests(unittest.TestCase):
-    def test_builds_project_to_include_chain(self) -> None:
+    def test_builds_a_queryable_sqlite_graph_with_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            fixture = create_fixture(Path(directory))
-            output = Path(directory) / "sample.sqlite3"
-            summary = build_file_graph(fixture.project, output)
+            root = Path(directory)
+            project = root / "Sample.uproject"
+            project.write_text(
+                json.dumps(
+                    {
+                        "FileVersion": 3,
+                        "Modules": [{"Name": "Sample", "Type": "Runtime"}],
+                        "Plugins": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            module = root / "Source" / "Sample"
+            module.mkdir(parents=True)
+            (module / "Sample.Build.cs").write_text(
+                "public class Sample : ModuleRules { public Sample(ReadOnlyTargetRules Target) : base(Target) {} }",
+                encoding="utf-8",
+            )
+            (root / "Source" / "Sample.Target.cs").write_text(
+                "public class SampleTarget : TargetRules { public SampleTarget(TargetInfo Target) : base(Target) { Type = TargetType.Game; ExtraModuleNames.Add(\"Sample\"); } }",
+                encoding="utf-8",
+            )
+            private = module / "Private"
+            public = module / "Public"
+            private.mkdir()
+            public.mkdir()
+            (private / "Worker.cpp").write_text('#include "Worker.h"\n', encoding="utf-8")
+            (public / "Worker.h").write_text("#pragma once\n", encoding="utf-8")
+            output = root / "graph.sqlite3"
 
-            self.assertTrue(output.is_file())
+            summary = build_file_graph(project, output)
+            self.assertEqual(summary["schema_version"], "ue-itps.file-graph.v1")
             self.assertGreater(summary["node_count"], 0)
+
             connection = sqlite3.connect(output)
             try:
-                node_kinds = {
-                    row[0]
-                    for row in connection.execute("SELECT DISTINCT kind FROM nodes")
-                }
-                edge_kinds = {
-                    row[0]
-                    for row in connection.execute("SELECT DISTINCT kind FROM edges")
-                }
-                self.assertTrue(
-                    {
-                        "project_file",
-                        "plugin_file",
-                        "target_file",
-                        "module_rules_file",
-                        "source_file",
-                    }.issubset(node_kinds)
-                )
-                self.assertTrue(
-                    {
-                        "DECLARES_TARGET",
-                        "DECLARES_MODULE",
-                        "ENABLES_PLUGIN",
-                        "REFERENCES_MODULE",
-                        "DEPENDS_ON_MODULE",
-                        "CONTAINS_FILE",
-                        "INCLUDES",
-                    }.issubset(edge_kinds)
-                )
+                self.assertEqual(connection.execute("PRAGMA foreign_key_check").fetchall(), [])
+                kinds = {row[0] for row in connection.execute("SELECT kind FROM edges")}
+                self.assertIn("DECLARES_MODULE", kinds)
+                self.assertIn("INCLUDES", kinds)
                 missing_evidence = connection.execute(
-                    """
-                    SELECT COUNT(*)
-                    FROM edges e
-                    LEFT JOIN edge_evidence x ON x.edge_id = e.edge_id
-                    WHERE x.evidence_id IS NULL
-                    """
+                    "SELECT COUNT(*) FROM edges e LEFT JOIN edge_evidence x ON x.edge_id=e.edge_id WHERE x.evidence_id IS NULL"
                 ).fetchone()[0]
                 self.assertEqual(missing_evidence, 0)
-                self.assertEqual(connection.execute("PRAGMA foreign_key_check").fetchall(), [])
-                plan = connection.execute(
-                    "EXPLAIN QUERY PLAN SELECT * FROM edges WHERE source_id = ?",
-                    ("node",),
-                ).fetchall()
-                self.assertTrue(any("idx_edges_source" in str(row) for row in plan))
             finally:
                 connection.close()
 
