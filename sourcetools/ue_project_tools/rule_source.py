@@ -44,30 +44,6 @@ def _rules_class_problems(
     ]
 
 
-def _target_rules_problems(facts: dict[str, Any]) -> list[dict[str, Any]]:
-    if not facts["rules_classes"]:
-        return _rules_class_problems(facts, "TargetRules")
-    return [
-        *facts.get("problems", []),
-        *[
-            {
-                "severity": "warning",
-                "code": "target-rules-base-unresolved",
-                "path": facts["path"],
-                "class_name": rules_class["name"],
-                "base_types": list(rules_class["base_types"]),
-                "message": (
-                    "The filename and TargetInfo constructor identify a local Target "
-                    "candidate, but its TargetRules inheritance cannot be confirmed "
-                    "from the selected file"
-                ),
-            }
-            for rules_class in facts["rules_classes"]
-            if rules_class.get("base_resolution") == "unresolved"
-        ],
-    ]
-
-
 def _reachable_method_names(rules_class: dict[str, Any]) -> set[str]:
     roots = {
         method["name"] for method in rules_class["methods"] if method["is_constructor"]
@@ -84,81 +60,6 @@ def _reachable_method_names(rules_class: dict[str, Any]) -> set[str]:
                 reachable.add(callee)
                 pending.append(callee)
     return reachable
-
-
-def _project_target_rules_class(rules_class: dict[str, Any]) -> dict[str, Any]:
-    methods = sorted(
-        rules_class["methods"],
-        key=lambda method: int(method["location"]["line"]),
-    )
-
-    return {
-        "kind": rules_class["kind"],
-        "name": rules_class["name"],
-        "base_types": list(rules_class["base_types"]),
-        "inheritance": {
-            "kind": rules_class.get("base_resolution", "confirmed"),
-        },
-        "member_details": {
-            "variables": [
-                {
-                    "name": str(field["name"]),
-                    "type_expression": str(field["type_expression"]),
-                    "evidence": {
-                        key: int(field["location"][key])
-                        for key in ("line", "end_line")
-                        if key in field["location"]
-                    },
-                }
-                for field in rules_class["fields"]
-            ],
-            "functions": [
-                {
-                    "name": str(method["name"]),
-                    "signature": " ".join(str(method["signature"]).split()),
-                    "is_constructor": bool(method["is_constructor"]),
-                    "has_body": bool(method["has_body"]),
-                    "evidence": {
-                        key: int(method["location"][key])
-                        for key in ("line", "end_line")
-                        if key in method["location"]
-                    },
-                }
-                for method in methods
-            ],
-        },
-        "evidence": {
-            key: int(rules_class["location"][key])
-            for key in ("line", "end_line")
-            if key in rules_class["location"]
-        },
-    }
-
-
-def inspect_target_rules(path: Path) -> dict[str, Any]:
-    facts = parse_rule_file(path, "TargetRules")
-    content = {
-        "path": facts["path"],
-        "rules_classes": [
-            _project_target_rules_class(rules_class)
-            for rules_class in facts["rules_classes"]
-        ],
-    }
-    return result_document(
-        "ue_inspect_target_rules",
-        content,
-        _target_rules_problems(facts),
-        responsibility=(
-            "Index TargetRules classes and their member variables and functions from one Target.cs file."
-        ),
-        boundaries=[
-            "Member variables and functions are a Tree-sitter syntax index, not semantic summaries or effective UBT build results.",
-            "Function bodies, mutations, calls, conditions, and referenced values are not included.",
-            "Use the focused C# function inspector to inspect one explicitly selected function name.",
-            "Filename-matching Target candidates with unresolved bases are local evidence, not inheritance proof.",
-            "Output order is deterministic source order.",
-        ],
-    )
 
 
 def _project_module_rules_class(

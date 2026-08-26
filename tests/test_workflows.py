@@ -39,12 +39,6 @@ class ProjectWorkflowTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0)
             self.assertEqual(targets["items"][0]["name"], "SampleTarget")
 
-            completed, sources = run_cli(
-                "sourcetools/ue_list_project_cxx_sources.py", "--project", fixture.project
-            )
-            self.assertEqual(completed.returncode, 0)
-            self.assertEqual(sources["modules"][0]["module"], "Sample")
-
             completed, dependencies = run_cli(
                 "sourcetools/ue_analyze_cxx_dependencies.py",
                 "--project",

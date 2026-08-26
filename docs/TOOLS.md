@@ -16,9 +16,7 @@ python sourcetools/ue_list_tools.py
 | 构建 | `ue_find_build_descriptor` | 按名称查找 Module Build.cs 或 Plugin 描述符 |
 | 构建 | `ue_inspect_targets` | 发现 Target 及其直接声明 |
 | 构建 | `ue_inspect_module_rules` | 读取一个 Build.cs 的直接字面量依赖 |
-| 构建 | `ue_inspect_target_rules` | 索引一个 Target.cs 的类型、字段和函数 |
 | Plugin | `ue_read_plugin_descriptor` | 读取一个 `.uplugin` 的 Module 和 Plugin 声明 |
-| 源码 | `ue_list_project_cxx_sources` | 按物理 Module 汇总工程与工程 Plugin 的 C++ 文件 |
 | 源码 | `ue_list_module_cxx_sources` | 汇总一个 Module 的 C++ 文件并配对同名头源文件 |
 | 源码 | `ue_list_cxx_includes` | 提取显式文件的直接 Include 及物理来源 |
 | 源码 | `ue_list_cxx_types` | 提取显式文件创建的类型、变量和函数定义 |

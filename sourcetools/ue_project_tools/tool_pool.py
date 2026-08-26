@@ -47,13 +47,6 @@ _TOOLS: tuple[dict[str, Any], ...] = (
         "capabilities": ["target_discovery", "csharp_ast"],
     },
     {
-        "name": "ue_list_project_cxx_sources",
-        "category": "source",
-        "entrypoint": "sourcetools/ue_list_project_cxx_sources.py",
-        "inputs": ["project"],
-        "capabilities": ["source_inventory", "module_ownership"],
-    },
-    {
         "name": "ue_list_module_cxx_sources",
         "category": "source",
         "entrypoint": "sourcetools/ue_list_module_cxx_sources.py",
@@ -77,13 +70,6 @@ _TOOLS: tuple[dict[str, Any], ...] = (
         "entrypoint": "sourcetools/ue_inspect_module_rules.py",
         "inputs": ["rules"],
         "capabilities": ["module_dependencies", "csharp_ast"],
-    },
-    {
-        "name": "ue_inspect_target_rules",
-        "category": "build",
-        "entrypoint": "sourcetools/ue_inspect_target_rules.py",
-        "inputs": ["target"],
-        "capabilities": ["target_rules", "csharp_ast"],
     },
     {
         "name": "ue_inspect_module_entry",
