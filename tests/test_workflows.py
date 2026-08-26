@@ -33,12 +33,6 @@ class ProjectWorkflowTests(unittest.TestCase):
             self.assertEqual(descriptor["declared_modules"], ["Sample"])
             self.assertEqual(descriptor["validation"]["status"], "ok")
 
-            completed, modules = run_cli(
-                "sourcetools/ue_inspect_modules.py", "--project", fixture.project
-            )
-            self.assertEqual(completed.returncode, 0)
-            self.assertEqual(modules["items"][0]["name"], "Sample")
-
             completed, targets = run_cli(
                 "sourcetools/ue_inspect_targets.py", "--project", fixture.project
             )

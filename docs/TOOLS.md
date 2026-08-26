@@ -13,20 +13,16 @@ python sourcetools/ue_list_tools.py
 | 工程 | `ue_find_projects` | 在一个根目录下发现 `.uproject`，歧义时不自动选择 |
 | 工程 | `ue_read_project_descriptor` | 读取 Module、Plugin 启用状态和显式 Target allow list |
 | 工程 | `ue_resolve_engine` | 解析工程关联的 Engine 身份和路径证据 |
-| 工程 | `ue_classify_project_paths` | 按工程约定分类根目录路径 |
 | 构建 | `ue_find_build_descriptor` | 按名称查找 Module Build.cs 或 Plugin 描述符 |
-| 构建 | `ue_inspect_modules` | 对照工程声明、Build.cs 和模块入口 |
 | 构建 | `ue_inspect_targets` | 发现 Target 及其直接声明 |
 | 构建 | `ue_inspect_module_rules` | 读取一个 Build.cs 的直接字面量依赖 |
 | 构建 | `ue_inspect_target_rules` | 索引一个 Target.cs 的类型、字段和函数 |
-| Plugin | `ue_resolve_plugins` | 定位工程直接声明的 Plugin 并评估 Profile |
 | Plugin | `ue_read_plugin_descriptor` | 读取一个 `.uplugin` 的 Module 和 Plugin 声明 |
 | 源码 | `ue_list_project_cxx_sources` | 按物理 Module 汇总工程与工程 Plugin 的 C++ 文件 |
 | 源码 | `ue_list_module_cxx_sources` | 汇总一个 Module 的 C++ 文件并配对同名头源文件 |
 | 源码 | `ue_list_cxx_includes` | 提取显式文件的直接 Include 及物理来源 |
 | 源码 | `ue_list_cxx_types` | 提取显式文件创建的类型、变量和函数定义 |
 | 源码 | `ue_inspect_cxx_function` | 提取指定函数的外部符号候选 |
-| 源码 | `ue_inspect_cs_function` | 提取指定 C# 成员函数的外部类型和方法引用 |
 | Module | `ue_inspect_module_entry` | 定位支持的模块注册宏及可唯一匹配的头文件 |
 | 图 | `ue_analyze_cxx_dependencies` | 构建工程内类型依赖并检测循环 |
 | 图 | `ue_query_cxx_hierarchy` | 查询一个类型的继承邻域 |

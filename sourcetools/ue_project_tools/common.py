@@ -18,20 +18,10 @@ SKIP_DIRS = {
     "Saved",
 }
 
-OPERATION_CHOICES = (
-    "scan",
-    "open_editor",
-    "build_editor",
-    "run_game",
-    "cook_package",
-)
-
 _TREE_SITTER_CSHARP_TOOLS = {
-    "ue_inspect_cs_function",
     "ue_inspect_module_rules",
     "ue_inspect_target_rules",
     "ue_inspect_targets",
-    "ue_inspect_modules",
 }
 _TREE_SITTER_CPP_TOOLS = {
     "ue_inspect_cxx_function",
@@ -42,12 +32,9 @@ _TREE_SITTER_CPP_TOOLS = {
     "ue_analyze_cxx_impact",
     "ue_trace_cxx_function_flow",
     "ue_inspect_module_entry",
-    "ue_inspect_modules",
 }
 _GRAPH_TOOLS = {
-    "ue_inspect_modules",
     "ue_read_plugin_descriptor",
-    "ue_resolve_plugins",
     "ue_query_cxx_hierarchy",
     "ue_analyze_cxx_dependencies",
     "ue_analyze_cxx_impact",

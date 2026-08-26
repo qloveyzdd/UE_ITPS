@@ -1,6 +1,6 @@
 ---
 name: ue-project-inspector
-description: Inspect Unreal Engine projects and explicitly selected source entry files through the repository's deterministic, read-only tools. Use when Codex needs to find or read .uproject files; resolve Engine identity; list project-local C++ sources; locate direct Plugin references; inspect one .uplugin; navigate one plugin's declared modules; read one Build.cs or Target.cs; inspect one selected C# or C++ function name; locate one module's registration source and matching header; list includes or types from one selected .h/.hpp/.cpp/.cc; classify project directories; or summarize focused results. Do not use for runtime behavior, asset reachability, general class/call graphs, code generation, builds, tests, or project modification.
+description: Inspect Unreal Engine projects and explicitly selected source entry files through the repository's deterministic, read-only tools. Use when Codex needs to find or read .uproject files; resolve Engine identity; list project-local C++ sources; inspect one .uplugin; navigate one plugin's declared modules; read one Build.cs or Target.cs; inspect one selected C++ function name; locate one module's registration source and matching header; list includes or types from one selected .h/.hpp/.cpp/.cc; or summarize focused results. Do not use for runtime behavior, asset reachability, general class/call graphs, code generation, builds, tests, or project modification.
 ---
 
 # UE Project Inspector
@@ -20,15 +20,11 @@ If the scripts are missing, report that this repository does not contain the exp
 | Find UE projects | `ue_find_projects.py` |
 | Read compact `.uproject` v3 declarations | `ue_read_project_descriptor.py` |
 | Resolve actual Engine identity/version | `ue_resolve_engine.py` |
-| Check declared project Module structure | `ue_inspect_modules.py` |
 | Discover project Targets | `ue_inspect_targets.py` |
 | List project and project-Plugin C++ source files | `ue_list_project_cxx_sources.py` |
-| Locate direct `.uproject` Plugin references | `ue_resolve_plugins.py` |
-| Classify project-root paths with explicit descriptor evidence | `ue_classify_project_paths.py` |
 | Read one explicitly selected `.uplugin` | `ue_read_plugin_descriptor.py` |
 | Read direct public, private, and dynamic dependencies from one Build.cs | `ue_inspect_module_rules.py` |
 | Index TargetRules classes, member variables, and functions from one Target.cs | `ue_inspect_target_rules.py` |
-| Inspect all class members matching one function name in one `.cs` | `ue_inspect_cs_function.py` |
 | Locate one module's registration source and matching header | `ue_inspect_module_entry.py` |
 | List direct include provenance from one selected `.cpp` | `ue_list_cxx_includes.py` |
 | List definitions and members created by one or two selected `.h/.hpp/.cpp/.cc` files | `ue_list_cxx_types.py` |
@@ -49,18 +45,13 @@ When the user explicitly requests all categories, run the relevant focused tools
 4. Parse its JSON output. Summarize the requested facts and include evidence paths for engine, Module, Target, or Plugin claims.
 5. Read `validation` for detected problems and `limits` for responsibility and boundaries. Report warnings and boundaries separately. Never reinterpret `validation: ok` as proof that the project compiles, launches, or runs correctly.
 
-When the user needs to modify or understand one plugin, drill down instead of merging all facts into a project-wide result:
-
-1. Read the `.uproject` declaration with `ue_read_project_descriptor.py`.
-2. Locate its direct plugin descriptors with `ue_resolve_plugins.py`.
-3. Select one resolved `.uplugin` and read its direct `Modules` and `Plugins` declarations with `ue_read_plugin_descriptor.py`.
-4. If Build.cs evidence is needed, locate it independently with `ue_list_project_cxx_sources.py`, then run only the source tool needed next: `ue_inspect_module_rules.py` for direct module dependencies or `ue_inspect_module_entry.py` for registration source and header evidence.
+When the user explicitly selects one `.uplugin`, read its direct `Modules` and `Plugins` declarations with `ue_read_plugin_descriptor.py`. If Build.cs evidence is needed, locate it independently with `ue_list_project_cxx_sources.py`, then run only the source tool needed next: `ue_inspect_module_rules.py` for direct module dependencies or `ue_inspect_module_entry.py` for registration source and header evidence.
 
 When the user or model explicitly selects C++ files, run only the smallest source fact tool that answers the request. Pass one file to scan it alone, or pass two files after `--source` to scan an explicitly selected pair. Two files must contain one `.cpp/.cc` and one `.h/.hpp` with the same basename; the caller is responsible for ensuring that they belong to the same UE project. Source tools never search for a companion. Every source tool discovers the nearest unique `.uproject` from the selected `.cpp/.cc`, or from the selected header when no source file is supplied. C++ Source tools parse local files with Tree-sitter C++ and do not require a compilation database. Report missing or ambiguous project discovery instead of choosing for the model.
 
 Use `ue_list_cxx_types.py` to discover member-function names when type context is needed. The model must explicitly choose one function name, then call `ue_inspect_cxx_function.py` with that name and the same explicit file selection. The function tool returns every same-name definition found in those files; namespace, qualified name, owner, parameters, qualifiers, and `function_id` are output facts and never selectors. Each match reports one source-ordered `external_symbols` array using only local syntax and declarations. Symbol kinds are `type`, `global_variable`, `free_function`, `member_call`, `function_address`, `callback_target`, and `unknown`; these are candidate symbol categories, not relation semantics. Wrapped template types remain one expression, and member-call receivers retain `owner_type` when locally derivable. Do not inspect other function names or dependency source.
 
-Use `ue_inspect_target_rules.py` to discover member-function names in one selected `Target.cs`. The model must explicitly choose one function name, then call `ue_inspect_cs_function.py` with the same file and selected name. The C# function tool can also inspect an explicitly selected ordinary `.cs` or `Build.cs` directly. It returns every same-name class or struct member in that file and never follows called functions.
+Use `ue_inspect_target_rules.py` to index member-function names in one selected `Target.cs`. Function bodies and called functions remain outside this tool's scope.
 
 Do not embed or reinterpret later source-tool results as fields of the earlier `.uproject` result. Each tool keeps its own schema, validation, and limits.
 
@@ -73,10 +64,8 @@ Replace `<project>` with the absolute `.uproject` path.
 ```powershell
 python sourcetools/ue_read_project_descriptor.py --project <project> --engine-build-version <Engine/Build/Build.version>
 python sourcetools/ue_resolve_engine.py --project <project>
-python sourcetools/ue_inspect_modules.py --project <project>
 python sourcetools/ue_inspect_targets.py --project <project>
 python sourcetools/ue_list_project_cxx_sources.py --project <project>
-python sourcetools/ue_classify_project_paths.py --project <project>
 ```
 
 Replace `<plugin>`, `<rules>`, and `<target>` with one explicit file selected from prior evidence or supplied by the user:
@@ -85,20 +74,11 @@ Replace `<plugin>`, `<rules>`, and `<target>` with one explicit file selected fr
 python sourcetools/ue_read_plugin_descriptor.py --plugin <plugin>
 python sourcetools/ue_inspect_module_rules.py --rules <rules>
 python sourcetools/ue_inspect_target_rules.py --target <target>
-python sourcetools/ue_inspect_cs_function.py --source <cs-source> --function <name>
 python sourcetools/ue_inspect_module_entry.py --rules <rules>
 python sourcetools/ue_list_cxx_includes.py --source <source> [<header>]
 python sourcetools/ue_list_cxx_types.py --source <source> [<header>]
 python sourcetools/ue_inspect_cxx_function.py --source <source> [<header>] --function <name>
 ```
-
-Plugin resolution derives the Engine root from the project's `EngineAssociation` by default. Pass `--engine-root` only as an explicit override:
-
-```powershell
-python sourcetools/ue_resolve_plugins.py --project <project> --operation scan --platform Win64 --target-type Editor
-```
-
-Use `Win64 / Editor` only as the default focused Plugin profile. If the user provides another platform, target type, or operation, pass it through and state the active profile. Configuration is not accepted or evaluated by the focused Plugin tool.
 
 ## Interpret project C++ sources v1
 
@@ -110,19 +90,11 @@ Treat `ue-itps.project-cxx-sources.v1` as a physical project-local source invent
 - All reported source paths and Build.cs or Plugin descriptor evidence are relative to `project.root`.
 - Engine directories, external additional directories, generated directories, and conventional generated filenames are excluded. This is a filesystem convention filter, not proof of human authorship.
 
-## Interpret Plugin v1
-
-Treat `ue-itps.project-plugin-references.v1` items as explicit records:
-
-- `path_roots.project` and `.engine` are absolute roots recorded once. Plugin `descriptor` paths are relative to the project root for `project*` and `additional-project-*` origins, or to the Engine root for `engine*` origins.
-- Every Plugin item retains all modeled fields, including false, empty, and null values.
-- Plugin descriptor contents and hashes are not read.
-
 ## Interpret project descriptor
 
 Treat `ue_read_project_descriptor` as a narrow projection of the original `.uproject`:
 
-- `declared_modules` reports declared Module names in descriptor order. Use `ue_inspect_modules.py` for types, loading phases, Build.cs evidence, or entrypoints.
+- `declared_modules` reports declared Module names in descriptor order. Use the focused source, Build.cs, or module-entry tools when their separate evidence is needed.
 - `plugin_declarations.enabled` and `.disabled` report every valid direct Plugin reference according to its boolean `Enabled` value.
 - `plugin_declarations.target_allow_list` reports only explicit, non-empty `TargetAllowList` declarations. Each item keeps one Plugin `name` together with its source-ordered `targets` array.
 - Missing `TargetAllowList` fields and explicit empty arrays do not produce items. Other Plugin reference fields and all other `.uproject` fields are outside this tool's result.
@@ -130,7 +102,7 @@ Treat `ue_read_project_descriptor` as a narrow projection of the original `.upro
 - A missing enabled Plugin is an error. A missing disabled Plugin is retained as an `info` problem whose message states that it is not enabled; info-only problems leave `validation.status` as `ok`.
 - `ue_read_project_descriptor.py` does not read `EngineAssociation`. Its required `Build.version` path is a trusted anchor: derive the Engine root from the conventional parent depth without validating the path layout, JSON, or version fields.
 
-Stop after `ue_read_project_descriptor.py` for declared Module names, Plugin enabled states, or explicit non-empty Target allow lists. Resolve Engine and run `ue_resolve_plugins.py` only when the question also needs Plugin location, origin, `.uplugin` evidence, or Profile applicability.
+Stop after `ue_read_project_descriptor.py` for declared Module names, Plugin enabled states, or explicit non-empty Target allow lists.
 
 ## Interpret Module dependencies
 
@@ -150,22 +122,9 @@ Treat `ue-itps.target-rule-relations.v1` as a TargetRules navigation index, not 
 - Each `rules_classes[]` item is a lexical type index with `kind`, `name`, `base_types`, `inheritance`, `member_details`, and `evidence`.
 - `member_details.variables` lists lexical class fields in deterministic source order. Each item retains name, type expression, and evidence; function locals and C# properties are not included.
 - `member_details.functions` lists every lexical member function in deterministic source order. Each item retains name, compact signature, constructor/body flags, and evidence.
-- Function bodies, mutations, calls, conditions, operands, and referenced values are not included. Select one function name and use `ue_inspect_cs_function.py` for body facts.
+- Function bodies, mutations, calls, conditions, operands, and referenced values are not included.
 - `inheritance.kind` is `confirmed` when the selected file proves the TargetRules chain. A filename-matching class with a `TargetInfo` constructor may be reported as `unresolved` with a validation warning when its base is defined elsewhere; its local class and member declarations remain evidence, but inheritance and base effects are not inferred.
 - The result is a TargetRules navigation index, not a complete C# type system or effective UBT result.
-
-## Interpret C# function v1
-
-Treat `ue-itps.cs-function.v1` as a lexical projection of one explicitly selected `.cs`, including ordinary C#, `Build.cs`, and `Target.cs`:
-
-- `selection.name` is the only function selector. `matches` returns every same-name class or struct member in the file.
-- Each match owns a compact `function_id`, a `function` identity, `external_types`, and source-ordered `external_methods`.
-- `function` retains constructor/method kind, owner, name, compact signature and parameters, body presence, and evidence.
-- External types are normalized type expressions derived from parameters, local variables, referenced member fields, and unbound type-like qualifiers used in non-call member access. Types declared in the selected file and built-in C# types are omitted.
-- External methods retain first-seen method-call expressions, including same-class calls. A locally typed root receiver is replaced with its type expression while the remaining member chain is preserved; unresolved receivers retain their source spelling.
-- Bare calls are retained when the selected class declares that method name. Constructor-shaped bare invocations remain outside `external_methods`.
-- A missing function returns `validation: error` with `function-not-found` and CLI exit 1. Input/read failure returns schema-shaped JSON and exit 2.
-- Called functions, inherited members, other files, runtime effects, and compiler semantics are not followed or inferred.
 
 ## Interpret module entry v1
 
@@ -190,13 +149,8 @@ Treat `ue-itps.cs-function.v1` as a lexical projection of one explicitly selecte
 
 - `EngineAssociation` remains an association key for tools that resolve Engine identity. The project descriptor reader ignores it and requires an explicit trusted `Build.version` path.
 - `.uproject` declares Modules and direct Plugin references, but the project descriptor result intentionally reports only Module names, Plugin enabled states, and explicit non-empty Target allow lists. Filesystem checks use same-named Build.cs and .uplugin evidence without returning their paths, and the result does not declare `Target.cs` or a dependency graph.
-- Direct Plugin resolution is not the effective `.uplugin` dependency closure.
 - The single-plugin descriptor tool reports only direct Module and Plugin declarations. It ignores every other top-level `.uplugin` field and does not read Build.cs files or dependency descriptors.
-- Build.cs dependency arrays report direct literal declarations only. The generic C# function tool reports lexical external references, while the TargetRules index omits function bodies; none is an effective UBT result.
+- Build.cs dependency arrays report direct literal declarations only, while the TargetRules index omits function bodies; neither is an effective UBT result.
 - Module entry scans only the two supported registration macros in `.cpp` files and derives an optional same-named `.h` companion from filesystem conventions.
-- Path v1 derives the project root from the selected `.uproject` and reports conventional path roles, filesystem state (`missing | file | directory | other`), and unclassified root directories.
-- Path v1 records the absolute `project_root` once; path items and validation problems use only `project_relative_path`.
-- Path v1 reads explicit descriptor fields only to emit validation problems: declared Modules without AdditionalRootDirectories require the conventional Source directory. It does not add requiredness fields to path items.
-- Absence of Module declarations does not prove Source is unnecessary. Path v1 does not inspect directory contents or determine source authority, deletion safety, self-containment, or rebuildability.
 - Resolve relative Additional* declarations separately through descriptor-aware tools; do not substitute the repository root or current working directory.
 - Do not modify UE source, assets, configuration, registry entries, or Engine installations.

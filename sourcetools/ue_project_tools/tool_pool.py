@@ -40,19 +40,6 @@ _TOOLS: tuple[dict[str, Any], ...] = (
         "capabilities": ["engine_resolution"],
     },
     {
-        "name": "ue_inspect_modules",
-        "category": "build",
-        "entrypoint": "sourcetools/ue_inspect_modules.py",
-        "inputs": ["project"],
-        "capabilities": [
-            "module_reconciliation",
-            "module_dependencies",
-            "csharp_ast",
-            "cxx_ast",
-            "cycle_detection",
-        ],
-    },
-    {
         "name": "ue_inspect_targets",
         "category": "build",
         "entrypoint": "sourcetools/ue_inspect_targets.py",
@@ -72,20 +59,6 @@ _TOOLS: tuple[dict[str, Any], ...] = (
         "entrypoint": "sourcetools/ue_list_module_cxx_sources.py",
         "inputs": ["rules"],
         "capabilities": ["source_inventory", "source_pairing", "module_ownership"],
-    },
-    {
-        "name": "ue_resolve_plugins",
-        "category": "plugin",
-        "entrypoint": "sourcetools/ue_resolve_plugins.py",
-        "inputs": ["project"],
-        "capabilities": ["plugin_resolution", "dependency_graph"],
-    },
-    {
-        "name": "ue_classify_project_paths",
-        "category": "project",
-        "entrypoint": "sourcetools/ue_classify_project_paths.py",
-        "inputs": ["project"],
-        "capabilities": ["path_classification"],
     },
     {
         "name": "ue_read_plugin_descriptor",
@@ -111,13 +84,6 @@ _TOOLS: tuple[dict[str, Any], ...] = (
         "entrypoint": "sourcetools/ue_inspect_target_rules.py",
         "inputs": ["target"],
         "capabilities": ["target_rules", "csharp_ast"],
-    },
-    {
-        "name": "ue_inspect_cs_function",
-        "category": "source",
-        "entrypoint": "sourcetools/ue_inspect_cs_function.py",
-        "inputs": ["source", "function"],
-        "capabilities": ["csharp_ast", "external_references"],
     },
     {
         "name": "ue_inspect_module_entry",

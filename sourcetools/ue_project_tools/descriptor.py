@@ -3,7 +3,26 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .common import normalized, read_json, result_document
+from .common import iter_files, normalized, read_json, result_document
+
+
+def descriptor_index(
+    roots: list[tuple[str, Path]],
+    declared_names: set[str] | None,
+) -> dict[str, list[dict[str, str]]]:
+    if declared_names == set():
+        return {}
+    index: dict[str, list[dict[str, str]]] = {}
+    for origin, root in roots:
+        for path in iter_files(root, ".uplugin", declared_names):
+            folded_name = path.stem.casefold()
+            index.setdefault(folded_name, []).append(
+                {
+                    "origin": origin,
+                    "path": normalized(path),
+                }
+            )
+    return index
 
 
 def resolve_internal_directories(
@@ -321,8 +340,6 @@ def declared_plugin_file_problems(
     descriptor: dict[str, Any],
     engine_build_version: Path,
 ) -> list[dict[str, Any]]:
-    from .plugins import descriptor_index
-
     declarations = descriptor.get("Plugins", [])
     if not isinstance(declarations, list):
         return []
