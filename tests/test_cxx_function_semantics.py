@@ -8,7 +8,7 @@ from tests.support import create_fixture, run_cli, write_text
 
 
 class CxxFunctionSemanticsTests(unittest.TestCase):
-    def test_known_static_accessor_resolves_chained_member_call(self) -> None:
+    def test_same_type_get_accessor_resolves_chained_member_call(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = create_fixture(Path(directory))
             header = write_text(
@@ -30,6 +30,9 @@ class CxxFunctionSemanticsTests(unittest.TestCase):
                 {
                     FNotificationInfo Info;
                     FSlateNotificationManager::Get().AddNotification(Info);
+                    FSlateApplication::Get().GetPlatformApplication();
+                    FContainer Container;
+                    Container.Get().DoWork();
                 }
                 """,
             )
@@ -56,6 +59,21 @@ class CxxFunctionSemanticsTests(unittest.TestCase):
             self.assertEqual(
                 notification_call["owner_type"], "FSlateNotificationManager"
             )
+            application_call = next(
+                item
+                for item in symbols
+                if item["spelling"].endswith("GetPlatformApplication()")
+            )
+            self.assertEqual(application_call["kind"], "member_call")
+            self.assertEqual(
+                application_call["spelling"],
+                "FSlateApplication->GetPlatformApplication()",
+            )
+            self.assertEqual(application_call["owner_type"], "FSlateApplication")
+            object_get_call = next(
+                item for item in symbols if item["spelling"].endswith("DoWork()")
+            )
+            self.assertEqual(object_get_call["kind"], "unknown")
             self.assertEqual(result["matches"][0]["delegate_operations"], [])
 
     def test_known_ue_function_like_macros_use_macro_kind(self) -> None:

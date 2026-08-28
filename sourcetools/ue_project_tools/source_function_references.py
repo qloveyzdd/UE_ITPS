@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from .source_context import load_source_context, source_result
-from .source_delegate_rules import ue_delegate_operation
+from .ue_cpp_conventions import ue_delegate_operation
 
 
 def _function_id(item: dict[str, Any]) -> str:

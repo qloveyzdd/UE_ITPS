@@ -1,6 +1,16 @@
 from __future__ import annotations
 
 
+UE_FUNCTION_LIKE_MACROS = frozenset(
+    {
+        "INVTEXT",
+        "LOCTEXT",
+        "NSLOCTEXT",
+    }
+)
+
+UE_SAME_TYPE_STATIC_ACCESSORS = frozenset({"Get"})
+
 UE_DELEGATE_PUBLISH_APIS = frozenset(
     {
         "Broadcast",
@@ -42,6 +52,14 @@ UE_DELEGATE_SUBSCRIBE_APIS = frozenset(
         "CreateWeakLambda",
     }
 )
+
+
+def is_ue_function_like_macro(name: str) -> bool:
+    return name in UE_FUNCTION_LIKE_MACROS
+
+
+def is_ue_same_type_static_accessor(name: str) -> bool:
+    return name in UE_SAME_TYPE_STATIC_ACCESSORS
 
 
 def ue_delegate_operation(api: str) -> str | None:

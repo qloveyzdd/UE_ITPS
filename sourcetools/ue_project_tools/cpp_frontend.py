@@ -10,7 +10,11 @@ from tree_sitter import Language, Node, Parser
 import tree_sitter_ue_cpp
 
 from .common import normalized
-from .source_delegate_rules import ue_delegate_operation
+from .ue_cpp_conventions import (
+    is_ue_function_like_macro,
+    is_ue_same_type_static_accessor,
+    ue_delegate_operation,
+)
 
 
 ENGINE = "tree-sitter/ue-cpp"
@@ -56,16 +60,6 @@ _PRIMITIVE_TYPES = {
     "void",
     "wchar_t",
 }
-_UE_FUNCTION_LIKE_MACROS = {
-    "INVTEXT",
-    "LOCTEXT",
-    "NSLOCTEXT",
-}
-_UE_STATIC_ACCESSOR_RETURN_TYPES: dict[tuple[str, ...], str] = {
-    ("FSlateNotificationManager", "Get"): "FSlateNotificationManager",
-}
-
-
 class CppFrontendError(ValueError):
     pass
 
@@ -1029,22 +1023,30 @@ def _finalize_references(model: dict[str, Any]) -> None:
             callee = str(call["callee"])
             target_name = str(call.get("target_name") or "")
             segments = [str(part) for part in call.get("callee_path", [])]
+            receiver = str(call.get("receiver") or "")
             root = segments[0] if len(segments) > 1 else ""
             variable_types = call.get("variable_types", {})
             owner_type = (
-                variable_types.get(root)
-                if root in variable_types
-                else field_types.get(root)
+                (
+                    variable_types.get(root)
+                    if root in variable_types
+                    else field_types.get(root)
+                )
+                if len(segments) == 2
+                else None
             )
             owner_key = str(function.get("owner") or "").rsplit("::", 1)[-1]
             if owner_type:
                 resolved_owner = str(owner_type).rsplit("::", 1)[-1]
             elif call.get("receiver_kind") == "scope" and len(segments) >= 2:
                 resolved_owner = segments[-2]
-            elif call.get("receiver_kind") == "member" and len(segments) >= 3:
-                resolved_owner = _UE_STATIC_ACCESSOR_RETURN_TYPES.get(
-                    tuple(segments[:-1]), ""
-                )
+            elif (
+                call.get("receiver_kind") == "member"
+                and len(segments) >= 3
+                and is_ue_same_type_static_accessor(segments[-2])
+                and receiver.endswith(f"::{segments[-2]}()")
+            ):
+                resolved_owner = segments[-3]
             elif len(segments) == 1 and methods.get((owner_key, target_name)):
                 resolved_owner = owner_key
             else:
@@ -1052,7 +1054,7 @@ def _finalize_references(model: dict[str, Any]) -> None:
             free = free_functions.get(
                 (str(function.get("namespace") or ""), target_name)
             )
-            if len(segments) == 1 and target_name in _UE_FUNCTION_LIKE_MACROS:
+            if len(segments) == 1 and is_ue_function_like_macro(target_name):
                 symbols.append(
                     {
                         "kind": "macro",
