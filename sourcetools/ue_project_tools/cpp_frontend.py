@@ -11,6 +11,7 @@ import tree_sitter_ue_cpp
 
 from .common import normalized
 from .ue_cpp_conventions import (
+    is_ignored_external_macro,
     is_ignored_external_member_call,
     is_ue_function_like_macro,
     is_ue_same_type_static_accessor,
@@ -1056,13 +1057,14 @@ def _finalize_references(model: dict[str, Any]) -> None:
                 (str(function.get("namespace") or ""), target_name)
             )
             if len(segments) == 1 and is_ue_function_like_macro(target_name):
-                symbols.append(
-                    {
-                        "kind": "macro",
-                        "spelling": f"{target_name}()",
-                        "line": int(call["line"]),
-                    }
-                )
+                if not is_ignored_external_macro(target_name):
+                    symbols.append(
+                        {
+                            "kind": "macro",
+                            "spelling": f"{target_name}()",
+                            "line": int(call["line"]),
+                        }
+                    )
             elif resolved_owner:
                 call["target_owner"] = resolved_owner
                 is_static_accessor = (

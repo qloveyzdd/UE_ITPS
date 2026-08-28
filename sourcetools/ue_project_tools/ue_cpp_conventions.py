@@ -11,8 +11,11 @@ UE_FUNCTION_LIKE_MACROS = frozenset(
 
 UE_SAME_TYPE_STATIC_ACCESSORS = frozenset({"Get"})
 
+UE_IGNORED_EXTERNAL_MACROS = frozenset({"LOCTEXT"})
+
 UE_IGNORED_EXTERNAL_MEMBER_CALLS = frozenset(
     {
+        ("FText", "Format"),
         ("FText", "FromName"),
     }
 )
@@ -66,6 +69,10 @@ def is_ue_function_like_macro(name: str) -> bool:
 
 def is_ue_same_type_static_accessor(name: str) -> bool:
     return name in UE_SAME_TYPE_STATIC_ACCESSORS
+
+
+def is_ignored_external_macro(name: str) -> bool:
+    return name in UE_IGNORED_EXTERNAL_MACROS
 
 
 def is_ignored_external_member_call(owner_type: str, method_name: str) -> bool:

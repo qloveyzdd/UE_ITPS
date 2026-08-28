@@ -48,6 +48,7 @@ class CxxFunctionSemanticsTests(unittest.TestCase):
 
             self.assertEqual(completed.returncode, 0)
             symbols = result["matches"][0]["external_symbols"]
+            self.assertIn("FNotificationInfo", {item["spelling"] for item in symbols})
             notification_call = next(
                 item for item in symbols if item["spelling"].endswith("AddNotification()")
             )
@@ -104,6 +105,7 @@ class CxxFunctionSemanticsTests(unittest.TestCase):
                 #include "Worker.h"
                 void AWorker::ConvertNames()
                 {
+                    FText::Format(Pattern);
                     FText::FromName(Name);
                     FOtherText::FromName(Name);
                 }
@@ -122,9 +124,11 @@ class CxxFunctionSemanticsTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0)
             match = result["matches"][0]
             spellings = {item["spelling"] for item in match["external_symbols"]}
+            self.assertNotIn("FText->Format()", spellings)
             self.assertNotIn("FText->FromName()", spellings)
             self.assertIn("FOtherText->FromName()", spellings)
             calls = {item["callee"] for item in match["syntax_flow"]["calls"]}
+            self.assertIn("FText::Format", calls)
             self.assertIn("FText::FromName", calls)
 
     def test_known_ue_function_like_macros_use_macro_kind(self) -> None:
@@ -169,10 +173,15 @@ class CxxFunctionSemanticsTests(unittest.TestCase):
                 item["spelling"]: item["kind"]
                 for item in result["matches"][0]["external_symbols"]
             }
-            self.assertEqual(symbols["LOCTEXT()"], "macro")
+            self.assertNotIn("LOCTEXT()", symbols)
             self.assertEqual(symbols["NSLOCTEXT()"], "macro")
             self.assertEqual(symbols["INVTEXT()"], "macro")
             self.assertEqual(symbols["UNKNOWN_MACRO_STYLE()"], "unknown")
+            calls = {
+                item["callee"]
+                for item in result["matches"][0]["syntax_flow"]["calls"]
+            }
+            self.assertIn("LOCTEXT", calls)
 
     def test_member_call_receiver_uses_current_class_field_type(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
