@@ -20,6 +20,12 @@ def _function_id(item: dict[str, Any]) -> str:
     )
 
 
+def _matches_function_selector(item: dict[str, Any], selector: str) -> bool:
+    if "::" in selector:
+        return item["qualified_name"] == selector
+    return item["name"] == selector
+
+
 def _callable_parts(loaded: dict[str, Any]) -> list[dict[str, Any]]:
     unit_files = {
         str(path.resolve()).replace("\\", "/").casefold()
@@ -99,7 +105,9 @@ def inspect_source_function(
     parts = _callable_parts(loaded)
     matches = []
     for item in parts:
-        if item["role"] != "definition" or item["name"] != function_name:
+        if item["role"] != "definition" or not _matches_function_selector(
+            item, function_name
+        ):
             continue
         references = loaded["cpp_model"]["references"].get(item["usr"], {})
         external_symbols = []

@@ -8,6 +8,94 @@ from tests.support import create_fixture, run_cli, write_text
 
 
 class CxxFunctionSemanticsTests(unittest.TestCase):
+    def test_qualified_function_selector_avoids_same_name_collisions(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            header = write_text(
+                fixture.header,
+                """
+                #pragma once
+                class AWorker
+                {
+                public:
+                    void Run();
+                };
+
+                struct FWorker
+                {
+                    void Run();
+                };
+
+                namespace Tools
+                {
+                    struct FWorker
+                    {
+                        void Run();
+                    };
+                }
+                """,
+            )
+            source = write_text(
+                fixture.source,
+                """
+                #include "Worker.h"
+                void AWorker::Run() {}
+                void FWorker::Run() {}
+                namespace Tools
+                {
+                    void FWorker::Run() {}
+                }
+                """,
+            )
+
+            completed, simple = run_cli(
+                "sourcetools/ue_inspect_cxx_function.py",
+                "--source",
+                source,
+                header,
+                "--function",
+                "Run",
+            )
+            self.assertEqual(completed.returncode, 0)
+            self.assertEqual(simple["match_count"], 3)
+
+            completed, qualified = run_cli(
+                "sourcetools/ue_inspect_cxx_function.py",
+                "--source",
+                source,
+                header,
+                "--function",
+                "AWorker::Run",
+            )
+            self.assertEqual(completed.returncode, 0)
+            self.assertEqual(qualified["match_count"], 1)
+            self.assertIn("AWorker|Run", qualified["matches"][0]["function_id"])
+
+            completed, namespaced = run_cli(
+                "sourcetools/ue_inspect_cxx_function.py",
+                "--source",
+                source,
+                header,
+                "--function",
+                "Tools::FWorker::Run",
+            )
+            self.assertEqual(completed.returncode, 0)
+            self.assertEqual(namespaced["match_count"], 1)
+            self.assertIn(
+                "Tools|FWorker|Run", namespaced["matches"][0]["function_id"]
+            )
+
+            completed, missing = run_cli(
+                "sourcetools/ue_inspect_cxx_function.py",
+                "--source",
+                source,
+                header,
+                "--function",
+                "Missing::Run",
+            )
+            self.assertEqual(completed.returncode, 1)
+            self.assertEqual(missing["match_count"], 0)
+
     def test_same_type_get_accessor_resolves_chained_member_call(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = create_fixture(Path(directory))

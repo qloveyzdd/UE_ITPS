@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inspect all C++ function definitions matching one selected name."""
+"""Inspect C++ function definitions matching one simple or qualified name."""
 
 from pathlib import Path
 
@@ -15,8 +15,8 @@ RESPONSIBILITY = (
 
 def main() -> int:
     parser = cli_parser(
-        "读取指定名称的全部 C++ 函数定义及其引用的外部符号。",
-        "Read external symbols referenced by all C++ function definitions matching one name.",
+        "读取指定简单名称或完整限定名称的 C++ 函数定义及其引用的外部符号。",
+        "Read external symbols referenced by C++ function definitions matching one simple or fully qualified name.",
         schema_version=SCHEMA_VERSION,
         responsibility=RESPONSIBILITY,
     )
@@ -30,8 +30,8 @@ def main() -> int:
     parser.add_argument(
         "--function",
         required=True,
-        metavar="NAME",
-        help="函数名称；返回所有同名定义 / Function name; return all matching definitions",
+        metavar="NAME_OR_QUALIFIED_NAME",
+        help="简单函数名返回所有同名定义；完整限定名执行精确匹配 / Simple name returns all same-name definitions; fully qualified name matches exactly",
     )
     parser.add_argument(
         "--include-syntax-flow",
