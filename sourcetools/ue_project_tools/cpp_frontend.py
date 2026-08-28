@@ -10,6 +10,7 @@ from tree_sitter import Language, Node, Parser
 import tree_sitter_ue_cpp
 
 from .common import normalized
+from .source_delegate_rules import ue_delegate_operation
 
 
 ENGINE = "tree-sitter/ue-cpp"
@@ -24,6 +25,10 @@ _CONTAINER_NODES = {
     "declaration_list",
     "linkage_specification",
     "template_declaration",
+    "preproc_if",
+    "preproc_ifdef",
+    "preproc_elif",
+    "preproc_else",
 }
 _CONTROL_NODES = {
     "if_statement": "if_statement",
@@ -50,6 +55,14 @@ _PRIMITIVE_TYPES = {
     "unsigned",
     "void",
     "wchar_t",
+}
+_UE_FUNCTION_LIKE_MACROS = {
+    "INVTEXT",
+    "LOCTEXT",
+    "NSLOCTEXT",
+}
+_UE_STATIC_ACCESSOR_RETURN_TYPES: dict[tuple[str, ...], str] = {
+    ("FSlateNotificationManager", "Get"): "FSlateNotificationManager",
 }
 
 
@@ -991,20 +1004,47 @@ def _finalize_references(model: dict[str, Any]) -> None:
         for item in model["functions"]
         if item["role"] == "definition"
     }
+    field_types_by_owner: dict[str, dict[str, str]] = {}
+    for item in model["types"]:
+        if item["role"] != "definition":
+            continue
+        field_types_by_owner[str(item["qualified_name"])] = {
+            str(field["name"]): str(field.get("type", {}).get("name") or "")
+            for field in item.get("fields", [])
+            if field.get("name")
+        }
     for usr, references in model["references"].items():
         function = functions_by_usr.get(usr, {})
+        function_owner = "::".join(
+            part
+            for part in (
+                str(function.get("namespace") or ""),
+                str(function.get("owner") or ""),
+            )
+            if part
+        )
+        field_types = field_types_by_owner.get(function_owner, {})
         symbols = list(references.get("external_symbols", []))
         for call in references.get("call_details", []):
             callee = str(call["callee"])
             target_name = str(call.get("target_name") or "")
             segments = [str(part) for part in call.get("callee_path", [])]
             root = segments[0] if len(segments) > 1 else ""
-            owner_type = call.get("variable_types", {}).get(root)
+            variable_types = call.get("variable_types", {})
+            owner_type = (
+                variable_types.get(root)
+                if root in variable_types
+                else field_types.get(root)
+            )
             owner_key = str(function.get("owner") or "").rsplit("::", 1)[-1]
             if owner_type:
                 resolved_owner = str(owner_type).rsplit("::", 1)[-1]
             elif call.get("receiver_kind") == "scope" and len(segments) >= 2:
                 resolved_owner = segments[-2]
+            elif call.get("receiver_kind") == "member" and len(segments) >= 3:
+                resolved_owner = _UE_STATIC_ACCESSOR_RETURN_TYPES.get(
+                    tuple(segments[:-1]), ""
+                )
             elif len(segments) == 1 and methods.get((owner_key, target_name)):
                 resolved_owner = owner_key
             else:
@@ -1012,7 +1052,15 @@ def _finalize_references(model: dict[str, Any]) -> None:
             free = free_functions.get(
                 (str(function.get("namespace") or ""), target_name)
             )
-            if resolved_owner:
+            if len(segments) == 1 and target_name in _UE_FUNCTION_LIKE_MACROS:
+                symbols.append(
+                    {
+                        "kind": "macro",
+                        "spelling": f"{target_name}()",
+                        "line": int(call["line"]),
+                    }
+                )
+            elif resolved_owner:
                 call["target_owner"] = resolved_owner
                 symbols.append(
                     {
@@ -1041,7 +1089,7 @@ def _finalize_references(model: dict[str, Any]) -> None:
             for address in call.get("function_addresses", []):
                 symbol = {
                     "kind": "callback_target"
-                    if target_name.startswith(("Add", "Bind", "Create"))
+                    if ue_delegate_operation(target_name) == "subscribe"
                     else "function_address",
                     "spelling": address["qualified_name"],
                     "line": int(call["line"]),

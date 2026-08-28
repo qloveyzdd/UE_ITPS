@@ -76,7 +76,7 @@ class ProjectWorkflowTests(unittest.TestCase):
                 "BeginPlay",
             )
             self.assertEqual(completed.returncode, 0)
-            self.assertEqual(function["matches"][0]["function"]["name"], "BeginPlay")
+            self.assertIn("AWorker|BeginPlay", function["matches"][0]["function_id"])
 
             completed, flow = run_cli(
                 "sourcetools/ue_trace_cxx_function_flow.py",
