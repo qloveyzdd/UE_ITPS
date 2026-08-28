@@ -11,6 +11,7 @@ import tree_sitter_ue_cpp
 
 from .common import normalized
 from .ue_cpp_conventions import (
+    is_ignored_external_member_call,
     is_ue_function_like_macro,
     is_ue_same_type_static_accessor,
     ue_delegate_operation,
@@ -1064,14 +1065,21 @@ def _finalize_references(model: dict[str, Any]) -> None:
                 )
             elif resolved_owner:
                 call["target_owner"] = resolved_owner
-                symbols.append(
-                    {
-                        "kind": "member_call",
-                        "spelling": f"{resolved_owner}->{target_name}()",
-                        "owner_type": resolved_owner,
-                        "line": int(call["line"]),
-                    }
+                is_static_accessor = (
+                    call.get("receiver_kind") == "scope"
+                    and is_ue_same_type_static_accessor(target_name)
                 )
+                if not is_static_accessor and not is_ignored_external_member_call(
+                    resolved_owner, target_name
+                ):
+                    symbols.append(
+                        {
+                            "kind": "member_call",
+                            "spelling": f"{resolved_owner}->{target_name}()",
+                            "owner_type": resolved_owner,
+                            "line": int(call["line"]),
+                        }
+                    )
             elif free is not None:
                 symbols.append(
                     {

@@ -74,7 +74,58 @@ class CxxFunctionSemanticsTests(unittest.TestCase):
                 item for item in symbols if item["spelling"].endswith("DoWork()")
             )
             self.assertEqual(object_get_call["kind"], "unknown")
+            self.assertNotIn(
+                "FSlateNotificationManager->Get()",
+                {item["spelling"] for item in symbols},
+            )
+            self.assertNotIn(
+                "FSlateApplication->Get()",
+                {item["spelling"] for item in symbols},
+            )
             self.assertEqual(result["matches"][0]["delegate_operations"], [])
+
+    def test_external_symbol_exclusions_preserve_syntax_flow(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            header = write_text(
+                fixture.header,
+                """
+                #pragma once
+                class AWorker
+                {
+                public:
+                    void ConvertNames();
+                };
+                """,
+            )
+            source = write_text(
+                fixture.source,
+                """
+                #include "Worker.h"
+                void AWorker::ConvertNames()
+                {
+                    FText::FromName(Name);
+                    FOtherText::FromName(Name);
+                }
+                """,
+            )
+
+            completed, result = run_cli(
+                "sourcetools/ue_inspect_cxx_function.py",
+                "--source",
+                source,
+                header,
+                "--function",
+                "ConvertNames",
+            )
+
+            self.assertEqual(completed.returncode, 0)
+            match = result["matches"][0]
+            spellings = {item["spelling"] for item in match["external_symbols"]}
+            self.assertNotIn("FText->FromName()", spellings)
+            self.assertIn("FOtherText->FromName()", spellings)
+            calls = {item["callee"] for item in match["syntax_flow"]["calls"]}
+            self.assertIn("FText::FromName", calls)
 
     def test_known_ue_function_like_macros_use_macro_kind(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

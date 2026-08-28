@@ -11,6 +11,12 @@ UE_FUNCTION_LIKE_MACROS = frozenset(
 
 UE_SAME_TYPE_STATIC_ACCESSORS = frozenset({"Get"})
 
+UE_IGNORED_EXTERNAL_MEMBER_CALLS = frozenset(
+    {
+        ("FText", "FromName"),
+    }
+)
+
 UE_DELEGATE_PUBLISH_APIS = frozenset(
     {
         "Broadcast",
@@ -60,6 +66,10 @@ def is_ue_function_like_macro(name: str) -> bool:
 
 def is_ue_same_type_static_accessor(name: str) -> bool:
     return name in UE_SAME_TYPE_STATIC_ACCESSORS
+
+
+def is_ignored_external_member_call(owner_type: str, method_name: str) -> bool:
+    return (owner_type, method_name) in UE_IGNORED_EXTERNAL_MEMBER_CALLS
 
 
 def ue_delegate_operation(api: str) -> str | None:
