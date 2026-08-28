@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any
 
 from .source_context import load_source_context, source_result
-from .ue_cpp_conventions import ue_delegate_operation
 
 
 def _function_id(item: dict[str, Any]) -> str:
@@ -52,8 +51,8 @@ def _delegate_operations(
     results = []
     for call in references.get("call_details", []):
         api = str(call.get("target_name") or "")
-        operation = ue_delegate_operation(api)
-        if operation is None:
+        operation = call.get("delegate_operation")
+        if operation not in {"publish", "subscribe"}:
             continue
         segments = [str(part) for part in call.get("callee_path", [])]
         if len(segments) < 2:

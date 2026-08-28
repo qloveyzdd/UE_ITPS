@@ -492,6 +492,158 @@ class CxxFunctionSemanticsTests(unittest.TestCase):
                 "AWorker::OnFinished",
             )
 
+    def test_delegate_projection_ignores_ambiguous_container_add_calls(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            header = write_text(
+                fixture.header,
+                """
+                #pragma once
+                class AWorker
+                {
+                public:
+                    void Collect();
+                    void OnFinished();
+                };
+                """,
+            )
+            source = write_text(
+                fixture.source,
+                """
+                #include "Worker.h"
+                void AWorker::Collect()
+                {
+                    TMap<int32, int32> ValuesById;
+                    TArray<int32> Values;
+                    ValuesById.Add(1, 2);
+                    Values.AddUnique(2);
+                    ValuesById.Add(3, &AWorker::OnFinished);
+                }
+                """,
+            )
+
+            completed, result = run_cli(
+                "sourcetools/ue_inspect_cxx_function.py",
+                "--source",
+                source,
+                header,
+                "--function",
+                "Collect",
+            )
+
+            self.assertEqual(completed.returncode, 0)
+            match = result["matches"][0]
+            self.assertEqual(match["delegate_operations"], [])
+            function_address = next(
+                item
+                for item in match["external_symbols"]
+                if item["spelling"] == "AWorker::OnFinished"
+            )
+            self.assertEqual(function_address["kind"], "function_address")
+
+    def test_delegate_projection_accepts_locally_declared_ambiguous_apis(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            header = write_text(
+                fixture.header,
+                """
+                #pragma once
+                DECLARE_MULTICAST_DELEGATE(FOnFinished);
+                class AWorker
+                {
+                public:
+                    void Activate();
+                    void OnFinished();
+
+                private:
+                    FOnFinished FinishedEvent;
+                    FOnFinished UniqueFinishedEvent;
+                };
+                """,
+            )
+            source = write_text(
+                fixture.source,
+                """
+                #include "Worker.h"
+                void AWorker::Activate()
+                {
+                    FinishedEvent.Add(&AWorker::OnFinished);
+                    UniqueFinishedEvent.AddUnique(&AWorker::OnFinished);
+                }
+                """,
+            )
+
+            completed, result = run_cli(
+                "sourcetools/ue_inspect_cxx_function.py",
+                "--source",
+                source,
+                header,
+                "--function",
+                "Activate",
+            )
+
+            self.assertEqual(completed.returncode, 0)
+            match = result["matches"][0]
+            operations = match["delegate_operations"]
+            self.assertEqual(
+                [(item["operation"], item["api"]) for item in operations],
+                [("subscribe", "Add"), ("subscribe", "AddUnique")],
+            )
+            callback_kinds = {
+                item["kind"]
+                for item in match["external_symbols"]
+                if item["spelling"] == "AWorker::OnFinished"
+            }
+            self.assertEqual(callback_kinds, {"callback_target"})
+
+    def test_delegate_projection_keeps_external_delegate_type_unknown(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            header = write_text(
+                fixture.header,
+                """
+                #pragma once
+                class AWorker
+                {
+                public:
+                    void Activate();
+                    void OnFinished();
+
+                private:
+                    FExternalDelegate ExternalEvent;
+                };
+                """,
+            )
+            source = write_text(
+                fixture.source,
+                """
+                #include "Worker.h"
+                void AWorker::Activate()
+                {
+                    ExternalEvent.Add(&AWorker::OnFinished);
+                }
+                """,
+            )
+
+            completed, result = run_cli(
+                "sourcetools/ue_inspect_cxx_function.py",
+                "--source",
+                source,
+                header,
+                "--function",
+                "Activate",
+            )
+
+            self.assertEqual(completed.returncode, 0)
+            match = result["matches"][0]
+            self.assertEqual(match["delegate_operations"], [])
+            function_address = next(
+                item
+                for item in match["external_symbols"]
+                if item["spelling"] == "AWorker::OnFinished"
+            )
+            self.assertEqual(function_address["kind"], "function_address")
+
 
 if __name__ == "__main__":
     unittest.main()

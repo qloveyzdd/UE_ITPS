@@ -15,6 +15,7 @@ from .ue_cpp_conventions import (
     is_ignored_external_member_call,
     is_ue_function_like_macro,
     is_ue_same_type_static_accessor,
+    ue_delegate_declared_type,
     ue_delegate_operation,
 )
 
@@ -984,6 +985,19 @@ def _deduplicate(
 
 
 def _finalize_references(model: dict[str, Any]) -> None:
+    known_delegate_types = {
+        declared_type
+        for macro in model["macros"]
+        if (
+            declared_type := ue_delegate_declared_type(
+                str(macro["name"]),
+                [
+                    str(argument.get("expression") or "")
+                    for argument in macro.get("arguments", [])
+                ],
+            )
+        )
+    }
     methods = {
         (str(item.get("owner") or "").rsplit("::", 1)[-1], str(item["name"])): item
         for item in model["functions"]
@@ -1053,6 +1067,17 @@ def _finalize_references(model: dict[str, Any]) -> None:
                 resolved_owner = owner_key
             else:
                 resolved_owner = ""
+            delegate_operation = (
+                ue_delegate_operation(
+                    target_name,
+                    owner_type=resolved_owner or None,
+                    known_delegate_types=known_delegate_types,
+                )
+                if len(segments) >= 2
+                else None
+            )
+            if delegate_operation is not None:
+                call["delegate_operation"] = delegate_operation
             free = free_functions.get(
                 (str(function.get("namespace") or ""), target_name)
             )
@@ -1101,7 +1126,7 @@ def _finalize_references(model: dict[str, Any]) -> None:
             for address in call.get("function_addresses", []):
                 symbol = {
                     "kind": "callback_target"
-                    if ue_delegate_operation(target_name) == "subscribe"
+                    if call.get("delegate_operation") == "subscribe"
                     else "function_address",
                     "spelling": address["qualified_name"],
                     "line": int(call["line"]),
