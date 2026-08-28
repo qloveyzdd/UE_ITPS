@@ -127,7 +127,22 @@ class CxxFunctionSemanticsTests(unittest.TestCase):
             self.assertNotIn("FText->Format()", spellings)
             self.assertNotIn("FText->FromName()", spellings)
             self.assertIn("FOtherText->FromName()", spellings)
-            calls = {item["callee"] for item in match["syntax_flow"]["calls"]}
+            self.assertNotIn("syntax_flow", match)
+
+            completed, with_flow = run_cli(
+                "sourcetools/ue_inspect_cxx_function.py",
+                "--source",
+                source,
+                header,
+                "--function",
+                "ConvertNames",
+                "--include-syntax-flow",
+            )
+            self.assertEqual(completed.returncode, 0)
+            calls = {
+                item["callee"]
+                for item in with_flow["matches"][0]["syntax_flow"]["calls"]
+            }
             self.assertIn("FText::Format", calls)
             self.assertIn("FText::FromName", calls)
 
@@ -166,6 +181,7 @@ class CxxFunctionSemanticsTests(unittest.TestCase):
                 header,
                 "--function",
                 "BuildText",
+                "--include-syntax-flow",
             )
 
             self.assertEqual(completed.returncode, 0)

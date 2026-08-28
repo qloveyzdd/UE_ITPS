@@ -79,7 +79,8 @@
           }
         },
         "syntax_flow": {
-          "type": "object"
+          "type": "object",
+          "description": "Present only when --include-syntax-flow is requested"
         }
       },
       "additionalProperties": false

@@ -92,6 +92,8 @@ def inspect_source_function(
     source_files: Path | Sequence[Path],
     function_name: str,
     engine_override: Path | None = None,
+    *,
+    include_syntax_flow: bool = False,
 ) -> dict[str, Any]:
     loaded = load_source_context(source_files, engine_override)
     parts = _callable_parts(loaded)
@@ -110,17 +112,17 @@ def inspect_source_function(
                 "line": int(symbol["line"]),
             }
             external_symbols.append(public)
-        matches.append(
-            {
-                "function_id": _function_id(item),
-                "external_symbols": external_symbols,
-                "delegate_operations": _delegate_operations(item, references),
-                "syntax_flow": {
-                    "calls": references.get("calls", []),
-                    "controls": references.get("controls", []),
-                },
+        match = {
+            "function_id": _function_id(item),
+            "external_symbols": external_symbols,
+            "delegate_operations": _delegate_operations(item, references),
+        }
+        if include_syntax_flow:
+            match["syntax_flow"] = {
+                "calls": references.get("calls", []),
+                "controls": references.get("controls", []),
             }
-        )
+        matches.append(match)
     matches.sort(key=lambda match: match["function_id"])
     additional = []
     if not matches:

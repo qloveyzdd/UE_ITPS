@@ -33,6 +33,11 @@ def main() -> int:
         metavar="NAME",
         help="函数名称；返回所有同名定义 / Function name; return all matching definitions",
     )
+    parser.add_argument(
+        "--include-syntax-flow",
+        action="store_true",
+        help="包含调用与控制语法流 / Include call and control syntax flow",
+    )
     parser.add_argument("--engine-root", metavar="PATH", help="显式 Engine 根目录覆盖 / Explicit Engine root override")
     args = parser.parse_args()
     try:
@@ -40,6 +45,7 @@ def main() -> int:
             [Path(value) for value in args.source],
             args.function,
             engine_override=Path(args.engine_root) if args.engine_root else None,
+            include_syntax_flow=args.include_syntax_flow,
         )
     except (OSError, ValueError) as exc:
         result = cli_error_document(
