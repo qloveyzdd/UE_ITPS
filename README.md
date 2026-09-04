@@ -4,7 +4,7 @@ UE ITPS 是一组面向 Unreal Engine 工程的确定性、只读检查工具。
 
 ## 当前组成
 
-- `sourcetools/`：17 个静态检查 CLI，负责工程、Engine、Module、Target、Plugin、C++ 源文件和局部关系分析。
+- `sourcetools/`：根目录保留 13 个静态检查 CLI，负责工程、Engine、Module、Target、Plugin 和 C++ 源文件分析；`lyra/` 集中存放 Lyra 专用证据工具。
 - `schemas/`：核心 CLI 的 JSON Schema，采用 Draft 2020-12。
 - `edittools/`：16 个 Editor/离线检查 CLI；连接 Editor 的命令只读取已连接节点的现场状态。
 - `information_pool/`：把工程、模块、Target、源码和 Include 关系写入 SQLite 文件图谱。

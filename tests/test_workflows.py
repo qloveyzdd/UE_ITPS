@@ -39,14 +39,6 @@ class ProjectWorkflowTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0)
             self.assertEqual(targets["items"][0]["name"], "SampleTarget")
 
-            completed, dependencies = run_cli(
-                "sourcetools/ue_analyze_cxx_dependencies.py",
-                "--project",
-                fixture.project,
-            )
-            self.assertEqual(completed.returncode, 0)
-            self.assertEqual(dependencies["validation"]["status"], "ok")
-
     def test_selected_build_and_source_workflow(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = create_fixture(Path(directory))
@@ -77,17 +69,6 @@ class ProjectWorkflowTests(unittest.TestCase):
             )
             self.assertEqual(completed.returncode, 0)
             self.assertIn("AWorker|BeginPlay", function["matches"][0]["function_id"])
-
-            completed, flow = run_cli(
-                "sourcetools/ue_trace_cxx_function_flow.py",
-                "--source",
-                fixture.source,
-                "--function",
-                "BeginPlay",
-            )
-            self.assertEqual(completed.returncode, 0)
-            self.assertEqual(flow["matches"][0]["name"], "AWorker::BeginPlay")
-            self.assertEqual(flow["matches"][0]["calls"][0]["callee"], "Helper")
 
 
 if __name__ == "__main__":

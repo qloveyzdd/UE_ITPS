@@ -1,8 +1,0 @@
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "urn:ue-itps:schema:ue_trace_cxx_function_flow", "title": "ue_trace_cxx_function_flow result",
-  "oneOf": [{"$ref": "#/$defs/success"}, {"allOf": [{"$ref": "urn:ue-itps:schema:common#/$defs/errorDocument"}, {"properties": {"schema_version": {"const": "ue_trace_cxx_function_flow"}}}]}],
-  "$defs": {"success": {"type": "object", "required": ["schema_version", "source", "selection", "match_count", "matches", "validation", "limits"], "properties": {
-    "schema_version": {"const": "ue_trace_cxx_function_flow"}, "source": {"type": "string"}, "selection": {"type": "object"}, "match_count": {"type": "integer", "minimum": 0}, "matches": {"type": "array"},
-    "validation": {"$ref": "urn:ue-itps:schema:common#/$defs/validation"}, "limits": {"$ref": "urn:ue-itps:schema:common#/$defs/limits"}
-  }, "additionalProperties": false}}
-}

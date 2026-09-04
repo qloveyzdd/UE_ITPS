@@ -106,34 +106,6 @@ _TOOLS: tuple[dict[str, Any], ...] = (
         "inputs": [],
         "capabilities": ["tool_discovery"],
     },
-    {
-        "name": "ue_analyze_cxx_dependencies",
-        "category": "graph",
-        "entrypoint": "sourcetools/ue_analyze_cxx_dependencies.py",
-        "inputs": ["project"],
-        "capabilities": ["class_dependencies", "cycle_detection"],
-    },
-    {
-        "name": "ue_query_cxx_hierarchy",
-        "category": "graph",
-        "entrypoint": "sourcetools/ue_query_cxx_hierarchy.py",
-        "inputs": ["project", "class"],
-        "capabilities": ["inheritance", "descendants"],
-    },
-    {
-        "name": "ue_analyze_cxx_impact",
-        "category": "graph",
-        "entrypoint": "sourcetools/ue_analyze_cxx_impact.py",
-        "inputs": ["project", "symbol"],
-        "capabilities": ["reverse_dependencies", "impact"],
-    },
-    {
-        "name": "ue_trace_cxx_function_flow",
-        "category": "graph",
-        "entrypoint": "sourcetools/ue_trace_cxx_function_flow.py",
-        "inputs": ["source", "function"],
-        "capabilities": ["local_flow", "direct_calls"],
-    },
 )
 
 

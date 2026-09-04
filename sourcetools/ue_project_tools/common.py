@@ -26,18 +26,10 @@ _TREE_SITTER_CPP_TOOLS = {
     "ue_inspect_cxx_function",
     "ue_list_cxx_includes",
     "ue_list_cxx_types",
-    "ue_query_cxx_hierarchy",
-    "ue_analyze_cxx_dependencies",
-    "ue_analyze_cxx_impact",
-    "ue_trace_cxx_function_flow",
     "ue_inspect_module_entry",
 }
 _GRAPH_TOOLS = {
     "ue_read_plugin_descriptor",
-    "ue_query_cxx_hierarchy",
-    "ue_analyze_cxx_dependencies",
-    "ue_analyze_cxx_impact",
-    "ue_trace_cxx_function_flow",
 }
 
 

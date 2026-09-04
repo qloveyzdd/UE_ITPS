@@ -1,8 +1,0 @@
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "urn:ue-itps:schema:ue_analyze_cxx_impact", "title": "ue_analyze_cxx_impact result",
-  "oneOf": [{"$ref": "#/$defs/success"}, {"allOf": [{"$ref": "urn:ue-itps:schema:common#/$defs/errorDocument"}, {"properties": {"schema_version": {"const": "ue_analyze_cxx_impact"}}}]}],
-  "$defs": {"success": {"type": "object", "required": ["schema_version", "project_root", "selection", "source_file_count", "impacted", "validation", "limits"], "properties": {
-    "schema_version": {"const": "ue_analyze_cxx_impact"}, "project_root": {"type": "string"}, "selection": {"type": "object"}, "source_file_count": {"type": "integer", "minimum": 0}, "impacted": {"type": "array"},
-    "validation": {"$ref": "urn:ue-itps:schema:common#/$defs/validation"}, "limits": {"$ref": "urn:ue-itps:schema:common#/$defs/limits"}
-  }, "additionalProperties": false}}
-}

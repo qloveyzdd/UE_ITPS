@@ -22,10 +22,6 @@ python sourcetools/ue_list_tools.py
 | 源码 | `ue_list_cxx_types` | 提取显式文件创建的类型、变量和函数定义 |
 | 源码 | `ue_inspect_cxx_function` | 提取指定函数的外部符号候选 |
 | Module | `ue_inspect_module_entry` | 定位支持的模块注册宏及可唯一匹配的头文件 |
-| 图 | `ue_analyze_cxx_dependencies` | 构建工程内类型依赖并检测循环 |
-| 图 | `ue_query_cxx_hierarchy` | 查询一个类型的继承邻域 |
-| 图 | `ue_analyze_cxx_impact` | 反向追踪一个符号的静态影响范围 |
-| 图 | `ue_trace_cxx_function_flow` | 提取指定函数的局部控制流和直接调用 |
 | 工具池 | `ue_list_tools` | 输出全部核心工具的入口、输入和能力 |
 
 CLI 文件位于 `sourcetools/`，调用时使用文件名并加 `.py`。
