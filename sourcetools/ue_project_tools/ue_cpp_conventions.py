@@ -22,6 +22,13 @@ UE_IGNORED_EXTERNAL_MEMBER_CALLS = frozenset(
     }
 )
 
+UE_GAMEPLAY_TAG_SYMBOL_MACROS = {
+    "UE_DECLARE_GAMEPLAY_TAG_EXTERN": ("declaration", "external"),
+    "UE_DEFINE_GAMEPLAY_TAG": ("definition", "external"),
+    "UE_DEFINE_GAMEPLAY_TAG_COMMENT": ("definition", "external"),
+    "UE_DEFINE_GAMEPLAY_TAG_STATIC": ("definition", "internal"),
+}
+
 UE_DELEGATE_PUBLISH_APIS = frozenset(
     {
         "Broadcast",
@@ -124,6 +131,24 @@ def is_ignored_external_macro(name: str) -> bool:
 
 def is_ignored_external_member_call(owner_type: str, method_name: str) -> bool:
     return (owner_type, method_name) in UE_IGNORED_EXTERNAL_MEMBER_CALLS
+
+
+def is_ue_gameplay_tag_symbol_macro(name: str) -> bool:
+    return name in UE_GAMEPLAY_TAG_SYMBOL_MACROS
+
+
+def ue_gameplay_tag_symbol(
+    macro_name: str, arguments: Sequence[str]
+) -> tuple[str, str, str] | None:
+    rule = UE_GAMEPLAY_TAG_SYMBOL_MACROS.get(macro_name)
+    if rule is None or not arguments:
+        return None
+    symbol = arguments[0].strip()
+    parts = symbol.split("::")
+    if not parts or any(not part.isidentifier() for part in parts):
+        return None
+    role, linkage = rule
+    return symbol, role, linkage
 
 
 def ue_delegate_declared_type(

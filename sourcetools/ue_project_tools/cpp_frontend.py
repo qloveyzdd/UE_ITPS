@@ -13,10 +13,12 @@ from .common import normalized
 from .ue_cpp_conventions import (
     is_ignored_external_macro,
     is_ignored_external_member_call,
+    is_ue_gameplay_tag_symbol_macro,
     is_ue_function_like_macro,
     is_ue_same_type_static_accessor,
     ue_delegate_declared_type,
     ue_delegate_operation,
+    ue_gameplay_tag_symbol,
 )
 
 
@@ -227,7 +229,7 @@ def _callee_fact(node: Node, source: bytes) -> dict[str, Any]:
 def _macros(root: Node, source: bytes, file_key: str) -> list[dict[str, Any]]:
     results = []
     for node in _walk(root):
-        if node.type != "ue_macro_invocation":
+        if node.type not in {"ue_gameplay_tag_macro", "ue_macro_invocation"}:
             continue
         name_node = node.child_by_field_name("head")
         arguments_node = node.child_by_field_name("arguments")
@@ -443,10 +445,12 @@ def _leading_macro_expressions(
         if current.type == "comment":
             current = current.prev_named_sibling
             continue
-        if current.type != "ue_macro_invocation":
+        if current.type not in {"ue_gameplay_tag_macro", "ue_macro_invocation"}:
             break
         macro = macros_by_start.get(int(current.start_byte))
         if macro is not None:
+            if is_ue_gameplay_tag_symbol_macro(str(macro["name"])):
+                break
             results.append(str(macro["expression"]))
         current = current.prev_named_sibling
     results.reverse()
@@ -774,6 +778,56 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
     variables: list[dict[str, Any]] = []
     references: dict[str, dict[str, Any]] = {}
 
+    def append_gameplay_tag_macro(
+        macro: dict[str, Any],
+        namespaces: tuple[str, ...],
+        owners: tuple[str, ...],
+    ) -> None:
+        if owners:
+            return
+        symbol = ue_gameplay_tag_symbol(
+            str(macro["name"]),
+            [
+                str(argument.get("expression") or "")
+                for argument in macro.get("arguments", [])
+            ],
+        )
+        if symbol is None:
+            return
+        symbol_name, role, linkage = symbol
+        qualified = (
+            symbol_name
+            if "::" in symbol_name
+            else "::".join((*namespaces, symbol_name))
+        )
+        variables.append(
+            {
+                "usr": f"variable|{qualified}",
+                "name": symbol_name.rsplit("::", 1)[-1],
+                "qualified_name": qualified,
+                "type_expression": "FNativeGameplayTag",
+                "type": {
+                    "expression": "FNativeGameplayTag",
+                    "name": "FNativeGameplayTag",
+                    "qualified_name": "FNativeGameplayTag",
+                    "references": ["FNativeGameplayTag"],
+                },
+                "role": role,
+                "linkage": linkage,
+                "storage_classes": (
+                    ["extern"]
+                    if role == "declaration"
+                    else (["static"] if linkage == "internal" else [])
+                ),
+                "macros": [],
+                "file": file_key,
+                "line": int(macro["line"]),
+                "end_line": int(macro["end_line"]),
+                "start_offset": int(macro["start_offset"]),
+                "end_offset": int(macro["end_offset"]),
+            }
+        )
+
     def visit(node: Node, namespaces: tuple[str, ...], owners: tuple[str, ...]) -> None:
         if node.type == "namespace_definition":
             name_node = node.child_by_field_name("name")
@@ -781,6 +835,11 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
             body = node.child_by_field_name("body")
             if body is not None:
                 visit(body, (*namespaces, name) if name else namespaces, owners)
+            return
+        if node.type in {"ue_gameplay_tag_macro", "ue_macro_invocation"}:
+            macro = macros_by_start.get(int(node.start_byte))
+            if macro is not None:
+                append_gameplay_tag_macro(macro, namespaces, owners)
             return
         if node.type in _TYPE_NODES:
             name_node = node.child_by_field_name("name")

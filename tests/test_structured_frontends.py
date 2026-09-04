@@ -77,6 +77,65 @@ class ASample
         sample = next(item for item in model["types"] if item["name"] == "ASample")
         self.assertEqual(sample["macros"], ["UCLASS()"])
 
+    def test_gameplay_tag_macros_create_variables_without_leaking_adjacency(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            header = root / "SampleTags.h"
+            source = root / "SampleTags.cpp"
+            header.write_text(
+                """
+namespace SampleTags
+{
+    SAMPLE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SharedTag);
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(HeaderOnlyTag);
+}
+""",
+                encoding="utf-8",
+            )
+            source.write_text(
+                """
+namespace SampleTags
+{
+    UE_DEFINE_GAMEPLAY_TAG(SharedTag, "Sample.Shared");
+    UE_DEFINE_GAMEPLAY_TAG_COMMENT(CommentedTag, "Sample.Commented", "Comment");
+    UE_DEFINE_GAMEPLAY_TAG_STATIC(LocalTag, "Sample.Local");
+
+    int32 OrdinaryGlobal = 0;
+    void TouchTags() {}
+}
+""",
+                encoding="utf-8",
+            )
+            model = load_cpp_unit(source, [source, header], root)
+
+        variables = {
+            (item["qualified_name"], item["role"]): item
+            for item in model["variables"]
+        }
+        declaration = variables[("SampleTags::SharedTag", "declaration")]
+        self.assertEqual(declaration["type_expression"], "FNativeGameplayTag")
+        self.assertEqual(declaration["linkage"], "external")
+        self.assertIn(
+            ("SampleTags::HeaderOnlyTag", "declaration"), variables
+        )
+
+        shared = variables[("SampleTags::SharedTag", "definition")]
+        commented = variables[("SampleTags::CommentedTag", "definition")]
+        local = variables[("SampleTags::LocalTag", "definition")]
+        self.assertEqual(shared["linkage"], "external")
+        self.assertEqual(commented["linkage"], "external")
+        self.assertEqual(local["linkage"], "internal")
+        self.assertEqual(local["type_expression"], "FNativeGameplayTag")
+
+        ordinary = variables[("SampleTags::OrdinaryGlobal", "definition")]
+        self.assertEqual(ordinary["macros"], [])
+        touch = next(
+            item
+            for item in model["functions"]
+            if item["qualified_name"] == "SampleTags::TouchTags"
+        )
+        self.assertEqual(touch["macros"], [])
+
     def test_dependency_graph_consumes_structured_nested_type_references(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

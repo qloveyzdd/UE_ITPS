@@ -206,5 +206,6 @@ def list_source_types(
             "Referenced types, variables, and functions are not emitted as entities created by the selected files.",
             "Definition identity, members, and linkage are syntax projections rather than compiler semantic facts.",
             "UE reflection macros are read from local source text and attached by source adjacency.",
+            "Supported native GameplayTag definition macros are projected as FNativeGameplayTag globals; extern declaration macros are excluded.",
         ],
     )

@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from tests.support import create_fixture, run_cli
+from tests.support import create_fixture, run_cli, write_text
 
 
 class ProjectWorkflowTests(unittest.TestCase):
@@ -69,6 +69,65 @@ class ProjectWorkflowTests(unittest.TestCase):
             )
             self.assertEqual(completed.returncode, 0)
             self.assertIn("AWorker|BeginPlay", function["matches"][0]["function_id"])
+
+    def test_gameplay_tag_macros_are_reported_as_definitions_only(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            header = write_text(
+                fixture.header,
+                """
+                #pragma once
+                namespace SampleTags
+                {
+                    SAMPLE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SharedTag);
+                    UE_DECLARE_GAMEPLAY_TAG_EXTERN(HeaderOnlyTag);
+                }
+                """,
+            )
+            source = write_text(
+                fixture.source,
+                """
+                #include "Worker.h"
+                namespace SampleTags
+                {
+                    UE_DEFINE_GAMEPLAY_TAG(SharedTag, "Sample.Shared");
+                    UE_DEFINE_GAMEPLAY_TAG_COMMENT(CommentedTag, "Sample.Commented", "Comment");
+                    UE_DEFINE_GAMEPLAY_TAG_STATIC(LocalTag, "Sample.Local");
+                    int32 OrdinaryGlobal = 0;
+                }
+                """,
+            )
+
+            completed, result = run_cli(
+                "sourcetools/ue_list_cxx_types.py",
+                "--source",
+                source,
+                header,
+            )
+
+            self.assertEqual(completed.returncode, 0)
+            globals_by_name = {
+                item["qualified_name"]: item for item in result["global_variables"]
+            }
+            self.assertEqual(
+                set(globals_by_name),
+                {
+                    "SampleTags::SharedTag",
+                    "SampleTags::CommentedTag",
+                    "SampleTags::LocalTag",
+                    "SampleTags::OrdinaryGlobal",
+                },
+            )
+            self.assertEqual(
+                globals_by_name["SampleTags::SharedTag"]["type_expression"],
+                "FNativeGameplayTag",
+            )
+            self.assertEqual(
+                globals_by_name["SampleTags::LocalTag"]["linkage"], "internal"
+            )
+            self.assertEqual(
+                globals_by_name["SampleTags::OrdinaryGlobal"]["macros"], []
+            )
 
 
 if __name__ == "__main__":
