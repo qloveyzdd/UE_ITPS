@@ -241,6 +241,7 @@ class CxxFunctionSemanticsTests(unittest.TestCase):
                 fixture.header,
                 """
                 #pragma once
+                #define PROJECT_MACRO(Value) Value
                 class AWorker
                 {
                 public:
@@ -257,6 +258,9 @@ class CxxFunctionSemanticsTests(unittest.TestCase):
                     LOCTEXT("Key", "Value");
                     NSLOCTEXT("Namespace", "Key", "Value");
                     INVTEXT("Value");
+                    UE_LOG(LogTemp, Log, TEXT("Message"));
+                    DOREPLIFETIME(AWorker, Value);
+                    PROJECT_MACRO(Value);
                     UNKNOWN_MACRO_STYLE();
                 }
                 """,
@@ -280,6 +284,10 @@ class CxxFunctionSemanticsTests(unittest.TestCase):
             self.assertNotIn("LOCTEXT()", symbols)
             self.assertEqual(symbols["NSLOCTEXT()"], "macro")
             self.assertEqual(symbols["INVTEXT()"], "macro")
+            self.assertEqual(symbols["TEXT()"], "macro")
+            self.assertEqual(symbols["UE_LOG()"], "macro")
+            self.assertEqual(symbols["DOREPLIFETIME()"], "macro")
+            self.assertEqual(symbols["PROJECT_MACRO()"], "macro")
             self.assertEqual(symbols["UNKNOWN_MACRO_STYLE()"], "unknown")
             calls = {
                 item["callee"]

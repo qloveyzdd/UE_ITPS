@@ -209,6 +209,7 @@
         "role",
         "scoped",
         "macros",
+        "enumerators",
         "evidence"
       ],
       "properties": {
@@ -235,6 +236,35 @@
         },
         "scoped": {
           "type": "boolean"
+        },
+        "macros": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "enumerators": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/enumeratorAnchor"
+          }
+        },
+        "evidence": {
+          "$ref": "#/$defs/unitEvidence"
+        }
+      },
+      "additionalProperties": false
+    },
+    "enumeratorAnchor": {
+      "type": "object",
+      "required": ["name", "value", "macros", "evidence"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "type": ["string", "null"]
         },
         "macros": {
           "type": "array",

@@ -132,11 +132,12 @@ def build_project_graph(
         for path in project_files
     ]
     for diagnostic in model["diagnostics"]:
-        if diagnostic["severity"] >= 3:
+        if diagnostic["severity"] >= 2:
+            severity = "error" if diagnostic["severity"] >= 3 else "warning"
             problems.append(
                 {
-                    "severity": "error",
-                    "code": "project-tree-sitter-cpp-syntax-error",
+                    "severity": severity,
+                    "code": f"project-tree-sitter-cpp-syntax-{severity}",
                     "path": Path(diagnostic["file"])
                     .resolve()
                     .relative_to(project_root)

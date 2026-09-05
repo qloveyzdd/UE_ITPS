@@ -5,9 +5,32 @@ from collections.abc import Collection, Sequence
 
 UE_FUNCTION_LIKE_MACROS = frozenset(
     {
+        "ABILITYLIST_SCOPE_LOCK",
+        "ASSERT_THAT",
+        "CSV_CATEGORY_INDEX",
+        "CSV_EVENT",
+        "CSV_METADATA",
+        "DISABLE_REPLICATED_PROPERTY",
+        "DOREPLIFETIME",
+        "DOREPLIFETIME_CONDITION",
+        "DOREPLIFETIME_CONDITION_NOTIFY",
+        "DOREPLIFETIME_WITH_PARAMS_FAST",
+        "GAMEPLAYATTRIBUTE_REPNOTIFY",
+        "GET_FUNCTION_NAME_CHECKED",
+        "GET_MEMBER_NAME_CHECKED",
         "INVTEXT",
         "LOCTEXT",
+        "MARK_PROPERTY_DIRTY_FROM_NAME",
         "NSLOCTEXT",
+        "QUICK_SCOPE_CYCLE_COUNTER",
+        "RETURN_QUICK_DECLARE_CYCLE_STAT",
+        "SCOPED_BOOT_TIMING",
+        "SCOPE_LOG_TIME_IN_SECONDS",
+        "TEXT",
+        "TRACE_CPUPROFILER_EVENT_SCOPE",
+        "UE_ARRAY_COUNT",
+        "UE_CLOG",
+        "UE_LOG",
     }
 )
 
@@ -21,6 +44,12 @@ UE_IGNORED_EXTERNAL_MEMBER_CALLS = frozenset(
         ("FText", "FromName"),
     }
 )
+
+UE_DECLARATION_ANNOTATION_MACROS = {
+    "type": frozenset({"UCLASS", "USTRUCT", "UENUM", "UINTERFACE"}),
+    "field": frozenset({"UPROPERTY"}),
+    "function": frozenset({"UFUNCTION"}),
+}
 
 UE_GAMEPLAY_TAG_SYMBOL_MACROS = {
     "UE_DECLARE_GAMEPLAY_TAG_EXTERN": ("declaration", "external"),
@@ -131,6 +160,10 @@ def is_ignored_external_macro(name: str) -> bool:
 
 def is_ignored_external_member_call(owner_type: str, method_name: str) -> bool:
     return (owner_type, method_name) in UE_IGNORED_EXTERNAL_MEMBER_CALLS
+
+
+def is_ue_declaration_annotation(name: str, target: str) -> bool:
+    return name in UE_DECLARATION_ANNOTATION_MACROS.get(target, ())
 
 
 def is_ue_gameplay_tag_symbol_macro(name: str) -> bool:

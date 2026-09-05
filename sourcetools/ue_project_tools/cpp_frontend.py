@@ -13,6 +13,7 @@ from .common import normalized
 from .ue_cpp_conventions import (
     is_ignored_external_macro,
     is_ignored_external_member_call,
+    is_ue_declaration_annotation,
     is_ue_gameplay_tag_symbol_macro,
     is_ue_function_like_macro,
     is_ue_same_type_static_accessor,
@@ -128,6 +129,15 @@ def _walk(node: Node) -> Iterator[Node]:
         current = stack.pop()
         yield current
         stack.extend(reversed(current.named_children))
+
+
+def _walk_all(node: Node) -> Iterator[Node]:
+    """Walk named and anonymous syntax nodes, including missing tokens."""
+    stack = [node]
+    while stack:
+        current = stack.pop()
+        yield current
+        stack.extend(reversed(current.children))
 
 
 def _descendant(node: Node | None, kinds: set[str]) -> Node | None:
@@ -261,6 +271,17 @@ def _macros(root: Node, source: bytes, file_key: str) -> list[dict[str, Any]]:
                 "end_offset": end,
             }
         )
+    return results
+
+
+def _function_like_macro_definitions(root: Node, source: bytes) -> set[str]:
+    results: set[str] = set()
+    for node in _walk(root):
+        if node.type != "preproc_function_def":
+            continue
+        name = node.child_by_field_name("name")
+        if name is not None:
+            results.add(_text(name, source))
     return results
 
 
@@ -436,8 +457,51 @@ def _is_scoped_enum(node: Node, source: bytes) -> bool:
     return False
 
 
+def _enumerator_facts(
+    node: Node,
+    source: bytes,
+    file_key: str,
+    macros_by_start: dict[int, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    body = node.child_by_field_name("body")
+    if body is None:
+        return []
+    results = []
+    for enumerator in _walk(body):
+        if enumerator.type != "enumerator":
+            continue
+        name_node = enumerator.child_by_field_name("name")
+        if name_node is None:
+            continue
+        value_node = enumerator.child_by_field_name("value")
+        macros = []
+        for child in enumerator.named_children:
+            if child.type != "ue_macro_invocation":
+                continue
+            macro = macros_by_start.get(int(child.start_byte))
+            if macro is not None:
+                macros.append(str(macro["expression"]))
+        results.append(
+            {
+                "name": _compact(_text(name_node, source)),
+                "value": (
+                    _compact(_text(value_node, source))
+                    if value_node is not None
+                    else None
+                ),
+                "macros": macros,
+                "file": file_key,
+                "line": _line(enumerator),
+                "end_line": _end_line(enumerator),
+            }
+        )
+    return results
+
+
 def _leading_macro_expressions(
-    node: Node, macros_by_start: dict[int, dict[str, Any]]
+    node: Node,
+    macros_by_start: dict[int, dict[str, Any]],
+    target: str,
 ) -> list[str]:
     results: list[str] = []
     current = node.prev_named_sibling
@@ -449,7 +513,7 @@ def _leading_macro_expressions(
             break
         macro = macros_by_start.get(int(current.start_byte))
         if macro is not None:
-            if is_ue_gameplay_tag_symbol_macro(str(macro["name"])):
+            if not is_ue_declaration_annotation(str(macro["name"]), target):
                 break
             results.append(str(macro["expression"]))
         current = current.prev_named_sibling
@@ -851,56 +915,73 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
             qualified = "::".join((*namespaces, *owners, name))
             fields = []
             methods = []
+
+            def append_member_declaration(
+                child: Node, *, append_function: bool
+            ) -> None:
+                function_declarator = _function_declarator(child)
+                if function_declarator is not None:
+                    function = _function_fact(
+                        child,
+                        function_declarator,
+                        source,
+                        file_key,
+                        namespaces,
+                        (*owners, name),
+                        "declaration",
+                    )
+                    if function is not None:
+                        function["macros"] = _leading_macro_expressions(
+                            child, macros_by_start, "function"
+                        )
+                        if append_function:
+                            functions.append(function)
+                        methods.append(
+                            {
+                                "name": function["name"],
+                                "signature": function["signature"],
+                                "role": "declaration",
+                                "macros": function["macros"],
+                                "line": _line(child),
+                                "end_line": _end_line(child),
+                            }
+                        )
+                    return
+                type_expression = _type_expression(child, source)
+                type_fact = _type_fact(child.child_by_field_name("type"), source)
+                for declarator in _declarators(child):
+                    field_name, _ = _name_from_declarator(declarator, source)
+                    if field_name:
+                        fields.append(
+                            {
+                                "name": field_name,
+                                "type_expression": type_expression,
+                                "type": type_fact,
+                                "macros": _leading_macro_expressions(
+                                    child, macros_by_start, "field"
+                                ),
+                                "line": _line(child),
+                                "end_line": _end_line(child),
+                                "start_offset": int(child.start_byte),
+                                "end_offset": int(child.end_byte),
+                            }
+                        )
+
+            def append_preprocessor_members(container: Node) -> None:
+                for child in container.named_children:
+                    if child.type == "field_declaration":
+                        # The normal recursive visitor records these functions
+                        # in the file model. Add only the owning type anchor here.
+                        append_member_declaration(child, append_function=False)
+                    elif child.type in _CONTAINER_NODES:
+                        append_preprocessor_members(child)
+
             if body is not None and kind != "enum":
                 for child in body.named_children:
-                    if child.type != "field_declaration":
-                        continue
-                    function_declarator = _function_declarator(child)
-                    if function_declarator is not None:
-                        function = _function_fact(
-                            child,
-                            function_declarator,
-                            source,
-                            file_key,
-                            namespaces,
-                            (*owners, name),
-                            "declaration",
-                        )
-                        if function is not None:
-                            function["macros"] = _leading_macro_expressions(
-                                child, macros_by_start
-                            )
-                            functions.append(function)
-                            methods.append(
-                                {
-                                    "name": function["name"],
-                                    "signature": function["signature"],
-                                    "role": "declaration",
-                                    "macros": function["macros"],
-                                    "line": _line(child),
-                                    "end_line": _end_line(child),
-                                }
-                            )
-                        continue
-                    type_expression = _type_expression(child, source)
-                    type_fact = _type_fact(child.child_by_field_name("type"), source)
-                    for declarator in _declarators(child):
-                        field_name, _ = _name_from_declarator(declarator, source)
-                        if field_name:
-                            fields.append(
-                                {
-                                    "name": field_name,
-                                    "type_expression": type_expression,
-                                    "type": type_fact,
-                                    "macros": _leading_macro_expressions(
-                                        child, macros_by_start
-                                    ),
-                                    "line": _line(child),
-                                    "end_line": _end_line(child),
-                                    "start_offset": int(child.start_byte),
-                                    "end_offset": int(child.end_byte),
-                                }
-                            )
+                    if child.type == "field_declaration":
+                        append_member_declaration(child, append_function=True)
+                    elif child.type in _CONTAINER_NODES:
+                        append_preprocessor_members(child)
             types.append(
                 {
                     "usr": f"{kind}|{qualified}",
@@ -914,8 +995,17 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                     "base_type_facts": _base_type_facts(node, source),
                     "fields": fields,
                     "methods": methods,
+                    "enumerators": (
+                        _enumerator_facts(
+                            node, source, file_key, macros_by_start
+                        )
+                        if kind == "enum"
+                        else []
+                    ),
                     "scoped": kind == "enum" and _is_scoped_enum(node, source),
-                    "macros": _leading_macro_expressions(node, macros_by_start),
+                    "macros": _leading_macro_expressions(
+                        node, macros_by_start, "type"
+                    ),
                     "file": file_key,
                     "line": _line(node),
                     "end_line": _end_line(node),
@@ -945,7 +1035,9 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                 node, declarator, source, file_key, namespaces, owners, "definition"
             )
             if function is not None:
-                function["macros"] = _leading_macro_expressions(node, macros_by_start)
+                function["macros"] = _leading_macro_expressions(
+                    node, macros_by_start, "function"
+                )
                 functions.append(function)
                 references[function["usr"]] = _function_references(
                     node, function, source
@@ -972,7 +1064,7 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                 )
                 if function is not None:
                     function["macros"] = _leading_macro_expressions(
-                        node, macros_by_start
+                        node, macros_by_start, "function"
                     )
                     functions.append(function)
                 return
@@ -999,7 +1091,9 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                             if "static" in storage_classes
                             else "external",
                             "storage_classes": storage_classes,
-                            "macros": _leading_macro_expressions(node, macros_by_start),
+                            "macros": _leading_macro_expressions(
+                                node, macros_by_start, "field"
+                            ),
                             "file": file_key,
                             "line": _line(node),
                             "end_line": _end_line(node),
@@ -1014,12 +1108,33 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
 
     visit(tree.root_node, (), ())
     diagnostics = []
-    for node in _walk(tree.root_node):
-        if node.type == "ERROR" or node.is_missing:
+    syntax_nodes = list(_walk_all(tree.root_node))
+    for node in syntax_nodes:
+        if node.is_error or node.is_missing:
+            detail = (
+                f"missing syntax {node.type!r}"
+                if node.is_missing
+                else "an incomplete syntax region"
+            )
             diagnostics.append(
                 {
                     "severity": 2,
-                    "message": f"Tree-sitter reported {'missing syntax' if node.is_missing else 'an incomplete syntax region'}",
+                    "message": f"Tree-sitter reported {detail}",
+                    "file": file_key,
+                    "line": _line(node),
+                }
+            )
+    for node in syntax_nodes:
+        if (
+            node.has_error
+            and not node.is_error
+            and not node.is_missing
+            and not any(child.has_error for child in node.children)
+        ):
+            diagnostics.append(
+                {
+                    "severity": 2,
+                    "message": "Tree-sitter reported a hidden syntax recovery",
                     "file": file_key,
                     "line": _line(node),
                 }
@@ -1032,6 +1147,9 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
         "references": references,
         "includes": _includes(tree.root_node, source, file_key),
         "macros": macros,
+        "function_like_macro_definitions": _function_like_macro_definitions(
+            tree.root_node, source
+        ),
         "diagnostics": diagnostics,
     }
 
@@ -1043,7 +1161,9 @@ def _deduplicate(
     return list(unique.values())
 
 
-def _finalize_references(model: dict[str, Any]) -> None:
+def _finalize_references(
+    model: dict[str, Any], function_like_macro_definitions: set[str]
+) -> None:
     known_delegate_types = {
         declared_type
         for macro in model["macros"]
@@ -1140,7 +1260,10 @@ def _finalize_references(model: dict[str, Any]) -> None:
             free = free_functions.get(
                 (str(function.get("namespace") or ""), target_name)
             )
-            if len(segments) == 1 and is_ue_function_like_macro(target_name):
+            if len(segments) == 1 and (
+                is_ue_function_like_macro(target_name)
+                or target_name in function_like_macro_definitions
+            ):
                 if not is_ignored_external_macro(target_name):
                     symbols.append(
                         {
@@ -1274,9 +1397,14 @@ def load_cpp_unit(
     )
     model["macros"].sort(key=lambda item: (item["file"], item["line"], item["name"]))
     model["diagnostic_error_count"] = sum(
-        int(item["severity"]) >= 3 for item in model["diagnostics"]
+        int(item["severity"]) >= 2 for item in model["diagnostics"]
     )
-    _finalize_references(model)
+    function_like_macro_definitions = {
+        name
+        for result in parsed
+        for name in result["function_like_macro_definitions"]
+    }
+    _finalize_references(model, function_like_macro_definitions)
     return model
 
 

@@ -15,6 +15,8 @@ UE ITPS 是一组面向 Unreal Engine 工程的确定性、只读检查工具。
 
 源码语法统一由 Tree-sitter 前端处理：C++/UE 宏通过 `tree-sitter-ue-cpp` 和 `cpp_frontend.py` 生成结构化事实，C# 通过 `tree-sitter-c-sharp` 和 `syntax_tree.py` 生成结构化事实。下游工具只负责名称解析和 UE 领域语义，不再用正则或字符串切割恢复 C++/C# 语法；INI、对象路径等独立数据格式仍由各自解析器处理。
 
+Lyra 全量 Tree-sitter 回归基线覆盖 `Source` 目录内 707 个 `.h/.cpp` 文件，要求原始 AST 无语法恢复，校验 Slate 参数声明与自动化测试声明的 UE 专用节点，并固定类型、函数、字段、枚举项、Include 与 UE 宏等关键事实计数。可运行 `python -m pytest -q tests/test_lyra_tree_sitter_baseline.py --import-mode=importlib` 单独验证。
+
 ## 安装
 
 需要 Python 3.10 或更高版本：

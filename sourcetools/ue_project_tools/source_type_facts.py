@@ -102,6 +102,15 @@ def list_source_types(
             "role": item["role"],
             "scoped": item["scoped"],
             "macros": list(item.get("macros", [])),
+            "enumerators": [
+                {
+                    "name": enumerator["name"],
+                    "value": enumerator["value"],
+                    "macros": list(enumerator.get("macros", [])),
+                    "evidence": _evidence(enumerator),
+                }
+                for enumerator in item.get("enumerators", [])
+            ],
             "evidence": _evidence(item),
         }
         for item in types
