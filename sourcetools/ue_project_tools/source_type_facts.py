@@ -12,8 +12,8 @@ def _unit(path: str) -> str:
 
 
 def _evidence(item: dict[str, Any]) -> dict[str, Any]:
-    result = {"unit": _unit(str(item["file"])), "line": int(item["line"])}
-    if item.get("end_line") and int(item["end_line"]) != int(item["line"]):
+    result = {"unit": _unit(str(item["file"])), "line": int(item.get("annotation_line", item["line"]))}
+    if item.get("end_line") and int(item["end_line"]) != result["line"]:
         result["end_line"] = int(item["end_line"])
     return result
 

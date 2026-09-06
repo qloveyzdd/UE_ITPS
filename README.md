@@ -55,7 +55,7 @@ python sourcetools/ue_inspect_cxx_function.py --source D:/Projects/MyGame/Source
 
 `ue_list_cxx_types.py` 会把 Engine 5.8 的原生 GameplayTag 声明/定义宏投影为 `FNativeGameplayTag` 变量事实；extern 声明不进入最终定义列表，static 定义保留内部 linkage。
 
-`ue_list_cxx_types.py` 只输出所给文件中类、结构体（含 union）、枚举、自由函数、全局变量及 `#define` 宏定义的基础清单。保留名称、限定名、所属作用域、位置、函数签名、变量类型和附带的 UE 宏；不展开继承、成员、枚举项或接口推断。独立宏仅返回名称、参数及位置，`parameters: null` 表示对象宏，`[]` 表示无参数函数宏，不输出宏体。前向声明、extern 声明和函数原型仍不进入清单。
+`ue_list_cxx_types.py` 只输出所给文件中类、结构体（含 union）、枚举、自由函数、全局变量及 `#define` 宏定义的基础清单。保留名称、限定名、所属作用域、位置、函数签名、变量类型和附带的 UE 宏；不展开继承、成员、枚举项或接口推断。类型的 `evidence.line` 从附带的 `UCLASS`、`USTRUCT`、`UENUM` 或 `UINTERFACE` 宏起始行计算，`end_line` 仍为类型结束行；无附带宏时从类型声明行开始。独立宏仅返回名称、参数及位置，`parameters: null` 表示对象宏，`[]` 表示无参数函数宏，不输出宏体。前向声明、extern 声明和函数原型仍不进入清单。
 
 `ue_inspect_cxx_type.py --type <qualified_name>` 精确选择类或结构体，返回 `matches`，包含继承、直接成员 `member_anchors`、成员函数定义 `member_functions` 和接口候选原因。嵌套类型须单独选择；类外实现只来自显式传入的文件，找不到类型返回退出码 1。成员覆盖类内定义、构造函数、模板和条件编译中的成员；类外静态成员变量定义仍在基础清单保留完整限定名。旧清单的 `member_anchors`、`base_types` 和顶层 `member_functions`、`interface_candidates` 已迁往类型详情，`enumerators` 及空的 `unresolved_declarations` 已移除。
 

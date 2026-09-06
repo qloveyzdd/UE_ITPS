@@ -530,12 +530,12 @@ def _enumerator_facts(
     return results
 
 
-def _leading_macro_expressions(
+def _leading_macros(
     node: Node,
     macros_by_start: dict[int, dict[str, Any]],
     target: str,
-) -> list[str]:
-    results: list[str] = []
+) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
     current = node.prev_named_sibling
     while current is not None:
         if current.type == "comment":
@@ -547,10 +547,18 @@ def _leading_macro_expressions(
         if macro is not None:
             if not is_ue_declaration_annotation(str(macro["name"]), target):
                 break
-            results.append(str(macro["expression"]))
+            results.append(macro)
         current = current.prev_named_sibling
     results.reverse()
     return results
+
+
+def _leading_macro_expressions(
+    node: Node,
+    macros_by_start: dict[int, dict[str, Any]],
+    target: str,
+) -> list[str]:
+    return [str(macro["expression"]) for macro in _leading_macros(node, macros_by_start, target)]
 
 
 def _parameter_facts(function_declarator: Node, source: bytes) -> list[dict[str, Any]]:
@@ -1041,6 +1049,7 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                         append_member_declaration(child, append_function=child.type == "field_declaration")
                     elif child.type in _CONTAINER_NODES:
                         append_contained_members(child)
+            type_macros = _leading_macros(node, macros_by_start, "type")
             types.append(
                 {
                     "usr": f"{kind}|{qualified}",
@@ -1062,9 +1071,8 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                         else []
                     ),
                     "scoped": kind == "enum" and _is_scoped_enum(node, source),
-                    "macros": _leading_macro_expressions(
-                        node, macros_by_start, "type"
-                    ),
+                    "macros": [str(macro["expression"]) for macro in type_macros],
+                    "annotation_line": int(type_macros[0]["line"]) if type_macros else _line(node),
                     "file": file_key,
                     "line": _line(node),
                     "end_line": _end_line(node),

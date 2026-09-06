@@ -63,6 +63,34 @@ class SourceTypeSemanticsTests(unittest.TestCase):
             self.assertTrue(all(set(item) == {"name", "parameters", "evidence"} for item in result["macros"]))
             self.assertEqual(result["macros"][0]["evidence"]["line"], 2)
 
+    def test_type_ranges_start_at_attached_reflection_macro(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            header = write_text(fixture.header, """
+                UCLASS()
+                // Type comment
+                class Worker {};
+                USTRUCT(
+                    BlueprintType
+                )
+                struct Data {};
+                UENUM()
+                enum class Mode { First };
+                UINTERFACE()
+                class UFeature {};
+                struct Plain {};
+            """)
+            completed, result = run_cli("sourcetools/ue_list_cxx_types.py", "--source", header)
+            self.assertEqual(completed.returncode, 0)
+            self.assert_contract(result)
+            types = {item["name"]: item for key in ("classes", "structs", "enums") for item in result[key]}
+            for name, start, end in (("Worker", 1, 3), ("Data", 4, 7), ("Mode", 8, 9),
+                                     ("UFeature", 10, 11), ("Plain", 12, 12)):
+                with self.subTest(name=name):
+                    evidence = types[name]["evidence"]
+                    self.assertEqual(evidence["line"], start)
+                    self.assertEqual(evidence.get("end_line", evidence["line"]), end)
+
     def test_type_selector_is_exact_and_limits_members_to_selected_files(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = create_fixture(Path(directory))
