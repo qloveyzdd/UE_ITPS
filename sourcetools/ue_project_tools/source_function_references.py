@@ -96,7 +96,7 @@ def inspect_source_function(
         external_symbols = []
         for symbol in references.get("external_symbols", []):
             public = {
-                key: value for key, value in symbol.items() if key not in {"line"}
+                key: value for key, value in symbol.items() if key not in {"line", "start_offset"}
             }
             public["evidence"] = {
                 "unit": _unit(item["file"]),

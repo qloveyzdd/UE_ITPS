@@ -24,6 +24,21 @@ class LyraTreeSitterBaselineTests(unittest.TestCase):
         def pair(relative: str) -> list[Path]:
             return [root / f"{relative}.cpp", root / f"{relative}.h"]
 
+        health = inspect_source_function(
+            pair("Character/LyraHealthComponent"),
+            "ULyraHealthComponent::InitializeWithAbilitySystem",
+        )
+        symbols = health["matches"][0]["external_symbols"]
+        self.assertTrue(any(
+            item["kind"] == "type" and item["spelling"] == "ULyraHealthSet"
+            and item["evidence"]["line"] == 70 for item in symbols
+        ))
+        self.assertEqual(
+            [item["spelling"] for item in symbols
+             if item["kind"] == "macro" and item["evidence"]["line"] == 59],
+            ["UE_LOG()", "TEXT()"],
+        )
+
         experience = pair("GameModes/LyraExperienceManagerComponent")
         result = inspect_source_function(
             experience, "ULyraExperienceManagerComponent::OnExperienceFullLoadCompleted"

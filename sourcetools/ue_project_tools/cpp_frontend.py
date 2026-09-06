@@ -738,8 +738,8 @@ def _function_fact(
     }
 
 
-def _function_addresses(arguments: Node | None, source: bytes) -> list[dict[str, str]]:
-    results: list[dict[str, str]] = []
+def _function_addresses(arguments: Node | None, source: bytes) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
     if arguments is None:
         return results
     for argument in arguments.named_children:
@@ -753,7 +753,8 @@ def _function_addresses(arguments: Node | None, source: bytes) -> list[dict[str,
             if not qualified_name:
                 continue
             owner, separator, name = qualified_name.rpartition("::")
-            result = {"name": name if separator else qualified_name}
+            result = {"name": name if separator else qualified_name,
+                      "start_offset": int(current.start_byte)}
             if separator:
                 result["owner_type"] = owner
                 result["qualified_name"] = qualified_name
@@ -791,6 +792,7 @@ def _function_references(
                     "global_scope": current.type == "qualified_identifier"
                     and current.child_by_field_name("scope") is None,
                     "line": _line(current),
+                    "start_offset": int(current.start_byte),
                 }
             )
         if current.type in _CONTROL_NODES:
@@ -806,7 +808,8 @@ def _function_references(
             type_name = str(type_fact.get("expression") or "")
             if type_name and type_name not in _PRIMITIVE_TYPES:
                 symbols.append(
-                    {"kind": "type", "spelling": type_name, "line": _line(current)}
+                    {"kind": "type", "spelling": type_name, "line": _line(current),
+                     "start_offset": int(current.start_byte)}
                 )
             for declarator in _declarators(current):
                 if _function_declarator(declarator) is not None:
@@ -821,6 +824,19 @@ def _function_references(
                             "type": type_fact,
                         }
                     )
+        if (
+            current.type == "type_descriptor"
+            and current.parent is not None
+            and current.parent.type == "template_argument_list"
+            and current.parent.parent is not None
+            and current.parent.parent.type in {"template_method", "template_function"}
+        ):
+            type_name = _canonical_cpp(_text(current, source))
+            if type_name and type_name not in _PRIMITIVE_TYPES:
+                symbols.append({
+                    "kind": "type", "spelling": type_name, "line": _line(current),
+                    "start_offset": int(current.start_byte),
+                })
         if current.type != "call_expression":
             continue
         callee_node = current.child_by_field_name("function")
@@ -880,6 +896,7 @@ def _function_references(
                 "delegate_receiver": delegate_receiver,
                 "variable_types": dict(variable_types),
                 "line": line,
+                "start_offset": int(current.start_byte),
             }
         )
     return {
@@ -1350,6 +1367,7 @@ def _finalize_references(
                             "kind": "macro",
                             "spelling": f"{target_name}()",
                             "line": int(call["line"]),
+                            "start_offset": int(call["start_offset"]),
                         }
                     )
             elif resolved_owner:
@@ -1367,6 +1385,7 @@ def _finalize_references(
                             "spelling": f"{resolved_owner}->{target_name}()",
                             "owner_type": resolved_owner,
                             "line": int(call["line"]),
+                            "start_offset": int(call["start_offset"]),
                         }
                     )
             elif free is not None:
@@ -1375,6 +1394,7 @@ def _finalize_references(
                         "kind": "free_function",
                         "spelling": free["qualified_name"],
                         "line": int(call["line"]),
+                        "start_offset": int(call["start_offset"]),
                     }
                 )
             elif target_name:
@@ -1383,6 +1403,7 @@ def _finalize_references(
                         "kind": "unknown",
                         "spelling": f"{callee}()",
                         "line": int(call["line"]),
+                        "start_offset": int(call["start_offset"]),
                     }
                 )
             for address in call.get("function_addresses", []):
@@ -1392,6 +1413,7 @@ def _finalize_references(
                     else "function_address",
                     "spelling": address["qualified_name"],
                     "line": int(call["line"]),
+                    "start_offset": int(address["start_offset"]),
                 }
                 if address.get("owner_type"):
                     symbol["owner_type"] = address["owner_type"]
@@ -1429,15 +1451,12 @@ def _finalize_references(
                     "kind": "global_variable",
                     "spelling": item["qualified_name"],
                     "line": int(reference["line"]),
+                    "start_offset": int(reference["start_offset"]),
                 }
             )
         references["external_symbols"] = sorted(
             _deduplicate(symbols, ("kind", "spelling", "owner_type", "line")),
-            key=lambda item: (
-                int(item["line"]),
-                str(item["kind"]),
-                str(item["spelling"]),
-            ),
+            key=lambda item: int(item["start_offset"]),
         )
         calls_by_expression = {
             _canonical_cpp(call["expression"]): call

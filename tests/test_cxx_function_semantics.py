@@ -8,6 +8,34 @@ from tests.support import create_fixture, run_cli, write_text
 
 
 class CxxFunctionSemanticsTests(unittest.TestCase):
+
+    def test_call_template_types_and_same_line_source_order(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            source = write_text(fixture.source, """
+                void AWorker::Run(FRouter* Router) {
+                    Router->GetSet<FPayload>();
+                    Router->Apply<TArray<FPayload>, 3, (1 + 2)>();
+                    UE_LOG(LogTemp, Warning, TEXT("message"));
+                }
+            """)
+            completed, result = run_cli(
+                "sourcetools/ue_inspect_cxx_function.py", "--source", source,
+                fixture.header, "--function", "AWorker::Run",
+            )
+            self.assertEqual(completed.returncode, 0)
+            symbols = result["matches"][0]["external_symbols"]
+            self.assertEqual(
+                [s["spelling"] for s in symbols if s["kind"] == "type"],
+                ["FPayload", "TArray<FPayload>"],
+            )
+            self.assertEqual(
+                [s["spelling"] for s in symbols if s["kind"] == "macro"],
+                ["UE_LOG()", "TEXT()"],
+            )
+            self.assertTrue(all(set(s) <= {"kind", "spelling", "owner_type", "evidence"}
+                                for s in symbols))
+
     def test_symbol_types_preserve_namespaces_and_template_arguments(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = create_fixture(Path(directory))
