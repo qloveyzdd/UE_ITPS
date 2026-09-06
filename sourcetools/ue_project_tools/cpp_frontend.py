@@ -286,6 +286,26 @@ def _macros(root: Node, source: bytes, file_key: str) -> list[dict[str, Any]]:
     return results
 
 
+def _macro_definitions(root: Node, source: bytes, file_key: str) -> list[dict[str, Any]]:
+    results = []
+    for node in _walk(root):
+        if node.type not in {"preproc_def", "preproc_function_def"}:
+            continue
+        name = node.child_by_field_name("name")
+        if name is None:
+            continue
+        parameters = node.child_by_field_name("parameters")
+        results.append({
+            "name": _text(name, source),
+            "parameters": [
+                _text(child, source) for child in parameters.children
+                if child.type not in {"(", ")", ",", "comment"}
+            ] if parameters is not None else None,
+            "file": file_key, "line": _line(node), "end_line": _end_line(node),
+        })
+    return results
+
+
 def _function_like_macro_definitions(root: Node, source: bytes) -> set[str]:
     results: set[str] = set()
     for node in _walk(root):
@@ -1192,6 +1212,7 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
         "references": references,
         "includes": _includes(tree.root_node, source, file_key),
         "macros": macros,
+        "macro_definitions": _macro_definitions(tree.root_node, source, file_key),
         "function_like_macro_definitions": _function_like_macro_definitions(
             tree.root_node, source
         ),
@@ -1476,6 +1497,7 @@ def load_cpp_unit(
         },
         "includes": [item for result in parsed for item in result["includes"]],
         "macros": [item for result in parsed for item in result["macros"]],
+        "macro_definitions": [item for result in parsed for item in result["macro_definitions"]],
         "diagnostics": [item for result in parsed for item in result["diagnostics"]],
     }
     for key in ("types", "functions", "variables"):

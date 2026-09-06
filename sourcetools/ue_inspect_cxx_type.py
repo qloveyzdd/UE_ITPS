@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""List basic definitions created by one or two selected C++ files."""
+"""Inspect class or struct definitions matching one exact qualified name."""
 
 from pathlib import Path
 
 from ue_project_tools.common import cli_error_document, cli_parser, json_text
-from ue_project_tools.source_unit import list_source_types
+from ue_project_tools.source_unit import inspect_source_type
 
 
-SCHEMA_VERSION = "ue_list_cxx_types"
-RESPONSIBILITY = "List basic type, variable, free-function, and macro definitions from selected files."
+SCHEMA_VERSION = "ue_inspect_cxx_type"
+RESPONSIBILITY = "Inspect one class or struct by its exact qualified name."
 
 
 def main() -> int:
     parser = cli_parser(
-        "列出一至两个显式选择的 C++ 文件所创建的基础定义。",
-        "List basic definitions created by one or two explicitly selected C++ files.",
+        "按完整限定名解析所给文件中的类或结构体。",
+        "Inspect a class or struct by its exact qualified name.",
         schema_version=SCHEMA_VERSION,
         responsibility=RESPONSIBILITY,
     )
@@ -26,10 +26,12 @@ def main() -> int:
         help="一至两个显式文件；两个文件必须为同名源文件和头文件 / One or two explicit files; two files must be a same-basename source and header",
     )
     parser.add_argument("--engine-root", metavar="PATH", help="显式 Engine 根目录覆盖 / Explicit Engine root override")
+    parser.add_argument("--type", required=True, metavar="QUALIFIED_NAME", help="类型完整限定名 / Exact qualified type name")
     args = parser.parse_args()
     try:
-        result = list_source_types(
+        result = inspect_source_type(
             [Path(value) for value in args.source],
+            args.type,
             engine_override=Path(args.engine_root) if args.engine_root else None,
         )
     except (OSError, ValueError) as exc:

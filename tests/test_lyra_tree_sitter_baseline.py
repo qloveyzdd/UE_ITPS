@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT / "sourcetools"))
 from ue_project_tools.cpp_frontend import load_cpp_unit
 from ue_project_tools.source_function_references import inspect_source_function
 from ue_project_tools.source_type_facts import list_source_types
+from ue_project_tools.source_type_details import inspect_source_type
 
 
 class LyraTreeSitterBaselineTests(unittest.TestCase):
@@ -47,8 +48,8 @@ class LyraTreeSitterBaselineTests(unittest.TestCase):
             result["matches"][0]["delegate_operations"][0]["event"]["qualified_name"],
             "UAbilitySystemComponent::AbilityTargetDataSetDelegate",
         )
-        result = list_source_types(pair("System/GameplayTagStack"))
-        container = next(t for t in result["structs"] if t["name"] == "FGameplayTagStackContainer")
+        result = inspect_source_type(pair("System/GameplayTagStack"), "FGameplayTagStackContainer")
+        container = result["matches"][0]
         self.assertTrue(
             {"GetStackCount", "ContainsTag", "NetDeltaSerialize"}
             <= {m["name"] for m in container["member_anchors"]}

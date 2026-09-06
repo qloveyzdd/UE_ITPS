@@ -24,6 +24,7 @@ _TREE_SITTER_CSHARP_TOOLS = {
 }
 _TREE_SITTER_CPP_TOOLS = {
     "ue_inspect_cxx_function",
+    "ue_inspect_cxx_type",
     "ue_list_cxx_includes",
     "ue_list_cxx_types",
     "ue_inspect_module_entry",

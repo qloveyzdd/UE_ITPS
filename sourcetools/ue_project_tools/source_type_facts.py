@@ -18,54 +18,11 @@ def _evidence(item: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _member_anchors(item: dict[str, Any]) -> list[dict[str, Any]]:
-    members = []
-    for field in item.get("fields", []):
-        projection = {**field, "file": item["file"]}
-        members.append(
-            {
-                "kind": "variable",
-                "name": field["name"],
-                "type_expression": field["type_expression"],
-                "macros": list(field.get("macros", [])),
-                "evidence": _evidence(projection),
-            }
-        )
-    for method in item.get("methods", []):
-        projection = {**method, "file": item["file"]}
-        members.append(
-            {
-                "kind": "function",
-                "name": method["name"],
-                "signature": method["signature"],
-                "macros": list(method.get("macros", [])),
-                "evidence": _evidence(projection),
-            }
-        )
-    return sorted(members, key=lambda member: member["evidence"]["line"])
-
-
-def _compound(item: dict[str, Any]) -> dict[str, Any]:
+def _basic_type(item: dict[str, Any]) -> dict[str, Any]:
     return {
-        "name": item["name"],
-        "namespace": item["namespace"],
-        "qualified_name": item["qualified_name"],
-        "owner": item["owner"],
-        "role": item["role"],
-        "base_types": item["base_types"],
-        "macros": list(item.get("macros", [])),
-        "member_anchors": _member_anchors(item),
-        "evidence": _evidence(item),
-    }
-
-
-def _member_function(item: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "name": item["name"],
-        "namespace": item["namespace"],
-        "qualified_name": item["qualified_name"],
-        "owner": item["owner"],
-        "signature": item["signature"],
+        **{key: item[key] for key in (
+            "kind", "name", "namespace", "qualified_name", "owner", "role"
+        )},
         "macros": list(item.get("macros", [])),
         "evidence": _evidence(item),
     }
@@ -77,143 +34,52 @@ def list_source_types(
 ) -> dict[str, Any]:
     loaded = load_source_context(source_files, engine_override)
     model = loaded["cpp_model"]
-    unit_files = {
-        str(path.resolve()).replace("\\", "/").casefold()
-        for path, _ in loaded["parsed_files"]
-    }
-    types = [item for item in model["types"] if item["file"] in unit_files]
-    classes = [
-        _compound(item)
-        for item in types
-        if item["kind"] == "class" and item["role"] == "definition"
-    ]
-    structs = [
-        _compound(item)
-        for item in types
-        if item["kind"] in {"struct", "union"} and item["role"] == "definition"
-    ]
-    enums = [
-        {
-            "kind": "enum",
-            "name": item["name"],
-            "namespace": item["namespace"],
-            "qualified_name": item["qualified_name"],
-            "owner": item["owner"],
-            "role": item["role"],
-            "scoped": item["scoped"],
-            "macros": list(item.get("macros", [])),
-            "enumerators": [
-                {
-                    "name": enumerator["name"],
-                    "value": enumerator["value"],
-                    "macros": list(enumerator.get("macros", [])),
-                    "evidence": _evidence(enumerator),
-                }
-                for enumerator in item.get("enumerators", [])
-            ],
-            "evidence": _evidence(item),
-        }
-        for item in types
-        if item["kind"] == "enum" and item["role"] == "definition"
-    ]
-    interface_candidates = []
-    known_names = {item["name"] for item in [*classes, *structs]}
-    for item in [*classes, *structs]:
-        reasons = []
-        if "UINTERFACE()" in item["macros"]:
-            reasons.append("UINTERFACE macro")
-        if "UInterface" in item["base_types"]:
-            reasons.append("derives from UInterface")
-        if item["name"].startswith("I") and f"U{item['name'][1:]}" in known_names:
-            reasons.append("paired I/U interface naming")
-        if not reasons:
-            continue
-        interface_candidates.append(
+    types = [item for item in model["types"] if item["role"] == "definition"]
+    type_namespaces = {item["qualified_name"]: item["namespace"] for item in model["types"]}
+    groups = {
+        "classes": [_basic_type(item) for item in types if item["kind"] == "class"],
+        "structs": [_basic_type(item) for item in types if item["kind"] in {"struct", "union"}],
+        "enums": [_basic_type(item) for item in types if item["kind"] == "enum"],
+        "global_variables": [
             {
-                "name": item["name"],
-                "qualified_name": item["qualified_name"],
-                "owner": item["owner"],
-                "declaration_kind": ("struct" if item in structs else "class"),
-                "reasons": reasons,
-                "evidence": item["evidence"],
+                **{key: item[key] for key in (
+                    "name", "qualified_name", "type_expression", "role", "linkage"
+                )},
+                "namespace": type_namespaces.get(
+                    item["qualified_name"].rpartition("::")[0], item.get("namespace")
+                ),
+                "macros": list(item.get("macros", [])),
+                "evidence": _evidence(item),
             }
-        )
-    type_namespaces = {item["qualified_name"]: item["namespace"] for item in types}
-    globals_ = [
-        {
-            "name": item["name"],
-            "namespace": type_namespaces.get(
-                item["qualified_name"].rpartition("::")[0], item.get("namespace")
-            ),
-            "qualified_name": item["qualified_name"],
-            "type_expression": item["type_expression"],
-            "role": item["role"],
-            "linkage": item["linkage"],
-            "macros": list(item.get("macros", [])),
-            "evidence": _evidence(item),
-        }
-        for item in model["variables"]
-        if item["file"] in unit_files and item["role"] == "definition"
-    ]
-    free_functions = [
-        {
-            "name": item["name"],
-            "namespace": item["namespace"],
-            "qualified_name": item["qualified_name"],
-            "signature": item["signature"],
-            "role": item["role"],
-            "linkage": item.get("linkage", "external"),
-            "evidence": _evidence(item),
-        }
-        for item in model["functions"]
-        if item["file"] in unit_files
-        and item["kind"] == "free_function"
-        and item["role"] == "definition"
-    ]
-    member_functions = [
-        _member_function(item)
-        for item in model["functions"]
-        if item["file"] in unit_files
-        and item["kind"] == "method"
-        and item["role"] == "definition"
-    ]
-
-    def sort_key(item: dict[str, Any]) -> tuple[str, int, str]:
-        return (
-            str(item["evidence"]["unit"]),
-            int(item["evidence"]["line"]),
-            str(item["qualified_name"]),
-        )
-
-    for group in (
-        classes,
-        structs,
-        enums,
-        interface_candidates,
-        globals_,
-        free_functions,
-        member_functions,
-    ):
-        group.sort(key=sort_key)
+            for item in model["variables"] if item["role"] == "definition"
+        ],
+        "free_functions": [
+            {
+                **{key: item[key] for key in (
+                    "name", "namespace", "qualified_name", "signature", "role"
+                )},
+                "linkage": item.get("linkage", "external"),
+                "evidence": _evidence(item),
+            }
+            for item in model["functions"]
+            if item["kind"] == "free_function" and item["role"] == "definition"
+        ],
+        "macros": [
+            {"name": item["name"], "parameters": item["parameters"], "evidence": _evidence(item)}
+            for item in model["macro_definitions"]
+        ],
+    }
+    for group in groups.values():
+        group.sort(key=lambda item: (item["evidence"]["unit"], item["evidence"]["line"], item["name"]))
     return source_result(
-        "ue_list_cxx_types",
-        loaded,
-        {
-            "classes": classes,
-            "structs": structs,
-            "enums": enums,
-            "interface_candidates": interface_candidates,
-            "global_variables": globals_,
-            "free_functions": free_functions,
-            "member_functions": member_functions,
-            "unresolved_declarations": [],
-        },
-        responsibility="Index Tree-sitter C++ definitions and members created by the selected files.",
+        "ue_list_cxx_types", loaded, groups,
+        responsibility="List basic definition information from the selected files.",
         boundaries=[
-            "Forward declarations, extern variable declarations, and function prototypes are excluded.",
-            "Referenced types, variables, and functions are not emitted as entities created by the selected files.",
-            "Definition identity, members, and linkage are syntax projections rather than compiler semantic facts.",
-            "UE reflection macros are read from local source text and attached by source adjacency.",
-            "Supported native GameplayTag definition macros are projected as FNativeGameplayTag globals; extern declaration macros are excluded.",
+            "Forward declarations, extern declarations, function prototypes, and referenced entities are excluded.",
+            "Type members, bases, enumerators, and interface inference require a separate inspection.",
+            "Macros lists local #define directives without replacement bodies; attached UE annotations remain on types.",
+            "Conditional branches are listed syntactically without preprocessing.",
+            "Static member variable definitions retain their qualified identities in global_variables.",
+            "Supported native GameplayTag definitions are projected as FNativeGameplayTag globals.",
         ],
     )
