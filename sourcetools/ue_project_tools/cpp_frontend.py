@@ -212,6 +212,8 @@ def _template_arguments(node: Node | None, source: bytes) -> list[str]:
 
 
 def _callee_fact(node: Node, source: bytes) -> dict[str, Any]:
+    if node.type == "call_expression":
+        return _callee_fact(node.child_by_field_name("function"), source)
     target = node
     receiver = None
     if node.type == "field_expression":
@@ -222,6 +224,16 @@ def _callee_fact(node: Node, source: bytes) -> dict[str, Any]:
         receiver = node.child_by_field_name("scope")
         target = node.child_by_field_name("name") or node
         receiver_kind = "scope"
+        if target.type == "qualified_identifier":
+            nested = _callee_fact(target, source)
+            scope = _canonical_cpp(_text(receiver, source)) if receiver is not None else ""
+            return {
+                **nested,
+                "path": _cpp_name_path(node, source),
+                "receiver": "::".join(
+                    part for part in (scope, nested["receiver"]) if part
+                ),
+            }
     else:
         receiver_kind = None
     path = _cpp_name_path(node, source)
@@ -735,15 +747,23 @@ def _function_references(
     local_variables: list[dict[str, str]] = []
     identifier_references: list[dict[str, Any]] = []
     variable_types = {
-        str(item["name"]): str(item.get("type", {}).get("name") or "")
+        str(item["name"]): str(item.get("type", {}).get("expression") or "")
         for item in fact.get("parameter_facts", [])
         if item.get("name")
     }
     body = node.child_by_field_name("body") or node
     for current in _walk(body):
-        if current.type == "identifier":
+        if current.type in {"identifier", "qualified_identifier"} and (
+            current.parent is None or current.parent.type != "qualified_identifier"
+        ):
             identifier_references.append(
-                {"name": _text(current, source), "line": _line(current)}
+                {
+                    "path": _cpp_name_path(current, source),
+                    "qualified": current.type == "qualified_identifier",
+                    "global_scope": current.type == "qualified_identifier"
+                    and current.child_by_field_name("scope") is None,
+                    "line": _line(current),
+                }
             )
         if current.type in _CONTROL_NODES:
             controls.append(
@@ -755,7 +775,7 @@ def _function_references(
         if current.type == "declaration":
             type_expression = _type_expression(current, source)
             type_fact = _type_fact(current.child_by_field_name("type"), source)
-            type_name = str(type_fact.get("name") or "")
+            type_name = str(type_fact.get("expression") or "")
             if type_name and type_name not in _PRIMITIVE_TYPES:
                 symbols.append(
                     {"kind": "type", "spelling": type_name, "line": _line(current)}
@@ -782,6 +802,18 @@ def _function_references(
         raw_callee = _compact(_text(callee_node, source))
         callee = re.sub(r"\s*(?:->|\.)\s*", ".", raw_callee)
         callee_fact = _callee_fact(callee_node, source)
+        receiver_node = (
+            callee_node.child_by_field_name("argument")
+            if callee_node.type == "field_expression"
+            else callee_node.child_by_field_name("scope")
+        )
+        delegate_receiver = None
+        if receiver_node is not None:
+            delegate_receiver = _callee_fact(receiver_node, source)
+            if receiver_node.type == "call_expression":
+                delegate_receiver["call_expression"] = _canonical_cpp(
+                    _text(receiver_node, source)
+                )
         target_name = str(callee_fact["target_name"])
         arguments = (
             [_compact(_text(child, source)) for child in arguments_node.named_children]
@@ -817,6 +849,7 @@ def _function_references(
                 "function_addresses": _function_addresses(arguments_node, source),
                 "target_name": target_name,
                 "target_owner": None,
+                "delegate_receiver": delegate_receiver,
                 "variable_types": dict(variable_types),
                 "line": line,
             }
@@ -869,6 +902,7 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                 "usr": f"variable|{qualified}",
                 "name": symbol_name.rsplit("::", 1)[-1],
                 "qualified_name": qualified,
+                "namespace": qualified.rsplit("::", 1)[0] if "::" in qualified else None,
                 "type_expression": "FNativeGameplayTag",
                 "type": {
                     "expression": "FNativeGameplayTag",
@@ -919,8 +953,13 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
             def append_member_declaration(
                 child: Node, *, append_function: bool
             ) -> None:
-                function_declarator = _function_declarator(child)
+                function_declarator = next(
+                    (function for declarator in _declarators(child)
+                     if (function := _function_declarator(declarator)) is not None),
+                    None,
+                )
                 if function_declarator is not None:
+                    role = "definition" if child.type == "function_definition" else "declaration"
                     function = _function_fact(
                         child,
                         function_declarator,
@@ -928,7 +967,7 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                         file_key,
                         namespaces,
                         (*owners, name),
-                        "declaration",
+                        role,
                     )
                     if function is not None:
                         function["macros"] = _leading_macro_expressions(
@@ -940,7 +979,7 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                             {
                                 "name": function["name"],
                                 "signature": function["signature"],
-                                "role": "declaration",
+                                "role": role,
                                 "macros": function["macros"],
                                 "line": _line(child),
                                 "end_line": _end_line(child),
@@ -967,21 +1006,21 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                             }
                         )
 
-            def append_preprocessor_members(container: Node) -> None:
+            def append_contained_members(container: Node) -> None:
                 for child in container.named_children:
-                    if child.type == "field_declaration":
+                    if child.type in {"field_declaration", "declaration", "function_definition"}:
                         # The normal recursive visitor records these functions
                         # in the file model. Add only the owning type anchor here.
                         append_member_declaration(child, append_function=False)
                     elif child.type in _CONTAINER_NODES:
-                        append_preprocessor_members(child)
+                        append_contained_members(child)
 
             if body is not None and kind != "enum":
                 for child in body.named_children:
-                    if child.type == "field_declaration":
-                        append_member_declaration(child, append_function=True)
+                    if child.type in {"field_declaration", "declaration", "function_definition"}:
+                        append_member_declaration(child, append_function=child.type == "field_declaration")
                     elif child.type in _CONTAINER_NODES:
-                        append_preprocessor_members(child)
+                        append_contained_members(child)
             types.append(
                 {
                     "usr": f"{kind}|{qualified}",
@@ -1073,15 +1112,21 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                 type_fact = _type_fact(node.child_by_field_name("type"), source)
                 storage_classes = _storage_classes(node, source)
                 for item in _declarators(node):
-                    name, _ = _name_from_declarator(item, source)
+                    name, declared_name = _name_from_declarator(item, source)
                     if not name:
                         continue
-                    qualified = "::".join((*namespaces, name))
+                    namespace = "::".join(namespaces)
+                    qualified = (
+                        declared_name
+                        if not namespace or declared_name.startswith(f"{namespace}::")
+                        else f"{namespace}::{declared_name}"
+                    )
                     variables.append(
                         {
                             "usr": f"variable|{qualified}",
                             "name": name,
                             "qualified_name": qualified,
+                            "namespace": namespace or None,
                             "type_expression": type_expression,
                             "type": type_fact,
                             "role": "declaration"
@@ -1178,16 +1223,16 @@ def _finalize_references(
         )
     }
     methods = {
-        (str(item.get("owner") or "").rsplit("::", 1)[-1], str(item["name"])): item
+        str(item["qualified_name"]): item
         for item in model["functions"]
         if item.get("owner")
     }
     free_functions = {
-        (str(item.get("namespace") or ""), str(item["name"])): item
+        str(item["qualified_name"]): item
         for item in model["functions"]
         if not item.get("owner")
     }
-    globals_by_name = {str(item["name"]): item for item in model["variables"]}
+    globals_by_name = {str(item["qualified_name"]): item for item in model["variables"]}
     functions_by_usr = {
         str(item["usr"]): item
         for item in model["functions"]
@@ -1198,7 +1243,7 @@ def _finalize_references(
         if item["role"] != "definition":
             continue
         field_types_by_owner[str(item["qualified_name"])] = {
-            str(field["name"]): str(field.get("type", {}).get("name") or "")
+            str(field["name"]): str(field.get("type", {}).get("expression") or "")
             for field in item.get("fields", [])
             if field.get("name")
         }
@@ -1221,6 +1266,16 @@ def _finalize_references(
             receiver = str(call.get("receiver") or "")
             root = segments[0] if len(segments) > 1 else ""
             variable_types = call.get("variable_types", {})
+            free = None
+            if call.get("receiver_kind") != "member":
+                namespace_parts = str(function.get("namespace") or "").split("::")
+                for depth in range(len(namespace_parts), -1, -1):
+                    candidate = "::".join(
+                        part for part in [*namespace_parts[:depth], *segments] if part
+                    )
+                    free = free_functions.get(candidate)
+                    if free is not None:
+                        break
             owner_type = (
                 (
                     variable_types.get(root)
@@ -1230,20 +1285,19 @@ def _finalize_references(
                 if len(segments) == 2
                 else None
             )
-            owner_key = str(function.get("owner") or "").rsplit("::", 1)[-1]
             if owner_type:
-                resolved_owner = str(owner_type).rsplit("::", 1)[-1]
+                resolved_owner = str(owner_type)
             elif call.get("receiver_kind") == "scope" and len(segments) >= 2:
-                resolved_owner = segments[-2]
+                resolved_owner = "" if free is not None else receiver
             elif (
                 call.get("receiver_kind") == "member"
                 and len(segments) >= 3
                 and is_ue_same_type_static_accessor(segments[-2])
                 and receiver.endswith(f"::{segments[-2]}()")
             ):
-                resolved_owner = segments[-3]
-            elif len(segments) == 1 and methods.get((owner_key, target_name)):
-                resolved_owner = owner_key
+                resolved_owner = (call.get("delegate_receiver") or {}).get("receiver") or ""
+            elif len(segments) == 1 and methods.get(f"{function_owner}::{target_name}"):
+                resolved_owner = function_owner
             else:
                 resolved_owner = ""
             delegate_operation = (
@@ -1257,9 +1311,6 @@ def _finalize_references(
             )
             if delegate_operation is not None:
                 call["delegate_operation"] = delegate_operation
-            free = free_functions.get(
-                (str(function.get("namespace") or ""), target_name)
-            )
             if len(segments) == 1 and (
                 is_ue_function_like_macro(target_name)
                 or target_name in function_like_macro_definitions
@@ -1324,18 +1375,25 @@ def _finalize_references(
             ]
             if item.get("name")
         }
-        for name, item in globals_by_name.items():
-            if name in local_names:
+        for reference in references.get("identifier_references", []):
+            path = reference["path"]
+            if not path or (not reference["qualified"] and path[0] in local_names):
                 continue
-            reference = next(
-                (
-                    candidate
-                    for candidate in references.get("identifier_references", [])
-                    if candidate["name"] == name
-                ),
-                None,
+            scopes = []
+            if not reference["global_scope"]:
+                if not reference["qualified"] and function_owner:
+                    scopes.append(function_owner)
+                namespace_parts = str(function.get("namespace") or "").split("::")
+                scopes.extend("::".join(namespace_parts[:depth])
+                              for depth in range(len(namespace_parts), 0, -1))
+            scopes.append("")
+            item = next(
+                (variable for scope in scopes
+                 if (variable := globals_by_name.get(
+                     "::".join(part for part in [scope, *path] if part)
+                 )) is not None), None,
             )
-            if reference is None:
+            if item is None:
                 continue
             symbols.append(
                 {
@@ -1352,9 +1410,46 @@ def _finalize_references(
                 str(item["spelling"]),
             ),
         )
+        calls_by_expression = {
+            _canonical_cpp(call["expression"]): call
+            for call in references.get("call_details", [])
+        }
+        for call in references.get("call_details", []):
+            if not call.get("delegate_operation"):
+                continue
+            event = call.get("delegate_receiver") or {}
+            event_name = event.get("target_name")
+            event_owner = None
+            if "call_expression" in event:
+                event_call = calls_by_expression.get(event["call_expression"], {})
+                event_name = event_call.get("target_name")
+                event_owner = event_call.get("target_owner")
+            else:
+                event_path = event.get("path", [])
+                variable_types = call.get("variable_types", {})
+                if len(event_path) == 1:
+                    root = event_path[0]
+                    event_owner = (
+                        variable_types[root] if root in variable_types else function_owner
+                    )
+                elif event.get("receiver_kind") == "scope":
+                    event_owner = event.get("receiver")
+                elif len(event_path) == 2:
+                    root = event_path[0]
+                    event_owner = (
+                        function_owner if root == "this"
+                        else variable_types.get(root) or field_types.get(root)
+                    )
+            if event_owner and event_name:
+                call["delegate_event"] = {
+                    "owner_type": event_owner,
+                    "name": event_name,
+                    "qualified_name": f"{event_owner}::{event_name}",
+                }
         for call in references.get("call_details", []):
             call.pop("raw_callee", None)
             call.pop("variable_types", None)
+            call.pop("delegate_receiver", None)
 
 
 def load_cpp_unit(

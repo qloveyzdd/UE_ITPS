@@ -12,9 +12,55 @@ from tests.support import ROOT
 sys.path.insert(0, str(ROOT / "sourcetools"))
 
 from ue_project_tools.cpp_frontend import load_cpp_unit
+from ue_project_tools.source_function_references import inspect_source_function
+from ue_project_tools.source_type_facts import list_source_types
 
 
 class LyraTreeSitterBaselineTests(unittest.TestCase):
+    def test_lyra_tool_symbol_and_member_projections(self) -> None:
+        root = ROOT / "LyraStarterGame" / "Source" / "LyraGame"
+
+        def pair(relative: str) -> list[Path]:
+            return [root / f"{relative}.cpp", root / f"{relative}.h"]
+
+        experience = pair("GameModes/LyraExperienceManagerComponent")
+        result = inspect_source_function(
+            experience, "ULyraExperienceManagerComponent::OnExperienceFullLoadCompleted"
+        )
+        self.assertEqual(result["validation"]["status"], "ok")
+        self.assertIn(
+            ("free_function", "LyraConsoleVariables::GetExperienceLoadDelayDuration"),
+            {(s["kind"], s["spelling"]) for s in result["matches"][0]["external_symbols"]},
+        )
+        result = inspect_source_function(
+            experience, "ULyraExperienceManagerComponent::CallOrRegister_OnExperienceLoaded"
+        )
+        self.assertIn(
+            "FOnLyraExperienceLoaded::FDelegate",
+            {s.get("owner_type") for s in result["matches"][0]["external_symbols"]},
+        )
+        result = inspect_source_function(
+            pair("Weapons/LyraGameplayAbility_RangedWeapon"),
+            "ULyraGameplayAbility_RangedWeapon::ActivateAbility",
+        )
+        self.assertEqual(
+            result["matches"][0]["delegate_operations"][0]["event"]["qualified_name"],
+            "UAbilitySystemComponent::AbilityTargetDataSetDelegate",
+        )
+        result = list_source_types(pair("System/GameplayTagStack"))
+        container = next(t for t in result["structs"] if t["name"] == "FGameplayTagStackContainer")
+        self.assertTrue(
+            {"GetStackCount", "ContainsTag", "NetDeltaSerialize"}
+            <= {m["name"] for m in container["member_anchors"]}
+        )
+        hero = pair("Character/LyraHeroComponent")
+        result = list_source_types(hero)
+        self.assertIn("ULyraHeroComponent::NAME_ActorFeatureName",
+                      {v["qualified_name"] for v in result["global_variables"]})
+        result = inspect_source_function(hero, "ULyraHeroComponent::GetFeatureName")
+        self.assertEqual(result["matches"][0]["external_symbols"][0]["spelling"],
+                         "ULyraHeroComponent::NAME_ActorFeatureName")
+
     def test_full_lyra_source_tree_matches_baseline(self) -> None:
         project_root = ROOT / "LyraStarterGame"
         files = sorted(
@@ -52,14 +98,16 @@ class LyraTreeSitterBaselineTests(unittest.TestCase):
 
         self.assertEqual(model["diagnostic_error_count"], 0)
         self.assertEqual(len(model["types"]), 2010)
-        self.assertEqual(len(model["functions"]), 6047)
+        # Nested type bodies must not create spurious outer-class function declarations.
+        self.assertEqual(len(model["functions"]), 6037)
         self.assertEqual(len(model["variables"]), 302)
         self.assertEqual(len(model["includes"]), 3254)
         self.assertEqual(len(model["macros"]), 3016)
 
         definitions = [item for item in model["types"] if item["role"] == "definition"]
         self.assertEqual(sum(len(item.get("fields", [])) for item in definitions), 1842)
-        self.assertEqual(sum(len(item.get("methods", [])) for item in definitions), 2452)
+        # Include inline definitions, constructors and template member declarations.
+        self.assertEqual(sum(len(item.get("methods", [])) for item in definitions), 3318)
         self.assertEqual(
             sum(len(item.get("enumerators", [])) for item in definitions), 234
         )

@@ -138,13 +138,12 @@ def list_source_types(
                 "evidence": item["evidence"],
             }
         )
+    type_namespaces = {item["qualified_name"]: item["namespace"] for item in types}
     globals_ = [
         {
             "name": item["name"],
-            "namespace": (
-                item["qualified_name"].rsplit("::", 1)[0]
-                if "::" in item["qualified_name"]
-                else None
+            "namespace": type_namespaces.get(
+                item["qualified_name"].rpartition("::")[0], item.get("namespace")
             ),
             "qualified_name": item["qualified_name"],
             "type_expression": item["type_expression"],

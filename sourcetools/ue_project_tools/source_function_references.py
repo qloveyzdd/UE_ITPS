@@ -44,26 +44,14 @@ def _unit(path: str) -> str:
 def _delegate_operations(
     function: dict[str, Any], references: dict[str, Any]
 ) -> list[dict[str, Any]]:
-    symbol_types = {
-        str(item["name"]): str(item.get("type", {}).get("name") or "")
-        for item in function.get("parameter_facts", [])
-    }
     results = []
     for call in references.get("call_details", []):
         api = str(call.get("target_name") or "")
         operation = call.get("delegate_operation")
         if operation not in {"publish", "subscribe"}:
             continue
-        segments = [str(part) for part in call.get("callee_path", [])]
-        if len(segments) < 2:
-            continue
-        event_name = segments[-2]
-        root = segments[0] if len(segments) >= 2 else None
-        owner_type = (
-            symbol_types.get(root or "")
-            or str(function.get("owner") or "").split("::")[-1]
-        )
-        if not owner_type:
+        event = call.get("delegate_event")
+        if event is None:
             continue
         callback = None
         for address in call.get("function_addresses", []):
@@ -78,11 +66,7 @@ def _delegate_operations(
             {
                 "operation": operation,
                 "api": api,
-                "event": {
-                    "owner_type": owner_type,
-                    "name": event_name,
-                    "qualified_name": f"{owner_type}::{event_name}",
-                },
+                "event": event,
                 "callback": callback,
                 "evidence": {
                     "unit": _unit(function["file"]),

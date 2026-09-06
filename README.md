@@ -54,6 +54,8 @@ python sourcetools/ue_inspect_cxx_function.py --source D:/Projects/MyGame/Source
 
 `ue_list_cxx_types.py` 会把 Engine 5.8 的原生 GameplayTag 声明/定义宏投影为 `FNativeGameplayTag` 变量事实；extern 声明不进入最终定义列表，static 定义保留内部 linkage。
 
+类型成员清单覆盖类内定义、构造函数、模板和条件编译中的成员；类外静态成员定义保留完整限定名。函数扫描按本地作用域区分自由函数与成员调用，保留类型限定名及模板参数；委托事件复用已知接收者的类型，无法确定链式调用归属时不生成事件归属记录。相关回归同时检查最小案例和 Lyra 实际源码中的符号身份与成员归属。
+
 所有核心 CLI 都把结果写到标准输出，并包含 `schema_version`、领域事实、`validation` 和 `limits`。静态结果是源码证据，不等同于 UBT、UHT、编译器、Editor 或运行时结论。
 
 ## 文档

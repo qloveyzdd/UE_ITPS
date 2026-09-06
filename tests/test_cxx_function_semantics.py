@@ -8,6 +8,104 @@ from tests.support import create_fixture, run_cli, write_text
 
 
 class CxxFunctionSemanticsTests(unittest.TestCase):
+    def test_symbol_types_preserve_namespaces_and_template_arguments(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            header = write_text(fixture.header, """
+                namespace Game {
+                    class AWorker {
+                        Other::FContainer Field;
+                        void Run(Events::FOnReady::FDelegate&& Delegate);
+                        void Helper();
+                    };
+                }
+            """)
+            source = write_text(fixture.source, """
+                namespace Game {
+                    void AWorker::Run(Events::FOnReady::FDelegate&& Delegate) {
+                        TMap<int32, Other::TEnvelope<Other::FPayload>> Values;
+                        Values.Reset();
+                        Field.Reset();
+                        Delegate.Execute();
+                        Services::FManager::Get().Refresh();
+                        Services::FManager::Refresh();
+                        Helper();
+                    }
+                }
+            """)
+            completed, result = run_cli(
+                "sourcetools/ue_inspect_cxx_function.py", "--source", source, header,
+                "--function", "Game::AWorker::Run",
+            )
+            self.assertEqual(completed.returncode, 0)
+            match = result["matches"][0]
+            template = "TMap<int32,Other::TEnvelope<Other::FPayload>>"
+            self.assertEqual(
+                {item["spelling"] for item in match["external_symbols"] if item["kind"] == "type"},
+                {template},
+            )
+            self.assertEqual(
+                {item["owner_type"] for item in match["external_symbols"] if item["kind"] == "member_call"},
+                {template, "Other::FContainer", "Events::FOnReady::FDelegate",
+                 "Services::FManager", "Game::AWorker"},
+            )
+            self.assertEqual(match["delegate_operations"][0]["event"]["owner_type"],
+                             "Events::FOnReady::FDelegate")
+
+    def test_delegate_events_use_local_and_chained_receiver_owners(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            source = write_text(fixture.source, """
+                void AWorker::Activate(FRouter* Parameter) {
+                    FRouter* Local;
+                    Local->GetEvent().AddUObject(this, &AWorker::OnFinished);
+                    Parameter->GetEvent().Broadcast();
+                    Local->Changed.Broadcast();
+                    this->Changed.Broadcast();
+                    Missing->GetEvent().Broadcast();
+                    Local->GetUnknown().GetEvent().Broadcast();
+                }
+            """)
+            completed, result = run_cli(
+                "sourcetools/ue_inspect_cxx_function.py", "--source", source,
+                fixture.header, "--function", "AWorker::Activate",
+            )
+            self.assertEqual(completed.returncode, 0)
+            operations = result["matches"][0]["delegate_operations"]
+            self.assertEqual(
+                [item["event"]["qualified_name"] for item in operations],
+                ["FRouter::GetEvent", "FRouter::GetEvent", "FRouter::Changed",
+                 "AWorker::Changed"],
+            )
+
+    def test_scoped_free_calls_do_not_become_member_calls(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            source = write_text(fixture.source, """
+                namespace Tools { void Run() {} void Get() {} }
+                namespace Outer {
+                    namespace Helpers { void Run() {} }
+                    void Invoke() {
+                        Tools::Run();
+                        Tools::Get();
+                        Helpers::Run();
+                        FWorker::Run();
+                    }
+                }
+            """)
+            completed, result = run_cli(
+                "sourcetools/ue_inspect_cxx_function.py", "--source", source,
+                "--function", "Outer::Invoke",
+            )
+            self.assertEqual(completed.returncode, 0)
+            symbols = result["matches"][0]["external_symbols"]
+            self.assertEqual(
+                {(item["kind"], item["spelling"]) for item in symbols},
+                {("free_function", "Tools::Run"), ("free_function", "Tools::Get"),
+                 ("free_function", "Outer::Helpers::Run"),
+                 ("member_call", "FWorker->Run()")},
+            )
+
     def test_qualified_function_selector_avoids_same_name_collisions(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = create_fixture(Path(directory))
