@@ -10,6 +10,8 @@ from tree_sitter import Language, Node, Parser
 import tree_sitter_ue_cpp
 
 from .common import normalized
+from . import cpp_expression_facts as expression_facts
+from .source_delegate_analysis import analyze_delegates
 from .ue_cpp_conventions import (
     is_ignored_external_macro,
     is_ignored_external_member_call,
@@ -17,8 +19,6 @@ from .ue_cpp_conventions import (
     is_ue_gameplay_tag_symbol_macro,
     is_ue_function_like_macro,
     is_ue_same_type_static_accessor,
-    ue_delegate_declared_type,
-    ue_delegate_operation,
     ue_gameplay_tag_symbol,
 )
 
@@ -277,6 +277,7 @@ def _macros(root: Node, source: bytes, file_key: str) -> list[dict[str, Any]]:
                 "tokens": _TOKEN_RE.findall(expression),
                 "expression": re.sub(r"\s+", "", expression),
                 "file": file_key,
+                "scope": expression_facts.scope_path(node, source),
                 "line": source.count(b"\n", 0, start) + 1,
                 "end_line": source.count(b"\n", 0, end) + 1,
                 "start_offset": start,
@@ -465,6 +466,7 @@ def _type_fact(node: Node | None, source: bytes) -> dict[str, Any]:
     primary = references[0] if references else None
     return {
         "expression": expression,
+        "template_name": _text(node.child_by_field_name("name"), source) if node is not None and node.type == "template_type" else None,
         "name": primary.rsplit("::", 1)[-1] if primary else None,
         "qualified_name": primary,
         "references": references,
@@ -851,11 +853,11 @@ def _function_references(
             if callee_node.type == "field_expression"
             else callee_node.child_by_field_name("scope")
         )
-        delegate_receiver = None
+        receiver_fact = None
         if receiver_node is not None:
-            delegate_receiver = _callee_fact(receiver_node, source)
+            receiver_fact = _callee_fact(receiver_node, source)
             if receiver_node.type == "call_expression":
-                delegate_receiver["call_expression"] = _canonical_cpp(
+                receiver_fact["call_expression"] = _canonical_cpp(
                     _text(receiver_node, source)
                 )
         target_name = str(callee_fact["target_name"])
@@ -881,6 +883,11 @@ def _function_references(
         calls.append({"callee": callee, "location": {"line": line}})
         call_details.append(
             {
+                "syntax": expression_facts.expression(current, source),
+                "argument_syntax": [expression_facts.expression(arg, source) for arg in arguments_node.named_children] if arguments_node else [],
+                "execution_scope": expression_facts.execution_scope(current, source),
+                "result_target": expression_facts.result_target(current, source),
+                "bindings": expression_facts.visible_bindings(current, node, source, _walk, _type_fact, _declarators, _name_from_declarator),
                 "callee": callee,
                 "raw_callee": raw_callee,
                 "callee_path": callee_fact["path"],
@@ -893,7 +900,7 @@ def _function_references(
                 "function_addresses": _function_addresses(arguments_node, source),
                 "target_name": target_name,
                 "target_owner": None,
-                "delegate_receiver": delegate_receiver,
+                "receiver_fact": receiver_fact,
                 "variable_types": dict(variable_types),
                 "line": line,
                 "start_offset": int(current.start_byte),
@@ -919,6 +926,7 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
     functions: list[dict[str, Any]] = []
     variables: list[dict[str, Any]] = []
     references: dict[str, dict[str, Any]] = {}
+    aliases = []
 
     def append_gameplay_tag_macro(
         macro: dict[str, Any],
@@ -972,6 +980,17 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
         )
 
     def visit(node: Node, namespaces: tuple[str, ...], owners: tuple[str, ...]) -> None:
+        if node.type in {"alias_declaration", "type_definition"}:
+            name_node = node.child_by_field_name("name") or node.child_by_field_name("declarator")
+            target = node.child_by_field_name("type")
+            if name_node is not None and target is not None:
+                if target.type == "type_descriptor":
+                    target = target.child_by_field_name("type") or target
+                aliases.append({
+                    "qualified_name": "::".join((*namespaces, *owners, _text(name_node, source))),
+                    "type": _type_fact(target, source), "file": file_key, "line": _line(node),
+                })
+            return
         if node.type == "namespace_definition":
             name_node = node.child_by_field_name("name")
             name = _compact(_text(name_node, source)) if name_node is not None else ""
@@ -1230,6 +1249,7 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                 }
             )
     return {
+        "aliases": aliases,
         "file": file_key,
         "types": types,
         "functions": functions,
@@ -1255,19 +1275,6 @@ def _deduplicate(
 def _finalize_references(
     model: dict[str, Any], function_like_macro_definitions: set[str]
 ) -> None:
-    known_delegate_types = {
-        declared_type
-        for macro in model["macros"]
-        if (
-            declared_type := ue_delegate_declared_type(
-                str(macro["name"]),
-                [
-                    str(argument.get("expression") or "")
-                    for argument in macro.get("arguments", [])
-                ],
-            )
-        )
-    }
     methods = {
         str(item["qualified_name"]): item
         for item in model["functions"]
@@ -1341,22 +1348,11 @@ def _finalize_references(
                 and is_ue_same_type_static_accessor(segments[-2])
                 and receiver.endswith(f"::{segments[-2]}()")
             ):
-                resolved_owner = (call.get("delegate_receiver") or {}).get("receiver") or ""
+                resolved_owner = (call.get("receiver_fact") or {}).get("receiver") or ""
             elif len(segments) == 1 and methods.get(f"{function_owner}::{target_name}"):
                 resolved_owner = function_owner
             else:
                 resolved_owner = ""
-            delegate_operation = (
-                ue_delegate_operation(
-                    target_name,
-                    owner_type=resolved_owner or None,
-                    known_delegate_types=known_delegate_types,
-                )
-                if len(segments) >= 2
-                else None
-            )
-            if delegate_operation is not None:
-                call["delegate_operation"] = delegate_operation
             if len(segments) == 1 and (
                 is_ue_function_like_macro(target_name)
                 or target_name in function_like_macro_definitions
@@ -1408,9 +1404,7 @@ def _finalize_references(
                 )
             for address in call.get("function_addresses", []):
                 symbol = {
-                    "kind": "callback_target"
-                    if call.get("delegate_operation") == "subscribe"
-                    else "function_address",
+                    "kind": "function_address",
                     "spelling": address["qualified_name"],
                     "line": int(call["line"]),
                     "start_offset": int(address["start_offset"]),
@@ -1458,46 +1452,8 @@ def _finalize_references(
             _deduplicate(symbols, ("kind", "spelling", "owner_type", "line")),
             key=lambda item: int(item["start_offset"]),
         )
-        calls_by_expression = {
-            _canonical_cpp(call["expression"]): call
-            for call in references.get("call_details", [])
-        }
-        for call in references.get("call_details", []):
-            if not call.get("delegate_operation"):
-                continue
-            event = call.get("delegate_receiver") or {}
-            event_name = event.get("target_name")
-            event_owner = None
-            if "call_expression" in event:
-                event_call = calls_by_expression.get(event["call_expression"], {})
-                event_name = event_call.get("target_name")
-                event_owner = event_call.get("target_owner")
-            else:
-                event_path = event.get("path", [])
-                variable_types = call.get("variable_types", {})
-                if len(event_path) == 1:
-                    root = event_path[0]
-                    event_owner = (
-                        variable_types[root] if root in variable_types else function_owner
-                    )
-                elif event.get("receiver_kind") == "scope":
-                    event_owner = event.get("receiver")
-                elif len(event_path) == 2:
-                    root = event_path[0]
-                    event_owner = (
-                        function_owner if root == "this"
-                        else variable_types.get(root) or field_types.get(root)
-                    )
-            if event_owner and event_name:
-                call["delegate_event"] = {
-                    "owner_type": event_owner,
-                    "name": event_name,
-                    "qualified_name": f"{event_owner}::{event_name}",
-                }
-        for call in references.get("call_details", []):
-            call.pop("raw_callee", None)
-            call.pop("variable_types", None)
-            call.pop("delegate_receiver", None)
+    analyze_delegates(model)
+
 
 
 def load_cpp_unit(
@@ -1515,6 +1471,7 @@ def load_cpp_unit(
         "engine": ENGINE,
         "version": frontend_version(),
         "types": [item for result in parsed for item in result["types"]],
+        "aliases": [item for result in parsed for item in result["aliases"]],
         "functions": [item for result in parsed for item in result["functions"]],
         "variables": [item for result in parsed for item in result["variables"]],
         "references": {

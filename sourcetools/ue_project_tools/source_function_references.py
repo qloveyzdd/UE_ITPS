@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from .source_context import load_source_context, source_result
+from .ue_cpp_conventions import UE_DELEGATE_CONTRACT_REVISION
 
 
 def _function_id(item: dict[str, Any]) -> str:
@@ -41,42 +42,6 @@ def _unit(path: str) -> str:
     return "header" if path.casefold().endswith((".h", ".hpp")) else "cpp"
 
 
-def _delegate_operations(
-    function: dict[str, Any], references: dict[str, Any]
-) -> list[dict[str, Any]]:
-    results = []
-    for call in references.get("call_details", []):
-        api = str(call.get("target_name") or "")
-        operation = call.get("delegate_operation")
-        if operation not in {"publish", "subscribe"}:
-            continue
-        event = call.get("delegate_event")
-        if event is None:
-            continue
-        callback = None
-        for address in call.get("function_addresses", []):
-            if address.get("owner_type"):
-                callback = {
-                    "owner_type": address["owner_type"],
-                    "name": address["name"],
-                    "qualified_name": address["qualified_name"],
-                }
-                break
-        results.append(
-            {
-                "operation": operation,
-                "api": api,
-                "event": event,
-                "callback": callback,
-                "evidence": {
-                    "unit": _unit(function["file"]),
-                    "line": int(call["line"]),
-                },
-            }
-        )
-    return results
-
-
 def inspect_source_function(
     source_files: Path | Sequence[Path],
     function_name: str,
@@ -106,7 +71,7 @@ def inspect_source_function(
         match = {
             "function_id": _function_id(item),
             "external_symbols": external_symbols,
-            "delegate_operations": _delegate_operations(item, references),
+            "delegate_operations": references["delegate_operations"],
         }
         if include_syntax_flow:
             match["syntax_flow"] = {
@@ -128,6 +93,7 @@ def inspect_source_function(
         "ue_inspect_cxx_function",
         loaded,
         {
+            "delegate_contract_revision": UE_DELEGATE_CONTRACT_REVISION,
             "match_count": len(matches),
             "matches": matches,
         },

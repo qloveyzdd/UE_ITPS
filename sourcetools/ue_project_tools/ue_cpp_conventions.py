@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Collection, Sequence
+from collections.abc import Sequence
 
 
 UE_FUNCTION_LIKE_MACROS = frozenset(
@@ -58,52 +58,81 @@ UE_GAMEPLAY_TAG_SYMBOL_MACROS = {
     "UE_DEFINE_GAMEPLAY_TAG_STATIC": ("definition", "internal"),
 }
 
-UE_DELEGATE_PUBLISH_APIS = frozenset(
-    {
-        "Broadcast",
-        "Execute",
-        "ExecuteIfBound",
+# UE 5.8 delegate API contract. Exact names only; roles refer to argument indexes.
+# Syntax classification and type evidence are handled by the single delegate analyzer.
+UE_DELEGATE_APIS = {}
+for prefix, operation, cardinality in (
+    ("Create", "create", "single"), ("Bind", "bind", "single"),
+    ("Add", "add", "multicast"),
+):
+    for suffix, roles, binding in (
+        ("Static", ("callback",), "static"),
+        ("Raw", ("object", "callback"), "raw"),
+        ("SP", ("object", "callback"), "shared_weak"),
+        ("ThreadSafeSP", ("object", "callback"), "shared_weak"),
+        ("UObject", ("object", "callback"), "uobject_weak"),
+        ("UFunction", ("object", "function_name"), "uobject_weak"),
+        ("Lambda", ("callback",), "lambda"),
+        ("SPLambda", ("object", "callback"), "shared_weak"),
+        ("WeakLambda", ("object", "callback"), "uobject_weak"),
+    ):
+        UE_DELEGATE_APIS[prefix + suffix] = {
+            "operation": operation, "cardinality": cardinality, "dispatch": "native",
+            "roles": roles, "tail": "payload", "binding": binding,
+            "callback_form": "functor" if suffix in {"Lambda", "SPLambda", "WeakLambda"} else
+                             "function" if suffix == "Static" else "member",
+            "result": "delegate" if operation == "create" else "handle" if operation == "add" else "value",
+        }
+for api, operation, cardinality in (
+    ("BindDynamic", "bind", "single"), ("AddDynamic", "add", "multicast"),
+    ("AddUniqueDynamic", "add", "multicast"), ("RemoveDynamic", "remove", "multicast"),
+    ("IsAlreadyBound", "query", "multicast"),
+):
+    UE_DELEGATE_APIS[api] = {
+        "operation": operation, "cardinality": cardinality, "dispatch": "dynamic",
+        "roles": ("object", "callback"), "tail": "payload", "binding": "uobject_weak",
+        "callback_form": "member", "result": "value",
     }
-)
+for api, operation, cardinality, roles, tail in (
+    ("Add", "add", "multicast", ("delegate",), None),
+    ("AddUnique", "add", "multicast", ("delegate",), None),
+    ("Unbind", "unbind", "single", (), None),
+    ("Remove", "remove", "multicast", ("handle",), None),
+    ("RemoveAll", "remove", "multicast", ("object",), None),
+    ("Clear", "clear", "multicast", (), None),
+    ("Execute", "execute", "single", (), "invocation"),
+    ("ExecuteIfBound", "execute", "single", (), "invocation"),
+    ("Broadcast", "broadcast", "multicast", (), "invocation"),
+    ("IsBound", "query", None, (), None),
+    ("IsBoundToObject", "query", None, ("object",), None),
+    ("GetHandle", "query", "single", (), None),
+):
+    UE_DELEGATE_APIS[api] = {
+        "operation": operation, "cardinality": cardinality,
+        "dispatch": "dynamic" if api == "AddUnique" else None,
+        "roles": roles, "tail": tail, "binding": None,
+        "callback_form": "delegate" if operation == "add" else None,
+        "result": "handle" if api == "GetHandle" else "value",
+    }
 
-UE_DELEGATE_SUBSCRIBE_APIS = frozenset(
-    {
-        "AddDynamic",
-        "AddLambda",
-        "AddRaw",
-        "AddSP",
-        "AddStatic",
-        "AddThreadSafeSP",
-        "AddUFunction",
-        "AddUniqueDynamic",
-        "AddUObject",
-        "AddWeakLambda",
-        "BindDynamic",
-        "BindLambda",
-        "BindRaw",
-        "BindSP",
-        "BindStatic",
-        "BindThreadSafeSP",
-        "BindUFunction",
-        "BindUObject",
-        "BindWeakLambda",
-        "CreateLambda",
-        "CreateRaw",
-        "CreateSP",
-        "CreateStatic",
-        "CreateThreadSafeSP",
-        "CreateUFunction",
-        "CreateUObject",
-        "CreateWeakLambda",
-    }
-)
 
-UE_AMBIGUOUS_DELEGATE_SUBSCRIBE_APIS = frozenset(
-    {
-        "Add",
-        "AddUnique",
-    }
-)
+def delegate_api_rule(api: str, dispatch: str | None) -> dict | None:
+    rule = UE_DELEGATE_APIS.get(api)
+    if rule is None:
+        return None
+    if api == "Remove" and dispatch == "dynamic":
+        return {**rule, "roles": ("object", "function_name"), "tail": "payload"}
+    if api == "Add" and dispatch == "native":
+        return {**rule, "result": "handle"}
+    return rule
+
+UE_DELEGATE_TEMPLATE_TYPES = {
+    "TDelegate": ("single", "native"),
+    "TMulticastDelegate": ("multicast", "native"),
+    "TDynamicDelegate": ("single", "dynamic"),
+    "TDynamicMulticastDelegate": ("multicast", "dynamic"),
+}
+UE_DELEGATE_CONTRACT_REVISION = 2
 
 _UE_DELEGATE_PARAMETER_SUFFIXES = (
     "",
@@ -118,31 +147,24 @@ _UE_DELEGATE_PARAMETER_SUFFIXES = (
     "_NineParams",
 )
 
-UE_DELEGATE_DECLARATION_TYPE_ARGUMENTS = {
-    **{
-        f"{prefix}{suffix}": 0
-        for prefix in (
-            "DECLARE_DELEGATE",
-            "DECLARE_DYNAMIC_DELEGATE",
-            "DECLARE_DYNAMIC_MULTICAST_DELEGATE",
-            "DECLARE_MULTICAST_DELEGATE",
-            "DECLARE_TS_MULTICAST_DELEGATE",
-        )
-        for suffix in _UE_DELEGATE_PARAMETER_SUFFIXES
-    },
-    **{
-        f"{prefix}{suffix}": 1
-        for prefix in (
-            "DECLARE_DELEGATE_RetVal",
-            "DECLARE_DYNAMIC_DELEGATE_RetVal",
-            "DECLARE_EVENT",
-        )
-        for suffix in _UE_DELEGATE_PARAMETER_SUFFIXES
-    },
-    **{
-        f"DECLARE_DERIVED_EVENT{suffix}": 2
-        for suffix in _UE_DELEGATE_PARAMETER_SUFFIXES
-    },
+UE_DELEGATE_DECLARATIONS = {}
+for prefix, index, cardinality, dispatch, policy in (
+    ("DECLARE_DELEGATE", 0, "single", "native", None),
+    ("DECLARE_DELEGATE_RetVal", 1, "single", "native", None),
+    ("DECLARE_DYNAMIC_DELEGATE", 0, "single", "dynamic", None),
+    ("DECLARE_DYNAMIC_DELEGATE_RetVal", 1, "single", "dynamic", None),
+    ("DECLARE_MULTICAST_DELEGATE", 0, "multicast", "native", None),
+    ("DECLARE_DYNAMIC_MULTICAST_DELEGATE", 0, "multicast", "dynamic", None),
+    ("DECLARE_TS_MULTICAST_DELEGATE", 0, "multicast", "native", "thread_safe"),
+    ("DECLARE_EVENT", 1, "multicast", "native", "event"),
+):
+    for suffix in _UE_DELEGATE_PARAMETER_SUFFIXES:
+        UE_DELEGATE_DECLARATIONS[prefix + suffix] = {
+            "type_argument": index, "cardinality": cardinality,
+            "dispatch": dispatch, "policy": policy,
+        }
+UE_DELEGATE_DECLARATIONS["DECLARE_DERIVED_EVENT"] = {
+    "type_argument": 2, "cardinality": "multicast", "dispatch": "native", "policy": "event",
 }
 
 
@@ -182,30 +204,3 @@ def ue_gameplay_tag_symbol(
         return None
     role, linkage = rule
     return symbol, role, linkage
-
-
-def ue_delegate_declared_type(
-    macro_name: str, arguments: Sequence[str]
-) -> str | None:
-    type_argument = UE_DELEGATE_DECLARATION_TYPE_ARGUMENTS.get(macro_name)
-    if type_argument is None or type_argument >= len(arguments):
-        return None
-    declared_type = arguments[type_argument].strip()
-    return declared_type.rsplit("::", 1)[-1] or None
-
-
-def ue_delegate_operation(
-    api: str,
-    *,
-    owner_type: str | None = None,
-    known_delegate_types: Collection[str] = (),
-) -> str | None:
-    if api in UE_DELEGATE_PUBLISH_APIS:
-        return "publish"
-    if api in UE_DELEGATE_SUBSCRIBE_APIS:
-        return "subscribe"
-    if api in UE_AMBIGUOUS_DELEGATE_SUBSCRIBE_APIS and owner_type:
-        short_owner = owner_type.rsplit("::", 1)[-1]
-        if short_owner in known_delegate_types:
-            return "subscribe"
-    return None

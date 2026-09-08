@@ -61,7 +61,11 @@ python sourcetools/ue_inspect_cxx_function.py --source D:/Projects/MyGame/Source
 
 `ue_inspect_cxx_type.py --type <qualified_name>` 精确选择类或结构体，返回 `matches`，包含继承、直接成员 `member_anchors`、成员函数定义 `member_functions` 和接口候选原因。嵌套类型须单独选择；类外实现只来自显式传入的文件，找不到类型返回退出码 1。成员覆盖类内定义、构造函数、模板和条件编译中的成员；类外静态成员变量定义仍在基础清单保留完整限定名。旧清单的 `member_anchors`、`base_types` 和顶层 `member_functions`、`interface_candidates` 已迁往类型详情，`enumerators` 及空的 `unresolved_declarations` 已移除。
 
-函数扫描按本地作用域区分自由函数与成员调用，保留类型限定名及模板参数；委托事件复用已知接收者的类型，无法确定链式调用归属时不生成事件归属记录。相关回归同时检查最小案例和 Lyra 实际源码中的符号身份与成员归属。
+函数扫描按本地作用域区分自由函数与成员调用，保留类型限定名及模板参数。
+
+委托分析使用唯一的 `delegate_contract_revision: 2` 契约：`delegate_operations` 区分创建、绑定、添加、解除绑定、移除、清空、执行、广播和查询；以 `subject` 表达被操作的成员、参数、局部变量或返回值，旧 `event` 字段已移除。`delegate_type` 来自所选文件的声明宏、显式模板或可解析别名；`identified` 表示类型及 API 形状有依据，`candidate` 保留无法确认的调用和原因，不代表真实委托关系。未知类型不会生成虚构的限定成员名。
+
+`callback` 按 API 参数位置识别函数、反射函数名、Lambda 或已有委托值，`callback_target` 从同一分析结果派生。`arguments` 保留对象、payload、执行参数和移除条件，`result` 记录直接承接的委托值或句柄；嵌套创建通过 `source_operation` 关联。`execution_scope` 区分外层函数与 Lambda 函数体。规则基于 UE 5.8；不读取传递头文件，不追踪变量赋值后的绑定流、不证明对象存活或回调线程安全。此次为原位契约替换，没有旧版开关或双写字段。
 
 所有核心 CLI 都把结果写到标准输出，并包含 `schema_version`、领域事实、`validation` 和 `limits`。静态结果是源码证据，不等同于 UBT、UHT、编译器、Editor 或运行时结论。
 

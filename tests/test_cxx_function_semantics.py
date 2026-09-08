@@ -77,8 +77,9 @@ class CxxFunctionSemanticsTests(unittest.TestCase):
                 {template, "Other::FContainer", "Events::FOnReady::FDelegate",
                  "Services::FManager", "Game::AWorker"},
             )
-            self.assertEqual(match["delegate_operations"][0]["event"]["owner_type"],
-                             "Events::FOnReady::FDelegate")
+            self.assertEqual(match["delegate_operations"][0]["subject"]["expression"], "Delegate")
+            self.assertEqual(match["delegate_operations"][0]["resolution"]["status"], "candidate")
+            self.assertIsNone(match["delegate_operations"][0]["subject"]["qualified_name"])
 
     def test_delegate_events_use_local_and_chained_receiver_owners(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -101,10 +102,10 @@ class CxxFunctionSemanticsTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0)
             operations = result["matches"][0]["delegate_operations"]
             self.assertEqual(
-                [item["event"]["qualified_name"] for item in operations],
-                ["FRouter::GetEvent", "FRouter::GetEvent", "FRouter::Changed",
-                 "AWorker::Changed"],
+                [item["subject"]["qualified_name"] for item in operations],
+                [None] * 6,
             )
+            self.assertTrue(all(item["resolution"]["status"] == "candidate" for item in operations))
 
     def test_scoped_free_calls_do_not_become_member_calls(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -580,9 +581,12 @@ class CxxFunctionSemanticsTests(unittest.TestCase):
                 fixture.header,
                 """
                 #pragma once
+                DECLARE_MULTICAST_DELEGATE(FOnFinished);
                 class AWorker
                 {
                 public:
+                    FOnFinished OnFinishedEvent;
+                    FOnFinished CompletedEvent;
                     void Activate();
                     void OnFinished();
                 };
@@ -597,7 +601,7 @@ class CxxFunctionSemanticsTests(unittest.TestCase):
                     FRouter Router;
                     Router.RegisterListenerInternal();
                     OnFinishedEvent.AddUObject(this, &AWorker::OnFinished);
-                    OnFinished.Broadcast();
+                    CompletedEvent.Broadcast();
                 }
                 """,
             )
@@ -613,17 +617,17 @@ class CxxFunctionSemanticsTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0)
             operations = result["matches"][0]["delegate_operations"]
             self.assertEqual(len(operations), 2)
-            self.assertEqual(operations[0]["operation"], "subscribe")
+            self.assertEqual(operations[0]["operation"], "add")
             self.assertEqual(operations[0]["api"], "AddUObject")
             self.assertEqual(
                 operations[0]["callback"]["qualified_name"],
                 "AWorker::OnFinished",
             )
-            self.assertEqual(operations[1]["operation"], "publish")
+            self.assertEqual(operations[1]["operation"], "broadcast")
             self.assertEqual(operations[1]["api"], "Broadcast")
             self.assertEqual(
-                operations[1]["event"]["qualified_name"],
-                "AWorker::OnFinished",
+                operations[1]["subject"]["qualified_name"],
+                "AWorker::CompletedEvent",
             )
 
     def test_delegate_projection_ignores_ambiguous_container_add_calls(self) -> None:
@@ -683,6 +687,7 @@ class CxxFunctionSemanticsTests(unittest.TestCase):
                 """
                 #pragma once
                 DECLARE_MULTICAST_DELEGATE(FOnFinished);
+                DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnDynamic);
                 class AWorker
                 {
                 public:
@@ -691,7 +696,7 @@ class CxxFunctionSemanticsTests(unittest.TestCase):
 
                 private:
                     FOnFinished FinishedEvent;
-                    FOnFinished UniqueFinishedEvent;
+                    FOnDynamic UniqueFinishedEvent;
                 };
                 """,
             )
@@ -701,8 +706,10 @@ class CxxFunctionSemanticsTests(unittest.TestCase):
                 #include "Worker.h"
                 void AWorker::Activate()
                 {
-                    FinishedEvent.Add(&AWorker::OnFinished);
-                    UniqueFinishedEvent.AddUnique(&AWorker::OnFinished);
+                    FOnFinished::FDelegate Callback;
+                    FinishedEvent.Add(Callback);
+                    FOnDynamic::FDelegate DynamicCallback;
+                    UniqueFinishedEvent.AddUnique(DynamicCallback);
                 }
                 """,
             )
@@ -721,14 +728,10 @@ class CxxFunctionSemanticsTests(unittest.TestCase):
             operations = match["delegate_operations"]
             self.assertEqual(
                 [(item["operation"], item["api"]) for item in operations],
-                [("subscribe", "Add"), ("subscribe", "AddUnique")],
+                [("add", "Add"), ("add", "AddUnique")],
             )
-            callback_kinds = {
-                item["kind"]
-                for item in match["external_symbols"]
-                if item["spelling"] == "AWorker::OnFinished"
-            }
-            self.assertEqual(callback_kinds, {"callback_target"})
+            self.assertTrue(all(item["resolution"]["status"] == "identified" for item in operations))
+            self.assertTrue(all(item["callback"]["kind"] == "delegate_value" for item in operations))
 
     def test_delegate_projection_keeps_external_delegate_type_unknown(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -770,7 +773,8 @@ class CxxFunctionSemanticsTests(unittest.TestCase):
 
             self.assertEqual(completed.returncode, 0)
             match = result["matches"][0]
-            self.assertEqual(match["delegate_operations"], [])
+            self.assertEqual(len(match["delegate_operations"]), 1)
+            self.assertEqual(match["delegate_operations"][0]["resolution"]["status"], "candidate")
             function_address = next(
                 item
                 for item in match["external_symbols"]

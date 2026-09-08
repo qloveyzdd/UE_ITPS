@@ -134,4 +134,11 @@ def run_cli(relative: str, *arguments: object) -> tuple[subprocess.CompletedProc
             f"{relative} did not emit JSON (exit {completed.returncode}):\n"
             f"stdout={completed.stdout}\nstderr={completed.stderr}"
         ) from error
+    if relative == "sourcetools/ue_inspect_cxx_function.py":
+        from jsonschema import Draft202012Validator
+        from referencing import Registry, Resource
+        schema = json.loads((ROOT / "schemas/ue_inspect_cxx_function.schema.json").read_text(encoding="utf-8"))
+        common = json.loads((ROOT / "schemas/common.schema.json").read_text(encoding="utf-8"))
+        registry = Registry().with_resource(common["$id"], Resource.from_contents(common))
+        Draft202012Validator(schema, registry=registry).validate(document)
     return completed, document

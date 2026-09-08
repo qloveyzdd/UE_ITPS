@@ -26,6 +26,7 @@
       "type": "object",
       "required": [
         "schema_version",
+        "delegate_contract_revision",
         "match_count",
         "matches",
         "validation",
@@ -50,6 +51,9 @@
         },
         "limits": {
           "$ref": "urn:ue-itps:schema:common#/$defs/limits"
+        },
+        "delegate_contract_revision": {
+          "const": 2
         }
       },
       "additionalProperties": false
@@ -121,45 +125,190 @@
     },
     "delegateOperation": {
       "type": "object",
-      "required": ["operation", "api", "event", "callback", "evidence"],
+      "required": [
+        "operation_id",
+        "operation",
+        "api",
+        "subject",
+        "delegate_type",
+        "callback",
+        "binding",
+        "arguments",
+        "result",
+        "resolution",
+        "execution_scope",
+        "evidence"
+      ],
       "properties": {
+        "operation_id": {
+          "type": "string"
+        },
         "operation": {
-          "enum": ["publish", "subscribe"]
+          "enum": [
+            "create",
+            "bind",
+            "add",
+            "unbind",
+            "remove",
+            "clear",
+            "execute",
+            "broadcast",
+            "query"
+          ]
         },
         "api": {
-          "type": "string",
-          "minLength": 1
+          "type": "string"
         },
-        "event": {
-          "$ref": "#/$defs/delegateEndpoint"
+        "subject": {
+          "$ref": "#/$defs/delegateSubject"
+        },
+        "delegate_type": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/delegateType"
+            }
+          ]
         },
         "callback": {
           "oneOf": [
-            {"type": "null"},
-            {"$ref": "#/$defs/delegateEndpoint"}
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/delegateCallback"
+            }
+          ]
+        },
+        "binding": {
+          "enum": [
+            null,
+            "static",
+            "raw",
+            "shared_weak",
+            "uobject_weak",
+            "lambda"
+          ]
+        },
+        "arguments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "role",
+              "expression"
+            ],
+            "properties": {
+              "role": {
+                "enum": [
+                  "callback",
+                  "delegate",
+                  "function_name",
+                  "object",
+                  "payload",
+                  "handle",
+                  "invocation",
+                  "unknown"
+                ]
+              },
+              "expression": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "result": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "required": [
+                "expression",
+                "kind"
+              ],
+              "properties": {
+                "expression": {
+                  "type": "string"
+                },
+                "kind": {
+                  "enum": [
+                    "delegate",
+                    "handle",
+                    "value"
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "resolution": {
+          "type": "object",
+          "required": [
+            "status",
+            "reasons"
+          ],
+          "properties": {
+            "status": {
+              "enum": [
+                "identified",
+                "candidate"
+              ]
+            },
+            "reasons": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "execution_scope": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "kind"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "function"
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": [
+                "kind",
+                "line",
+                "column"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "lambda"
+                },
+                "line": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "column": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "additionalProperties": false
+            }
           ]
         },
         "evidence": {
-          "$ref": "#/$defs/sourceEvidence"
-        }
-      },
-      "additionalProperties": false
-    },
-    "delegateEndpoint": {
-      "type": "object",
-      "required": ["owner_type", "name", "qualified_name"],
-      "properties": {
-        "owner_type": {
-          "type": "string",
-          "minLength": 1
-        },
-        "name": {
-          "type": "string",
-          "minLength": 1
-        },
-        "qualified_name": {
-          "type": "string",
-          "minLength": 1
+          "$ref": "#/$defs/delegateEvidence"
         }
       },
       "additionalProperties": false
@@ -180,6 +329,154 @@
         "line": {
           "type": "integer",
           "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "delegateEvidence": {
+      "type": "object",
+      "required": [
+        "unit",
+        "line",
+        "column"
+      ],
+      "properties": {
+        "unit": {
+          "enum": [
+            "cpp",
+            "header"
+          ]
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "delegateSubject": {
+      "type": "object",
+      "required": [
+        "expression",
+        "kind",
+        "qualified_name"
+      ],
+      "properties": {
+        "expression": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "type",
+            "member",
+            "parameter",
+            "local",
+            "global",
+            "return_value",
+            "temporary",
+            "unknown"
+          ]
+        },
+        "qualified_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "delegateType": {
+      "type": "object",
+      "required": [
+        "expression",
+        "qualified_name",
+        "cardinality",
+        "dispatch",
+        "policy",
+        "evidence"
+      ],
+      "properties": {
+        "expression": {
+          "type": "string"
+        },
+        "qualified_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cardinality": {
+          "enum": [
+            "single",
+            "multicast",
+            null
+          ]
+        },
+        "dispatch": {
+          "enum": [
+            "native",
+            "dynamic",
+            null
+          ]
+        },
+        "policy": {
+          "enum": [
+            null,
+            "event",
+            "thread_safe"
+          ]
+        },
+        "evidence": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/sourceEvidence"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "delegateCallback": {
+      "type": "object",
+      "required": [
+        "kind",
+        "expression",
+        "qualified_name",
+        "source_operation"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "member_function",
+            "function",
+            "reflection_name",
+            "lambda",
+            "delegate_value",
+            "unknown"
+          ]
+        },
+        "expression": {
+          "type": "string"
+        },
+        "qualified_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_operation": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false

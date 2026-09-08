@@ -18,6 +18,36 @@ from ue_project_tools.source_type_details import inspect_source_type
 
 
 class LyraTreeSitterBaselineTests(unittest.TestCase):
+    def test_lyra_delegate_creation_execution_and_removal(self) -> None:
+        root = ROOT / "LyraStarterGame" / "Source" / "LyraGame"
+
+        def scan(relative, function):
+            paths = [root / f"{relative}.cpp", root / f"{relative}.h"]
+            result = inspect_source_function(paths, function)
+            self.assertEqual(result["validation"]["status"], "ok")
+            self.assertEqual(result["delegate_contract_revision"], 2)
+            return result["matches"][0]["delegate_operations"]
+
+        operations = scan("AbilitySystem/Phases/LyraGamePhaseSubsystem",
+                          "ULyraGamePhaseSubsystem::K2_StartPhase")
+        self.assertEqual([o["operation"] for o in operations], ["create", "execute"])
+        self.assertTrue(all(o["resolution"]["status"] == "identified" for o in operations))
+        self.assertEqual(operations[0]["subject"]["qualified_name"], "FLyraGamePhaseDelegate")
+        self.assertEqual(operations[0]["callback"]["kind"], "lambda")
+        self.assertEqual(operations[1]["execution_scope"]["kind"], "lambda")
+        self.assertIsNone(operations[1]["subject"]["qualified_name"])
+        operations = scan("AbilitySystem/Phases/LyraGamePhaseSubsystem",
+                          "ULyraGamePhaseSubsystem::StartPhase")
+        execute = next(o for o in operations if o["api"] == "ExecuteIfBound")
+        self.assertEqual(execute["subject"]["kind"], "parameter")
+        self.assertIsNone(execute["subject"]["qualified_name"])
+        operations = scan("Weapons/LyraGameplayAbility_RangedWeapon",
+                          "ULyraGameplayAbility_RangedWeapon::EndAbility")
+        removal = next(o for o in operations if o["api"] == "Remove")
+        self.assertEqual(removal["operation"], "remove")
+        self.assertEqual(removal["arguments"][0]["expression"], "OnTargetDataReadyCallbackDelegateHandle")
+        self.assertEqual(removal["resolution"]["status"], "candidate")
+
     def test_lyra_tool_symbol_and_member_projections(self) -> None:
         root = ROOT / "LyraStarterGame" / "Source" / "LyraGame"
 
@@ -59,10 +89,10 @@ class LyraTreeSitterBaselineTests(unittest.TestCase):
             pair("Weapons/LyraGameplayAbility_RangedWeapon"),
             "ULyraGameplayAbility_RangedWeapon::ActivateAbility",
         )
-        self.assertEqual(
-            result["matches"][0]["delegate_operations"][0]["event"]["qualified_name"],
-            "UAbilitySystemComponent::AbilityTargetDataSetDelegate",
-        )
+        operation = result["matches"][0]["delegate_operations"][0]
+        self.assertIn("AbilityTargetDataSetDelegate", operation["subject"]["expression"])
+        self.assertIsNone(operation["subject"]["qualified_name"])
+        self.assertEqual(operation["resolution"]["status"], "candidate")
         result = inspect_source_type(pair("System/GameplayTagStack"), "FGameplayTagStackContainer")
         container = result["matches"][0]
         self.assertTrue(
