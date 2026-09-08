@@ -84,6 +84,22 @@ class DelegateAnalysisTests(unittest.TestCase):
         self.assertEqual(ops[2]["subject"]["kind"], "parameter")
         self.assertIsNone(ops[2]["subject"]["qualified_name"])
 
+    def test_identified_callback_replaces_unknown_address_without_promoting_payload(self):
+        match = self.scan("""
+            DECLARE_DELEGATE(FDone);
+            class FWorker { int Payload; void Run(); };
+        """, """
+            void FWorker::Run() {
+                FDone Done = FDone::CreateStatic(&External::Ready, &Payload);
+            }
+        """)
+        self.assertEqual(match["delegate_operations"][0]["resolution"]["status"], "identified")
+        symbols = match["external_symbols"]
+        self.assertEqual([s["spelling"] for s in symbols if s["kind"] == "callback_target"],
+                         ["External::Ready"])
+        self.assertFalse(any(s["kind"] == "function_address" for s in symbols))
+        self.assertFalse(any(s["spelling"] in {"&External::Ready", "&Payload"} for s in symbols))
+
     def test_dynamic_operations_and_non_delegate_lookalikes(self):
         match = self.scan("""
             DECLARE_DYNAMIC_DELEGATE(FSingle);

@@ -777,30 +777,33 @@ def _function_fact(
     }
 
 
-def _function_addresses(arguments: Node | None, source: bytes) -> list[dict[str, Any]]:
-    results: list[dict[str, Any]] = []
-    if arguments is None:
-        return results
-    for argument in arguments.named_children:
-        for current in _walk_function_body(argument):
-            if current.type != "pointer_expression":
-                continue
-            spelling = _canonical_cpp(_text(current, source))
-            if not spelling.startswith("&"):
-                continue
-            qualified_name = spelling[1:]
-            if not qualified_name:
-                continue
-            owner, separator, name = qualified_name.rpartition("::")
-            result = {"name": name if separator else qualified_name,
-                      "start_offset": int(current.start_byte)}
-            if separator:
-                result["owner_type"] = owner
-                result["qualified_name"] = qualified_name
-            else:
-                result["qualified_name"] = qualified_name
-            results.append(result)
-    return results
+def _address_symbol(
+    address: dict[str, Any], function: dict[str, Any], targets: dict[str, set[str]],
+) -> dict[str, Any] | None:
+    """Classify an address using selected-file declarations and lexical bindings."""
+    symbol = {"kind": "unknown", "spelling": address["expression"],
+              "line": address["line"], "start_offset": address["start_offset"]}
+    if address["target_kind"] not in {"identifier", "qualified_identifier", "template_function"}:
+        return symbol
+    path = address["path"]
+    if not path:
+        return symbol
+    if not address["global_scope"] and path[0] in address["bindings"]:
+        return None if len(path) == 1 else symbol
+    scope = function["qualified_name"].split("::")
+    depths = [0] if address["global_scope"] else range(len(scope), -1, -1)
+    for depth in depths:
+        kinds = targets.get("::".join([*scope[:depth], *path]))
+        if kinds is None:
+            continue
+        if kinds == {"data"}:
+            return None
+        if kinds == {"function"}:
+            symbol.update(kind="function_address", spelling=address["target_expression"])
+            if len(path) > 1:
+                symbol["owner_type"] = "::".join(path[:-1])
+        return symbol
+    return symbol
 
 
 def _function_references(
@@ -812,6 +815,7 @@ def _function_references(
     calls: list[dict[str, Any]] = []
     controls: list[dict[str, Any]] = []
     call_details: list[dict[str, Any]] = []
+    addresses: list[dict[str, Any]] = []
     local_variables: list[dict[str, str]] = []
     identifier_references: list[dict[str, Any]] = []
     variable_types = {
@@ -821,6 +825,19 @@ def _function_references(
     }
     body = node.child_by_field_name("body") or node
     for current in _walk_function_body(body):
+        if current.type == "pointer_expression" and _text(current.child_by_field_name("operator"), source) == "&":
+            target = current.child_by_field_name("argument")
+            while target is not None and target.type == "parenthesized_expression":
+                target = next(iter(target.named_children), None)
+            if target is not None:
+                addresses.append({
+                    "expression": _canonical_cpp(_text(current, source)),
+                    "target_expression": _canonical_cpp(_text(target, source)),
+                    "target_kind": target.type, "path": _cpp_name_path(target, source),
+                    "global_scope": target.type == "qualified_identifier" and target.child_by_field_name("scope") is None,
+                    "bindings": expression_facts.visible_bindings(current, node, source, _walk_function_body, _type_fact, _declarators, _name_from_declarator),
+                    "line": _line(current), "start_offset": int(current.start_byte),
+                })
         if current.type in {"identifier", "qualified_identifier"} and (
             current.parent is None or current.parent.type != "qualified_identifier"
         ):
@@ -876,7 +893,7 @@ def _function_references(
                     "kind": "type", "spelling": type_name, "line": _line(current),
                     "start_offset": int(current.start_byte),
                 })
-        if current.type != "call_expression":
+        if expression_facts.expression_kind(current, source) != "call_expression":
             continue
         callee_node = current.child_by_field_name("function")
         arguments_node = current.child_by_field_name("arguments")
@@ -934,7 +951,6 @@ def _function_references(
                 "arguments": arguments,
                 "argument_details": argument_details,
                 "template_arguments": callee_fact["template_arguments"],
-                "function_addresses": _function_addresses(arguments_node, source),
                 "target_name": target_name,
                 "target_owner": None,
                 "receiver_fact": receiver_fact,
@@ -948,6 +964,7 @@ def _function_references(
         "calls": calls,
         "controls": controls,
         "call_details": call_details,
+        "addresses": addresses,
         "local_variables": local_variables,
         "identifier_references": identifier_references,
     }
@@ -1363,6 +1380,11 @@ def _finalize_references(
         if item["role"] == "definition"
     }
     field_types_by_owner: dict[str, dict[str, str]] = {}
+    address_targets: dict[str, set[str]] = {}
+    for item in model["functions"]:
+        address_targets.setdefault(item["qualified_name"], set()).add("function")
+    for item in model["variables"]:
+        address_targets.setdefault(item["qualified_name"], set()).add("data")
     for item in model["types"]:
         if item["role"] != "definition":
             continue
@@ -1371,6 +1393,8 @@ def _finalize_references(
             for field in item.get("fields", [])
             if field.get("name")
         }
+        for field in item.get("fields", []):
+            address_targets.setdefault(f"{item['qualified_name']}::{field['name']}", set()).add("data")
     for occurrence_id, references in model["references"].items():
         function = functions_by_occurrence[occurrence_id]
         function_owner = "::".join(
@@ -1473,15 +1497,9 @@ def _finalize_references(
                         "start_offset": int(call["start_offset"]),
                     }
                 )
-            for address in call.get("function_addresses", []):
-                symbol = {
-                    "kind": "function_address",
-                    "spelling": address["qualified_name"],
-                    "line": int(call["line"]),
-                    "start_offset": int(address["start_offset"]),
-                }
-                if address.get("owner_type"):
-                    symbol["owner_type"] = address["owner_type"]
+        for address in references["addresses"]:
+            symbol = _address_symbol(address, function, address_targets)
+            if symbol is not None:
                 symbols.append(symbol)
         local_names = {
             str(item["name"])

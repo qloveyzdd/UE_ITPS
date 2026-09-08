@@ -65,6 +65,8 @@ python sourcetools/ue_inspect_cxx_function.py --source D:/Projects/MyGame/Source
 
 函数扫描按本地作用域区分自由函数与成员调用，保留类型限定名及模板参数。
 
+取地址表达式依据所选文件中的函数、变量和成员声明分类，并考虑参数、局部变量、Lambda 参数及范围循环变量的遮蔽；有函数声明证据才输出 `function_address`，已知数据地址不进入该类别，无法确认的地址保留原表达式并输出 `unknown`。已识别委托操作的指定回调参数继续由委托分析生成 `callback_target`。C++ 的 `const_cast`、`static_cast`、`reinterpret_cast` 和 `dynamic_cast` 不进入调用列表或外部函数候选，但保留目标类型及内部实际调用；普通模板调用（例如 UE `Cast<T>`）仍按调用处理。
+
 `function_id` 标识所选文件中的一处具体定义，格式在原签名后增加 `|unit:line:column`。条件编译分支、头源文件和同一行上的定义各自保存符号、调用及委托结果；内部函数签名身份仍用于实体描述。依赖旧 `function_id` 的缓存需重新生成，源码位置变化也会改变该标识。
 
 委托分析使用唯一的 `delegate_contract_revision: 2` 契约：`delegate_operations` 区分创建、绑定、添加、解除绑定、移除、清空、执行、广播和查询；以 `subject` 表达被操作的成员、参数、局部变量或返回值，旧 `event` 字段已移除。`delegate_type` 来自所选文件的声明宏、显式模板或可解析别名；`identified` 表示类型及 API 形状有依据，`candidate` 保留无法确认的调用和原因，不代表真实委托关系。未知类型不会生成虚构的限定成员名。

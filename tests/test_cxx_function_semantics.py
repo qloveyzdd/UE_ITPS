@@ -9,6 +9,83 @@ from tests.support import create_fixture, run_cli, write_text
 
 class CxxFunctionSemanticsTests(unittest.TestCase):
 
+    def test_named_casts_preserve_operand_calls_and_target_types(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            write_text(fixture.source, """
+                void Run() {
+                    Consume(const_cast<FTarget*>(Acquire()));
+                    Consume(static_cast<FBase*>(Acquire()));
+                    Consume(reinterpret_cast<FBuffer*>(Acquire()));
+                    Consume(dynamic_cast<FDerived*>(Acquire()));
+                    Consume(static_cast<FBase*>(const_cast<FTarget*>(Acquire())));
+                    Cast<FTarget>(Acquire());
+                }
+            """)
+            completed, result = run_cli(
+                "sourcetools/ue_inspect_cxx_function.py", "--source", fixture.source,
+                "--function", "Run", "--include-syntax-flow",
+            )
+            self.assertEqual(completed.returncode, 0, result)
+            match = result["matches"][0]
+            calls = [c["callee"] for c in match["syntax_flow"]["calls"]]
+            self.assertEqual(calls, ["Consume", "Acquire"] * 5 + ["Cast<FTarget>", "Acquire"])
+            symbols = {(s["kind"], s["spelling"]) for s in match["external_symbols"]}
+            self.assertTrue({("type", name) for name in
+                             ("FTarget*", "FBase*", "FBuffer*", "FDerived*", "FTarget")} <= symbols)
+            self.assertIn(("unknown", "Cast<FTarget>()"), symbols)
+            self.assertFalse(any("_cast<" in spelling for _, spelling in symbols))
+
+    def test_address_targets_require_function_evidence_and_respect_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            write_text(fixture.header, """
+                namespace Game {
+                    void Ready();
+                    void Overload();
+                    void Overload(int);
+                    int Value;
+                    struct FWorker {
+                        void Run(int Parameter);
+                        void Finished();
+                        int Field;
+                        int Children[2];
+                    };
+                }
+            """)
+            source = write_text(fixture.source, """
+                void Game::FWorker::Run(int Parameter) {
+                    int Local = 0;
+                    Sink(&Local, &Parameter, &Field, &FWorker::Field, &Game::Value);
+                    Sink(&Children[0], &External::Missing);
+                    Sink(&Ready, &FWorker::Finished, &Game::Overload);
+                    Sink(
+                        &(FWorker::Finished));
+                    { int Ready = 0; Sink(&Ready); }
+                    Sink(&Ready);
+                    auto Lambda = [](int Ready) { Sink(&Ready); };
+                    auto Callback = &FWorker::Finished;
+                    for (auto& Ready : Children) { Sink(&Ready); }
+                    Sink(&Ready);
+                }
+            """)
+            completed, result = run_cli(
+                "sourcetools/ue_inspect_cxx_function.py", "--source", source, fixture.header,
+                "--function", "Game::FWorker::Run",
+            )
+            self.assertEqual(completed.returncode, 0, result)
+            symbols = result["matches"][0]["external_symbols"]
+            addresses = [s for s in symbols if s["kind"] == "function_address"]
+            self.assertEqual([s["spelling"] for s in addresses],
+                             ["Ready", "FWorker::Finished", "Game::Overload",
+                              "FWorker::Finished", "Ready", "FWorker::Finished", "Ready"])
+            self.assertEqual([s["evidence"]["line"] for s in addresses], [5, 5, 5, 7, 9, 11, 13])
+            self.assertIn(("unknown", "&External::Missing"),
+                          {(s["kind"], s["spelling"]) for s in symbols})
+            self.assertFalse(any(s["kind"] == "unknown" and s["spelling"] in
+                                 {"&Local", "&Parameter", "&Field", "&FWorker::Field", "&Game::Value"}
+                                 for s in symbols))
+
     def test_inline_friends_are_namespace_functions_not_members(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = create_fixture(Path(directory))

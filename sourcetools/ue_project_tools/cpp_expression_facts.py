@@ -6,6 +6,17 @@ def text(node, source):
     return source[node.start_byte:node.end_byte].decode("utf-8") if node else ""
 
 
+def expression_kind(node, source):
+    """Normalize language operations represented as calls by the C++ grammar."""
+    if node.type == "call_expression":
+        callee = node.child_by_field_name("function")
+        if callee is not None and callee.type == "template_function":
+            name = text(callee.child_by_field_name("name"), source)
+            if name in {"const_cast", "static_cast", "reinterpret_cast", "dynamic_cast"}:
+                return "cast_expression"
+    return node.type
+
+
 def scope_path(node, source):
     """Namespace fallback; the frontend supplies the innermost named definition."""
     parts = []
@@ -23,7 +34,7 @@ def expression(node, source):
     if node is None:
         return None
     result: dict[str, Any] = {
-        "kind": node.type, "expression": text(node, source),
+        "kind": expression_kind(node, source), "expression": text(node, source),
         "start_offset": node.start_byte, "end_offset": node.end_byte,
         "line": node.start_point.row + 1, "column": node.start_point.column + 1,
     }
@@ -79,9 +90,9 @@ def visible_bindings(call, function, source, walk, type_fact, declarators, name_
     for node in walk(function):
         if node.start_byte >= call.start_byte:
             continue
-        if node.type not in {"declaration", "parameter_declaration", "optional_parameter_declaration"}:
+        if node.type not in {"declaration", "parameter_declaration", "optional_parameter_declaration", "for_range_loop"}:
             continue
-        owner = node.parent
+        owner = node if node.type == "for_range_loop" else node.parent
         while owner and owner.type not in {"compound_statement", "lambda_expression", "function_definition",
                                           "if_statement", "for_statement", "for_range_loop", "catch_clause"}:
             owner = owner.parent

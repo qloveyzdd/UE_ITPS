@@ -259,7 +259,7 @@ class DelegateAnalyzer:
                 if nested and nested["operation"] == "create" and nested_id != operation["operation_id"]:
                     callback["source_operation"] = nested_id
         symbols = [s for s in references["external_symbols"]
-                   if not (s["kind"] == "function_address" and s["start_offset"] in callback_offsets)]
+                   if not (s["kind"] in {"function_address", "unknown"} and s["start_offset"] in callback_offsets)]
         symbols.extend(callback_symbols)
         references["external_symbols"] = sorted(symbols, key=lambda s: s["start_offset"])
         references["delegate_operations"] = operations
