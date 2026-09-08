@@ -9,6 +9,158 @@ from tests.support import create_fixture, run_cli, write_text
 
 class CxxFunctionSemanticsTests(unittest.TestCase):
 
+    def test_inline_friends_are_namespace_functions_not_members(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            write_text(fixture.header, """
+                namespace Game {
+                    struct First {
+                        friend uint32 GetTypeHash(const First& Value) { return FirstHash(Value); }
+                    };
+                    struct Second {
+                        friend FORCEINLINE uint32 GetTypeHash(Second Value) { return SecondHash(Value); }
+                    };
+                }
+            """)
+            completed, result = run_cli("sourcetools/ue_inspect_cxx_function.py", "--source",
+                                        fixture.header, "--function", "Game::GetTypeHash",
+                                        "--include-syntax-flow")
+            self.assertEqual(completed.returncode, 0, result)
+            self.assertEqual(result["match_count"], 2)
+            self.assertEqual({m["syntax_flow"]["calls"][0]["callee"] for m in result["matches"]},
+                             {"FirstHash", "SecondHash"})
+            _, inventory = run_cli("sourcetools/ue_list_cxx_types.py", "--source", fixture.header)
+            self.assertEqual([f["qualified_name"] for f in inventory["free_functions"]],
+                             ["Game::GetTypeHash", "Game::GetTypeHash"])
+            _, details = run_cli("sourcetools/ue_inspect_cxx_type.py", "--source",
+                                 fixture.header, "--type", "Game::First")
+            self.assertEqual(details["matches"][0]["member_functions"], [])
+            self.assertEqual(details["matches"][0]["member_anchors"], [])
+
+    def test_local_type_bodies_are_separate_from_enclosing_function_and_lambda(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            write_text(fixture.source, """
+                namespace Game {
+                    DECLARE_DELEGATE(FDone);
+                    void Outer() {
+                        struct Local {
+                            FDone Done;
+                            void Run() { InnerOnly(); Done.Execute(); }
+                        };
+                        OuterOnly();
+                        auto Work = [] {
+                            struct InLambda { void Run(FDone Done) { LambdaMemberOnly(); Done.Execute(); } };
+                            LambdaOnly();
+                        };
+                    }
+                    void Other() {
+                        struct Local { void Run() { OtherInnerOnly(); } };
+                    }
+                }
+            """)
+            for selector, calls, operations in (
+                ("Game::Outer", {"OuterOnly", "LambdaOnly"}, []),
+                ("Game::Outer::Local::Run", {"InnerOnly", "Done.Execute"}, ["execute"]),
+                ("Game::Outer::InLambda::Run", {"LambdaMemberOnly", "Done.Execute"}, ["execute"]),
+                ("Game::Other::Local::Run", {"OtherInnerOnly"}, []),
+            ):
+                with self.subTest(selector=selector):
+                    completed, result = run_cli("sourcetools/ue_inspect_cxx_function.py", "--source",
+                                                fixture.source, "--function", selector, "--include-syntax-flow")
+                    self.assertEqual(completed.returncode, 0, result)
+                    match = result["matches"][0]
+                    self.assertEqual({c["callee"] for c in match["syntax_flow"]["calls"]}, calls)
+                    self.assertEqual([o["operation"] for o in match["delegate_operations"]], operations)
+                    for operation in match["delegate_operations"]:
+                        self.assertEqual(operation["resolution"]["status"], "identified")
+                        self.assertEqual(operation["execution_scope"], {"kind": "function"})
+            _, inventory = run_cli("sourcetools/ue_list_cxx_types.py", "--source", fixture.source)
+            self.assertEqual({t["qualified_name"] for t in inventory["structs"]},
+                             {"Game::Outer::Local", "Game::Outer::InLambda", "Game::Other::Local"})
+            self.assertEqual(inventory["global_variables"], [])
+
+    def test_ue_test_containers_expose_named_methods_and_helpers(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            write_text(fixture.source, """
+                TEST_CLASS_WITH_FLAGS(FCheck, "Tests", Flags) {
+                    FCheck() { Construct(); }
+                    void Helper() { Help(); }
+                    BEFORE_EACH() { Prepare(); }
+                    TEST_METHOD(First) { CheckFirst(); }
+                    TEST_METHOD(Second) { CheckSecond(); }
+                    AFTER_EACH() { Cleanup(); }
+                };
+                BEGIN_DEFINE_SPEC(FSpec, "Tests.Spec", Flags)
+                    int Value;
+                    void Helper() { SpecHelp(); }
+                END_DEFINE_SPEC(FSpec)
+            """)
+            for name, call in (("FCheck::FCheck", "Construct"), ("FCheck::Helper", "Help"),
+                               ("FCheck::Setup", "Prepare"), ("FCheck::First", "CheckFirst"),
+                               ("FCheck::Second", "CheckSecond"), ("FCheck::TearDown", "Cleanup"),
+                               ("FSpec::Helper", "SpecHelp")):
+                with self.subTest(name=name):
+                    completed, result = run_cli("sourcetools/ue_inspect_cxx_function.py", "--source",
+                                                fixture.source, "--function", name, "--include-syntax-flow")
+                    self.assertEqual(completed.returncode, 0, result)
+                    self.assertEqual(result["match_count"], 1)
+                    self.assertEqual(result["matches"][0]["syntax_flow"]["calls"][0]["callee"], call)
+            _, inventory = run_cli("sourcetools/ue_list_cxx_types.py", "--source", fixture.source)
+            self.assertEqual([t["name"] for t in inventory["structs"]], ["FCheck"])
+            self.assertEqual([t["name"] for t in inventory["classes"]], ["FSpec"])
+            self.assertEqual(inventory["free_functions"], [])
+
+    def test_conditional_definitions_keep_independent_bodies_and_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            write_text(fixture.header, """
+                DECLARE_DELEGATE(FDone);
+                class AWorker { FDone Done; void Run(); void Ready(); };
+                #if HEADER_IMPLEMENTATION
+                void AWorker::Run() { HeaderOnly(); Done.IsBound(); }
+                #endif
+            """)
+            write_text(fixture.source, """
+                #if SERVER
+                void AWorker::Run() { ServerOnly(); Done.BindUObject(this, &AWorker::Ready); }
+                #elif CLIENT
+                void AWorker::Run() { ClientOnly(); Done.Execute(); }
+                #else
+                void AWorker::Run() { FallbackOnly(); Done.Unbind(); }
+                #endif
+            """)
+            arguments = ("--source", fixture.source, fixture.header,
+                         "--function", "AWorker::Run", "--include-syntax-flow")
+            completed, result = run_cli("sourcetools/ue_inspect_cxx_function.py", *arguments)
+            self.assertEqual(completed.returncode, 0, result)
+            matches = result["matches"]
+            self.assertEqual(len(matches), 4)
+            # Check content before identity so a signature-keyed reference map fails here.
+            by_call = {m["syntax_flow"]["calls"][0]["callee"]: m for m in matches}
+            self.assertEqual(set(by_call), {"HeaderOnly", "ServerOnly", "ClientOnly", "FallbackOnly"})
+            for call, operation in (("HeaderOnly", "query"), ("ServerOnly", "bind"),
+                                    ("ClientOnly", "execute"), ("FallbackOnly", "unbind")):
+                match = by_call[call]
+                self.assertIn(call + "()", [s["spelling"] for s in match["external_symbols"]])
+                self.assertEqual([o["operation"] for o in match["delegate_operations"]], [operation])
+                self.assertEqual(match["delegate_operations"][0]["resolution"]["status"], "identified")
+            self.assertEqual(len({m["function_id"] for m in matches}), 4)
+            _, repeated = run_cli("sourcetools/ue_inspect_cxx_function.py", *arguments)
+            self.assertEqual(repeated["matches"], matches)
+
+    def test_same_line_definitions_have_distinct_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            write_text(fixture.source, "void Run() { First(); } void Run() { Second(); }")
+            completed, result = run_cli("sourcetools/ue_inspect_cxx_function.py", "--source",
+                                        fixture.source, "--function", "Run", "--include-syntax-flow")
+            self.assertEqual(completed.returncode, 0, result)
+            self.assertEqual(len({m["function_id"] for m in result["matches"]}), 2)
+            self.assertEqual({m["syntax_flow"]["calls"][0]["callee"] for m in result["matches"]},
+                             {"First", "Second"})
+
     def test_call_template_types_and_same_line_source_order(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = create_fixture(Path(directory))
@@ -565,7 +717,8 @@ class CxxFunctionSemanticsTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0)
             match = normalized["matches"][0]
             self.assertIn("AWorker|Normalize", match["function_id"])
-            self.assertTrue(match["function_id"].endswith(" const"))
+            self.assertTrue(match["function_id"].rsplit("|", 1)[0].endswith(" const"))
+            self.assertTrue(match["function_id"].endswith("|cpp:4:1"))
             global_symbol = next(
                 item
                 for item in match["external_symbols"]

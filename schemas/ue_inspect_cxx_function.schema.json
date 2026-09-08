@@ -68,6 +68,7 @@
       "properties": {
         "function_id": {
           "type": "string",
+          "description": "Identifies one definition occurrence in the selected source unit; includes its signature and unit:line:column location.",
           "minLength": 1
         },
         "external_symbols": {

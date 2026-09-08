@@ -126,14 +126,46 @@ class LyraTreeSitterBaselineTests(unittest.TestCase):
             "ue_test_class_declaration": 0,
             "ue_test_spec_declaration": 0,
         }
+        raw_definitions = set()
+        raw_type_definitions = set()
+        raw_body_calls = {}
+        macro_end_lines = {}
+        type_nodes = {"class_specifier", "struct_specifier", "union_specifier", "enum_specifier",
+                      "ue_test_class_declaration", "ue_test_spec_declaration"}
         for path in files:
-            tree = parser.parse(path.read_bytes())
+            source = path.read_bytes()
+            file_key = path.resolve().as_posix().casefold()
+            tree = parser.parse(source)
             self.assertFalse(tree.root_node.has_error, path.as_posix())
             stack = [tree.root_node]
             while stack:
                 node = stack.pop()
                 if node.type in syntax_counts:
                     syntax_counts[node.type] += 1
+                if node.type == "function_definition":
+                    raw_definitions.add((file_key, node.start_byte))
+                if node.type in type_nodes and (
+                    node.type.startswith("ue_test_")
+                    or (node.child_by_field_name("name") is not None
+                        and node.child_by_field_name("body") is not None)
+                ):
+                    raw_type_definitions.add((file_key, node.start_byte))
+                if node.type == "call_expression":
+                    # Find the owning body from ancestors, independent of the frontend visitor.
+                    parent = node.parent
+                    while parent is not None and parent.type not in type_nodes:
+                        if parent.type == "function_definition":
+                            body = parent.child_by_field_name("body")
+                            if body is not None and body.start_byte <= node.start_byte < body.end_byte:
+                                raw_body_calls.setdefault((file_key, parent.start_byte), set()).add(node.start_byte)
+                            break
+                        parent = parent.parent
+                if node.type in {"preproc_def", "preproc_function_def"}:
+                    # Strip the directive's final newline, keeping continuation lines.
+                    directive = source[node.start_byte:node.end_byte].rstrip(b"\r\n")
+                    macro_end_lines[(file_key, node.start_point.row + 1)] = (
+                        node.start_point.row + 1 + directive.count(b"\n")
+                    )
                 stack.extend(reversed(node.named_children))
 
         self.assertEqual(syntax_counts["ue_slate_arguments_declaration"], 8)
@@ -143,17 +175,30 @@ class LyraTreeSitterBaselineTests(unittest.TestCase):
         model = load_cpp_unit(files[0], files, project_root)
 
         self.assertEqual(model["diagnostic_error_count"], 0)
-        self.assertEqual(len(model["types"]), 2010)
+        self.assertEqual(len(model["types"]), 2022)
         # Nested type bodies must not create spurious outer-class function declarations.
-        self.assertEqual(len(model["functions"]), 6037)
+        self.assertEqual(len(model["functions"]), 6069)
         self.assertEqual(len(model["variables"]), 302)
         self.assertEqual(len(model["includes"]), 3254)
         self.assertEqual(len(model["macros"]), 3016)
 
         definitions = [item for item in model["types"] if item["role"] == "definition"]
-        self.assertEqual(sum(len(item.get("fields", [])) for item in definitions), 1842)
+        self.assertEqual({(t["file"], t["start_offset"]) for t in definitions}, raw_type_definitions)
+        functions = [f for f in model["functions"] if f["role"] == "definition"]
+        self.assertEqual(len(functions), len(raw_definitions))
+        self.assertEqual({(f["file"], f["start_offset"]) for f in functions}, raw_definitions)
+        self.assertEqual(len(model["references"]), len(functions))
+        for function in functions:
+            location = (function["file"], function["start_offset"])
+            references = model["references"][function["occurrence_id"]]
+            self.assertEqual({c["start_offset"] for c in references["call_details"]},
+                             raw_body_calls.get(location, set()), location)
+        for macro in model["macro_definitions"]:
+            location = (macro["file"], macro["line"])
+            self.assertEqual(macro["end_line"], macro_end_lines[location], location)
+        self.assertEqual(sum(len(item.get("fields", [])) for item in definitions), 1850)
         # Include inline definitions, constructors and template member declarations.
-        self.assertEqual(sum(len(item.get("methods", [])) for item in definitions), 3318)
+        self.assertEqual(sum(len(item.get("methods", [])) for item in definitions), 3348)
         self.assertEqual(
             sum(len(item.get("enumerators", [])) for item in definitions), 234
         )

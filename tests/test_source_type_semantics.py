@@ -18,6 +18,23 @@ class SourceTypeSemanticsTests(unittest.TestCase):
         registry = Registry().with_resource(common["$id"], Resource.from_contents(common))
         Draft202012Validator(schema, registry=registry).validate(result)
 
+    def test_macro_end_lines_are_inclusive_for_lf_crlf_and_eof(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            content = "#define SINGLE 1\n#define MULTI(x) " + chr(92) + "\n ((x) + 1)\n#define EMPTY()"
+            for newline in ("\n", "\r\n"):
+                for trailing_newline in (False, True):
+                    with self.subTest(newline=repr(newline), trailing_newline=trailing_newline):
+                        text = content.replace("\n", newline) + (newline if trailing_newline else "")
+                        fixture.header.write_bytes(text.encode("utf-8"))
+                        completed, result = run_cli("sourcetools/ue_list_cxx_types.py", "--source", fixture.header)
+                        self.assertEqual(completed.returncode, 0, result)
+                        self.assert_contract(result)
+                        self.assertEqual([(m["name"], m["evidence"]["line"],
+                                           m["evidence"].get("end_line", m["evidence"]["line"]))
+                                          for m in result["macros"]],
+                                         [("SINGLE", 1, 1), ("MULTI", 2, 3), ("EMPTY", 4, 4)])
+
     def test_basic_inventory_excludes_details_and_lists_local_macro_definitions(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = create_fixture(Path(directory))

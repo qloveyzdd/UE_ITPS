@@ -18,6 +18,23 @@ class DelegateAnalysisTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, result)
             return result["matches"][0]
 
+    def test_function_local_declaration_and_local_callback_keep_lexical_scope(self):
+        match = self.scan("""
+            class FWorker { void Run(); };
+        """, """
+            void FWorker::Run() {
+                DECLARE_DELEGATE(FDone);
+                struct Local { static void Ready() {} };
+                FDone Done = FDone::CreateStatic(&Local::Ready);
+                Done.Execute();
+            }
+        """)
+        operations = match["delegate_operations"]
+        self.assertEqual([o["operation"] for o in operations], ["create", "execute"])
+        self.assertTrue(all(o["resolution"]["status"] == "identified" for o in operations))
+        self.assertEqual(operations[0]["delegate_type"]["qualified_name"], "FWorker::Run::FDone")
+        self.assertEqual(operations[0]["callback"]["qualified_name"], "FWorker::Run::Local::Ready")
+
     def test_native_lifecycle_and_payload_address(self):
         match = self.scan("""
             DECLARE_DELEGATE(FDone);

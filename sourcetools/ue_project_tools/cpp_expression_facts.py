@@ -7,10 +7,11 @@ def text(node, source):
 
 
 def scope_path(node, source):
+    """Namespace fallback; the frontend supplies the innermost named definition."""
     parts = []
     current = node.parent
     while current:
-        if current.type in {"namespace_definition", "class_specifier", "struct_specifier"}:
+        if current.type == "namespace_definition":
             name = text(current.child_by_field_name("name"), source)
             if name:
                 parts.append(name)
@@ -44,6 +45,8 @@ def expression(node, source):
 def execution_scope(node, source):
     current = node.parent
     while current:
+        if current.type == "function_definition":
+            break
         if current.type == "lambda_expression":
             return {"kind": "lambda", "line": current.start_point.row + 1,
                     "column": current.start_point.column + 1}

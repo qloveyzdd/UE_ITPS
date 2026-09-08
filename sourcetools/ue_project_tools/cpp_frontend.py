@@ -13,6 +13,7 @@ from .common import normalized
 from . import cpp_expression_facts as expression_facts
 from .source_delegate_analysis import analyze_delegates
 from .ue_cpp_conventions import (
+    UE_TEST_LIFECYCLE_METHODS,
     is_ignored_external_macro,
     is_ignored_external_member_call,
     is_ue_declaration_annotation,
@@ -29,6 +30,8 @@ _TYPE_NODES = {
     "struct_specifier": "struct",
     "union_specifier": "union",
     "enum_specifier": "enum",
+    "ue_test_class_declaration": "struct",
+    "ue_test_spec_declaration": "class",
 }
 _CONTAINER_NODES = {
     "translation_unit",
@@ -120,7 +123,8 @@ def _line(node: Node) -> int:
 
 
 def _end_line(node: Node) -> int:
-    return max(_line(node), int(node.end_point.row) + 1)
+    # Tree-sitter end points are exclusive; column zero belongs to the previous line.
+    return max(_line(node), int(node.end_point.row) + int(node.end_point.column > 0))
 
 
 def _walk(node: Node) -> Iterator[Node]:
@@ -128,6 +132,17 @@ def _walk(node: Node) -> Iterator[Node]:
     while stack:
         current = stack.pop()
         yield current
+        stack.extend(reversed(current.named_children))
+
+
+def _walk_function_body(node: Node) -> Iterator[Node]:
+    """Include lambda expressions, but leave local type members to their own bodies."""
+    stack = [node]
+    while stack:
+        current = stack.pop()
+        yield current
+        if current != node and (current.type in _TYPE_NODES or current.type == "function_definition"):
+            continue
         stack.extend(reversed(current.named_children))
 
 
@@ -461,6 +476,9 @@ def _type_references(node: Node | None, source: bytes) -> list[str]:
 
 
 def _type_fact(node: Node | None, source: bytes) -> dict[str, Any]:
+    # A named inline definition used in a declaration denotes that name, not its body.
+    if node is not None and node.type in _TYPE_NODES:
+        node = node.child_by_field_name("name")
     expression = _canonical_cpp(_text(node, source)) if node is not None else ""
     references = _type_references(node, source)
     primary = references[0] if references else None
@@ -689,6 +707,21 @@ def _function_fact(
     if not name_path:
         return None
     name = name_path[-1]
+    parameters = _parameter_facts(function_declarator, source)
+    container = node.parent
+    while container is not None and container.type not in _TYPE_NODES:
+        container = container.parent
+    test_method = container is not None and container.type == "ue_test_class_declaration"
+    projected_test_method = False
+    if test_method and node.child_by_field_name("type") is None:
+        if name == "TEST_METHOD" and len(parameters) == 1:
+            name = parameters[0]["type_expression"]
+            projected_test_method = True
+        elif name in UE_TEST_LIFECYCLE_METHODS and not parameters:
+            name = UE_TEST_LIFECYCLE_METHODS[name]
+            projected_test_method = True
+        if projected_test_method:
+            parameters = []
     owner_parts = list(owners)
     if len(name_path) > 1:
         prefix_parts = name_path[:-1]
@@ -698,7 +731,6 @@ def _function_fact(
     owner = "::".join(owner_parts) or None
     qualified_parts = [*namespaces, *owner_parts, name]
     qualified_name = "::".join(qualified_parts)
-    parameters = _parameter_facts(function_declarator, source)
     parameter_text = ", ".join(
         f"{item['type_expression']} {item['name']}".strip() for item in parameters
     )
@@ -720,6 +752,8 @@ def _function_fact(
     )
     return {
         "usr": identity,
+        # A signature denotes an entity; each syntax occurrence owns its own body.
+        "occurrence_id": f"{file_key}:{node.start_byte}",
         "kind": "method" if owner else "free_function",
         "namespace": "::".join(namespaces) or None,
         "owner": owner,
@@ -728,12 +762,15 @@ def _function_fact(
         "parameters": parameter_text,
         "parameter_facts": parameters,
         "signature": declaration_text or _compact(_text(function_declarator, source)),
-        "return_type": _type_fact(node.child_by_field_name("type"), source),
+        "return_type": ({"expression": "void", "template_name": None, "name": "void",
+                         "qualified_name": "void", "references": ["void"]}
+                        if projected_test_method else _type_fact(node.child_by_field_name("type"), source)),
         "qualifiers": qualifiers,
         "role": role,
         "linkage": "internal" if "static" in qualifiers else "external",
         "file": file_key,
         "line": _line(node),
+        "column": int(node.start_point.column) + 1,
         "end_line": _end_line(node),
         "start_offset": int(node.start_byte),
         "end_offset": int(node.end_byte),
@@ -745,7 +782,7 @@ def _function_addresses(arguments: Node | None, source: bytes) -> list[dict[str,
     if arguments is None:
         return results
     for argument in arguments.named_children:
-        for current in _walk(argument):
+        for current in _walk_function_body(argument):
             if current.type != "pointer_expression":
                 continue
             spelling = _canonical_cpp(_text(current, source))
@@ -783,7 +820,7 @@ def _function_references(
         if item.get("name")
     }
     body = node.child_by_field_name("body") or node
-    for current in _walk(body):
+    for current in _walk_function_body(body):
         if current.type in {"identifier", "qualified_identifier"} and (
             current.parent is None or current.parent.type != "qualified_identifier"
         ):
@@ -887,7 +924,7 @@ def _function_references(
                 "argument_syntax": [expression_facts.expression(arg, source) for arg in arguments_node.named_children] if arguments_node else [],
                 "execution_scope": expression_facts.execution_scope(current, source),
                 "result_target": expression_facts.result_target(current, source),
-                "bindings": expression_facts.visible_bindings(current, node, source, _walk, _type_fact, _declarators, _name_from_declarator),
+                "bindings": expression_facts.visible_bindings(current, node, source, _walk_function_body, _type_fact, _declarators, _name_from_declarator),
                 "callee": callee,
                 "raw_callee": raw_callee,
                 "callee_path": callee_fact["path"],
@@ -979,7 +1016,19 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
             }
         )
 
+    def visit_local_types(node: Node, namespaces: tuple[str, ...], owners: tuple[str, ...]) -> None:
+        if node.type in _TYPE_NODES:
+            visit(node, namespaces, owners)
+            return
+        for child in node.named_children:
+            visit_local_types(child, namespaces, owners)
+
     def visit(node: Node, namespaces: tuple[str, ...], owners: tuple[str, ...]) -> None:
+        if node.type == "friend_declaration":
+            # An unqualified friend definition belongs to the enclosing namespace.
+            for child in node.named_children:
+                visit(child, namespaces, ())
+            return
         if node.type in {"alias_declaration", "type_definition"}:
             name_node = node.child_by_field_name("name") or node.child_by_field_name("declarator")
             target = node.child_by_field_name("type")
@@ -1005,10 +1054,16 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
             return
         if node.type in _TYPE_NODES:
             name_node = node.child_by_field_name("name")
+            body = node.child_by_field_name("body")
+            test_head = node.child_by_field_name("begin") or node
+            if node.type in {"ue_test_class_declaration", "ue_test_spec_declaration"}:
+                arguments = test_head.child_by_field_name("arguments")
+                name_node = next((child for child in arguments.named_children if child.type != "comment"), None)
+                if node.type == "ue_test_spec_declaration":
+                    body = node
             name = _compact(_text(name_node, source)) if name_node is not None else ""
             if not name:
                 return
-            body = node.child_by_field_name("body")
             kind = _TYPE_NODES[node.type]
             qualified = "::".join((*namespaces, *owners, name))
             fields = []
@@ -1086,6 +1141,10 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                     elif child.type in _CONTAINER_NODES:
                         append_contained_members(child)
             type_macros = _leading_macros(node, macros_by_start, "type")
+            declaration_macros = [str(macro["expression"]) for macro in type_macros]
+            if node.type in {"ue_test_class_declaration", "ue_test_spec_declaration"}:
+                arguments = test_head.child_by_field_name("arguments")
+                declaration_macros.append(_compact(source[test_head.start_byte:arguments.end_byte].decode("utf-8")))
             types.append(
                 {
                     "usr": f"{kind}|{qualified}",
@@ -1107,7 +1166,7 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                         else []
                     ),
                     "scoped": kind == "enum" and _is_scoped_enum(node, source),
-                    "macros": [str(macro["expression"]) for macro in type_macros],
+                    "macros": declaration_macros,
                     "annotation_line": int(type_macros[0]["line"]) if type_macros else _line(node),
                     "file": file_key,
                     "line": _line(node),
@@ -1126,9 +1185,8 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                         for item in child.named_children
                         if item.type in _TYPE_NODES
                     ]
-                    if nested_types and not _declarators(child):
-                        for nested in nested_types:
-                            visit(nested, namespaces, (*owners, name))
+                    for nested in nested_types:
+                        visit(nested, namespaces, (*owners, name))
             return
         if node.type == "function_definition":
             declarator = _function_declarator(node)
@@ -1142,9 +1200,13 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                     node, macros_by_start, "function"
                 )
                 functions.append(function)
-                references[function["usr"]] = _function_references(
+                references[function["occurrence_id"]] = _function_references(
                     node, function, source
                 )
+                body = node.child_by_field_name("body")
+                if body is not None:
+                    local_owners = tuple(filter(None, str(function["owner"] or "").split("::")))
+                    visit_local_types(body, namespaces, (*local_owners, function["name"]))
             return
         if node.type in {"declaration", "field_declaration"}:
             direct_types = [
@@ -1216,6 +1278,15 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                 visit(child, namespaces, owners)
 
     visit(tree.root_node, (), ())
+    scopes = sorted(
+        (item for item in [*types, *functions] if item["role"] == "definition"),
+        key=lambda item: item["end_offset"] - item["start_offset"],
+    )
+    for macro in macros:
+        owner = next((item for item in scopes
+                      if item["start_offset"] <= macro["start_offset"] < item["end_offset"]), None)
+        if owner is not None:
+            macro["scope"] = owner["qualified_name"]
     diagnostics = []
     syntax_nodes = list(_walk_all(tree.root_node))
     for node in syntax_nodes:
@@ -1286,8 +1357,8 @@ def _finalize_references(
         if not item.get("owner")
     }
     globals_by_name = {str(item["qualified_name"]): item for item in model["variables"]}
-    functions_by_usr = {
-        str(item["usr"]): item
+    functions_by_occurrence = {
+        str(item["occurrence_id"]): item
         for item in model["functions"]
         if item["role"] == "definition"
     }
@@ -1300,8 +1371,8 @@ def _finalize_references(
             for field in item.get("fields", [])
             if field.get("name")
         }
-    for usr, references in model["references"].items():
-        function = functions_by_usr.get(usr, {})
+    for occurrence_id, references in model["references"].items():
+        function = functions_by_occurrence[occurrence_id]
         function_owner = "::".join(
             part
             for part in (
@@ -1551,9 +1622,9 @@ def syntax_projection(model: dict[str, Any], path: Path) -> dict[str, Any]:
                 "signature": item["signature"],
                 "has_body": item["role"] == "definition",
                 "location": {"line": item["line"]},
-                "calls": model["references"].get(item["usr"], {}).get("calls", []),
+                "calls": model["references"].get(item["occurrence_id"], {}).get("calls", []),
                 "controls": model["references"]
-                .get(item["usr"], {})
+                .get(item["occurrence_id"], {})
                 .get("controls", []),
             }
             for item in functions

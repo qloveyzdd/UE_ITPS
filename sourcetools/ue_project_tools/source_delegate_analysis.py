@@ -93,7 +93,7 @@ class DelegateAnalyzer:
             if binding:
                 return {**unknown, "kind": binding["kind"]}, binding["type"]
             owner_name, separator, field_name = name.rpartition("::")
-            owner = _lookup(owner_name, scope, self.types) if separator else _lookup(scope, "", self.types)
+            owner = _lookup(owner_name, scope, self.types) if separator else self.enclosing_type(scope)
             if owner:
                 field = next((f for f in owner["fields"] if f["name"] == (field_name if separator else name)), None)
                 if field:
@@ -104,8 +104,8 @@ class DelegateAnalyzer:
             return unknown, None
         if kind == "field_expression":
             receiver, receiver_type = self.subject(node["receiver"], call, scope)
-            owner_name = scope if node["receiver"]["expression"] == "this" else (receiver_type or {}).get("expression", "")
-            owner = _lookup(owner_name, scope, self.types)
+            owner = (self.enclosing_type(scope) if node["receiver"]["expression"] == "this"
+                     else _lookup((receiver_type or {}).get("expression", ""), scope, self.types))
             if owner:
                 field = next((f for f in owner["fields"] if f["name"] == node["name"]), None)
                 if field:
@@ -128,6 +128,13 @@ class DelegateAnalyzer:
             returns = {f["return_type"]["expression"] for f in functions}
             return {**unknown, "kind": "return_value"}, {**functions[0]["return_type"], "scope": functions[0]["qualified_name"].rpartition("::")[0]} if len(returns) == 1 else None
         return unknown, None
+
+    def enclosing_type(self, scope):
+        while scope:
+            if scope in self.types:
+                return self.types[scope]
+            scope = scope.rpartition("::")[0]
+        return None
 
     def callback(self, argument, role, scope):
         if argument is None:
@@ -153,7 +160,7 @@ class DelegateAnalyzer:
         return result
 
     def analyze(self, function, references):
-        scope = function["qualified_name"].rpartition("::")[0]
+        scope = function["qualified_name"]
         unit = _evidence(function)["unit"]
         operations = []
         callback_offsets = set()
@@ -261,5 +268,5 @@ class DelegateAnalyzer:
 def analyze_delegates(model):
     analyzer = DelegateAnalyzer(model)
     for function in model["functions"]:
-        if function["role"] == "definition" and function["usr"] in model["references"]:
-            analyzer.analyze(function, model["references"][function["usr"]])
+        if function["role"] == "definition":
+            analyzer.analyze(function, model["references"][function["occurrence_id"]])

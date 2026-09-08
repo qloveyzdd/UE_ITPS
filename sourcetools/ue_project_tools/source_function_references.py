@@ -16,6 +16,7 @@ def _function_id(item: dict[str, Any]) -> str:
             str(item.get("owner") or ""),
             str(item["name"]),
             str(item["signature"]),
+            f"{_unit(item['file'])}:{item['line']}:{item['column']}",
         )
     )
 
@@ -57,7 +58,7 @@ def inspect_source_function(
             item, function_name
         ):
             continue
-        references = loaded["cpp_model"]["references"].get(item["usr"], {})
+        references = loaded["cpp_model"]["references"][item["occurrence_id"]]
         external_symbols = []
         for symbol in references.get("external_symbols", []):
             public = {

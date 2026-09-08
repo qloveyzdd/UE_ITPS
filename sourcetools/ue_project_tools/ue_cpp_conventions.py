@@ -58,6 +58,9 @@ UE_GAMEPLAY_TAG_SYMBOL_MACROS = {
     "UE_DEFINE_GAMEPLAY_TAG_STATIC": ("definition", "internal"),
 }
 
+# CQTest.h: these source declarations own the following function body.
+UE_TEST_LIFECYCLE_METHODS = {"BEFORE_EACH": "Setup", "AFTER_EACH": "TearDown"}
+
 # UE 5.8 delegate API contract. Exact names only; roles refer to argument indexes.
 # Syntax classification and type evidence are handled by the single delegate analyzer.
 UE_DELEGATE_APIS = {}
