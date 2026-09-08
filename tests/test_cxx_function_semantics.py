@@ -9,6 +9,99 @@ from tests.support import create_fixture, run_cli, write_text
 
 class CxxFunctionSemanticsTests(unittest.TestCase):
 
+    def test_builtin_casts_preserve_operand_and_ambiguous_parenthesized_calls(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            builtin_types = ("bool", "char", "char8_t", "char16_t", "char32_t", "double", "float",
+                             "int", "long", "short", "signed", "unsigned", "void", "wchar_t")
+            conversions = "\n".join(f"Consume({name}(Acquire()));" for name in builtin_types)
+            write_text(fixture.source, "void Run() {\n" + conversions + """
+                Consume((int)(Acquire()));
+                (Callback)(Acquire());
+                (UnknownType)(Acquire());
+            }
+            """)
+            completed, result = run_cli(
+                "sourcetools/ue_inspect_cxx_function.py", "--source", fixture.source,
+                "--function", "Run", "--include-syntax-flow",
+            )
+            self.assertEqual(completed.returncode, 0, result)
+            match = result["matches"][0]
+            self.assertEqual([c["callee"] for c in match["syntax_flow"]["calls"]],
+                             ["Consume", "Acquire"] * (len(builtin_types) + 1)
+                             + ["(Callback)", "Acquire", "(UnknownType)", "Acquire"])
+            self.assertFalse(any(s["spelling"] in {name + "()" for name in builtin_types}
+                                 for s in match["external_symbols"]))
+
+    def test_placeholder_receivers_use_visible_bindings_without_inventing_types(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            write_text(fixture.source, """
+                struct FWorker {
+                    FKnown Entry;
+                    void Run(auto Parameter) {
+                        Parameter.FromParameter();
+                        Entry.BeforeScope();
+                        { auto Entry = Acquire(); Entry.InScope(); }
+                        Entry.AfterScope();
+                        const auto& Local = Acquire(); Local.FromLocal();
+                        decltype(auto) Ref = Acquire(); Ref.FromDecltype();
+                        for (auto& Entry : Entries) { Entry.InRange(); }
+                        Entry.AfterRange();
+                        auto Lambda = [](auto Entry) { Entry.InLambda(); };
+                        Entry.AfterLambda();
+                        FKnown Explicit; Explicit.FromExplicit();
+                    }
+                };
+            """)
+            completed, result = run_cli(
+                "sourcetools/ue_inspect_cxx_function.py", "--source", fixture.source,
+                "--function", "FWorker::Run", "--include-syntax-flow",
+            )
+            self.assertEqual(completed.returncode, 0, result)
+            symbols = result["matches"][0]["external_symbols"]
+            unknown = {s["spelling"] for s in symbols if s["kind"] == "unknown"}
+            self.assertTrue({"Parameter.FromParameter()", "Entry.InScope()", "Local.FromLocal()",
+                             "Ref.FromDecltype()", "Entry.InRange()", "Entry.InLambda()"} <= unknown)
+            members = [s for s in symbols if s["kind"] == "member_call"]
+            self.assertEqual({s["owner_type"] for s in members}, {"FKnown"})
+            self.assertEqual([s["spelling"] for s in members],
+                             ["FKnown->BeforeScope()", "FKnown->AfterScope()", "FKnown->AfterRange()",
+                              "FKnown->AfterLambda()", "FKnown->FromExplicit()"])
+            self.assertFalse(any(s["kind"] == "type" and s["spelling"] in {"auto", "decltype(auto)"}
+                                 for s in symbols))
+
+    def test_member_pointer_invocations_preserve_indirection_and_operand_calls(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            write_text(fixture.source, """
+                struct FWorker { void Direct(int); };
+                void Run(FWorker& Object, FWorker* Pointer, void(FWorker::*Function)(int)) {
+                    (Object.*Function)(Acquire());
+                    (Pointer->*Function)(Acquire());
+                    ((Object.*Function))(Acquire());
+                    (GetObject().*Function)(Acquire());
+                    Object.Direct(Acquire());
+                }
+            """)
+            completed, result = run_cli(
+                "sourcetools/ue_inspect_cxx_function.py", "--source", fixture.source,
+                "--function", "Run", "--include-syntax-flow",
+            )
+            self.assertEqual(completed.returncode, 0, result)
+            match = result["matches"][0]
+            self.assertEqual([c["callee"] for c in match["syntax_flow"]["calls"]],
+                             ["(Object.*Function)", "Acquire", "(Pointer->*Function)", "Acquire",
+                              "((Object.*Function))", "Acquire", "(GetObject().*Function)",
+                              "GetObject", "Acquire", "Object.Direct", "Acquire"])
+            symbols = match["external_symbols"]
+            members = [s["spelling"] for s in symbols if s["kind"] == "member_call"]
+            self.assertEqual(members, ["FWorker->Direct()"])
+            unknown = {s["spelling"] for s in symbols if s["kind"] == "unknown"}
+            self.assertTrue({"(Object.*Function)()", "(Pointer->*Function)()",
+                             "((Object.*Function))()", "(GetObject().*Function)()"} <= unknown)
+            self.assertEqual(match["delegate_operations"], [])
+
     def test_named_casts_preserve_operand_calls_and_target_types(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = create_fixture(Path(directory))

@@ -55,20 +55,7 @@ _CONTROL_NODES = {
     "return_statement": "return_statement",
 }
 _TOKEN_RE = re.compile(r'::|->|\.\.\.|"(?:\\.|[^"\\])*"|[A-Za-z_]\w*|\d+|[^\s]')
-_PRIMITIVE_TYPES = {
-    "auto",
-    "bool",
-    "char",
-    "double",
-    "float",
-    "int",
-    "long",
-    "short",
-    "signed",
-    "unsigned",
-    "void",
-    "wchar_t",
-}
+_PRIMITIVE_TYPES = expression_facts.BUILTIN_TYPE_NAMES | {"auto"}
 class CppFrontendError(ValueError):
     pass
 
@@ -185,6 +172,8 @@ def _string_literals(node: Node | None, source: bytes) -> list[str]:
 def _cpp_name_path(node: Node | None, source: bytes) -> list[str]:
     if node is None:
         return []
+    if expression_facts.expression_kind(node, source) == "member_pointer_expression":
+        return []
     if node.type in {
         "identifier",
         "field_identifier",
@@ -229,6 +218,14 @@ def _template_arguments(node: Node | None, source: bytes) -> list[str]:
 def _callee_fact(node: Node, source: bytes) -> dict[str, Any]:
     if node.type == "call_expression":
         return _callee_fact(node.child_by_field_name("function"), source)
+    target = node
+    while target.type == "parenthesized_expression" and target.named_children:
+        target = target.named_children[-1]
+    if expression_facts.expression_kind(target, source) == "member_pointer_expression":
+        return {
+            "path": [], "receiver": None, "receiver_kind": "indirect",
+            "target_name": _compact(_text(node, source)), "template_arguments": [],
+        }
     target = node
     receiver = None
     if node.type == "field_expression":
@@ -488,6 +485,7 @@ def _type_fact(node: Node | None, source: bytes) -> dict[str, Any]:
         "name": primary.rsplit("::", 1)[-1] if primary else None,
         "qualified_name": primary,
         "references": references,
+        "is_placeholder": node is not None and node.type == "placeholder_type_specifier",
     }
 
 
@@ -808,7 +806,6 @@ def _address_symbol(
 
 def _function_references(
     node: Node,
-    fact: dict[str, Any],
     source: bytes,
 ) -> dict[str, Any]:
     symbols: list[dict[str, Any]] = []
@@ -818,11 +815,6 @@ def _function_references(
     addresses: list[dict[str, Any]] = []
     local_variables: list[dict[str, str]] = []
     identifier_references: list[dict[str, Any]] = []
-    variable_types = {
-        str(item["name"]): str(item.get("type", {}).get("expression") or "")
-        for item in fact.get("parameter_facts", [])
-        if item.get("name")
-    }
     body = node.child_by_field_name("body") or node
     for current in _walk_function_body(body):
         if current.type == "pointer_expression" and _text(current.child_by_field_name("operator"), source) == "&":
@@ -862,7 +854,7 @@ def _function_references(
             type_expression = _type_expression(current, source)
             type_fact = _type_fact(current.child_by_field_name("type"), source)
             type_name = str(type_fact.get("expression") or "")
-            if type_name and type_name not in _PRIMITIVE_TYPES:
+            if type_name and type_name not in _PRIMITIVE_TYPES and not type_fact["is_placeholder"]:
                 symbols.append(
                     {"kind": "type", "spelling": type_name, "line": _line(current),
                      "start_offset": int(current.start_byte)}
@@ -872,7 +864,6 @@ def _function_references(
                     continue
                 name, _ = _name_from_declarator(declarator, source)
                 if name and type_name:
-                    variable_types[name] = type_name
                     local_variables.append(
                         {
                             "name": name,
@@ -900,8 +891,9 @@ def _function_references(
         if callee_node is None:
             continue
         raw_callee = _compact(_text(callee_node, source))
-        callee = re.sub(r"\s*(?:->|\.)\s*", ".", raw_callee)
         callee_fact = _callee_fact(callee_node, source)
+        callee = (raw_callee if callee_fact["receiver_kind"] == "indirect"
+                  else re.sub(r"\s*(?:->|\.)\s*", ".", raw_callee))
         receiver_node = (
             callee_node.child_by_field_name("argument")
             if callee_node.type == "field_expression"
@@ -954,7 +946,6 @@ def _function_references(
                 "target_name": target_name,
                 "target_owner": None,
                 "receiver_fact": receiver_fact,
-                "variable_types": dict(variable_types),
                 "line": line,
                 "start_offset": int(current.start_byte),
             }
@@ -1218,7 +1209,7 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                 )
                 functions.append(function)
                 references[function["occurrence_id"]] = _function_references(
-                    node, function, source
+                    node, source
                 )
                 body = node.child_by_field_name("body")
                 if body is not None:
@@ -1379,7 +1370,7 @@ def _finalize_references(
         for item in model["functions"]
         if item["role"] == "definition"
     }
-    field_types_by_owner: dict[str, dict[str, str]] = {}
+    field_types_by_owner: dict[str, dict[str, dict[str, Any]]] = {}
     address_targets: dict[str, set[str]] = {}
     for item in model["functions"]:
         address_targets.setdefault(item["qualified_name"], set()).add("function")
@@ -1389,7 +1380,7 @@ def _finalize_references(
         if item["role"] != "definition":
             continue
         field_types_by_owner[str(item["qualified_name"])] = {
-            str(field["name"]): str(field.get("type", {}).get("expression") or "")
+            str(field["name"]): field.get("type", {})
             for field in item.get("fields", [])
             if field.get("name")
         }
@@ -1413,7 +1404,7 @@ def _finalize_references(
             segments = [str(part) for part in call.get("callee_path", [])]
             receiver = str(call.get("receiver") or "")
             root = segments[0] if len(segments) > 1 else ""
-            variable_types = call.get("variable_types", {})
+            bindings = call["bindings"]
             free = None
             if call.get("receiver_kind") != "member":
                 namespace_parts = str(function.get("namespace") or "").split("::")
@@ -1424,15 +1415,16 @@ def _finalize_references(
                     free = free_functions.get(candidate)
                     if free is not None:
                         break
-            owner_type = (
+            owner_fact = (
                 (
-                    variable_types.get(root)
-                    if root in variable_types
-                    else field_types.get(root)
+                    bindings[root]["type"]
+                    if root in bindings
+                    else field_types.get(root, {})
                 )
                 if len(segments) == 2
-                else None
+                else {}
             )
+            owner_type = "" if owner_fact.get("is_placeholder") else owner_fact.get("expression", "")
             if owner_type:
                 resolved_owner = str(owner_type)
             elif call.get("receiver_kind") == "scope" and len(segments) >= 2:

@@ -2,14 +2,28 @@
 from typing import Any
 
 
+BUILTIN_TYPE_NAMES = frozenset({
+    "bool", "char", "char8_t", "char16_t", "char32_t", "double", "float", "int",
+    "long", "short", "signed", "unsigned", "void", "wchar_t",
+})
+
+
 def text(node, source):
     return source[node.start_byte:node.end_byte].decode("utf-8") if node else ""
 
 
 def expression_kind(node, source):
-    """Normalize language operations represented as calls by the C++ grammar."""
+    """Keep language operations distinct from ordinary calls and member access."""
+    if node.type == "field_expression" and text(node.child_by_field_name("operator"), source) in {".*", "->*"}:
+        return "member_pointer_expression"
     if node.type == "call_expression":
         callee = node.child_by_field_name("function")
+        if callee is not None and (
+            callee.type in {"primitive_type", "sized_type_specifier"}
+            # The grammar also uses identifiers for some reserved type keywords.
+            or callee.type == "identifier" and text(callee, source) in BUILTIN_TYPE_NAMES
+        ):
+            return "cast_expression"
         if callee is not None and callee.type == "template_function":
             name = text(callee.child_by_field_name("name"), source)
             if name in {"const_cast", "static_cast", "reinterpret_cast", "dynamic_cast"}:
