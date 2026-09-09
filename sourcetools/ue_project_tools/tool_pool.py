@@ -93,6 +93,13 @@ _TOOLS: tuple[dict[str, Any], ...] = (
         "capabilities": ["cxx_ast", "ue_reflection", "type_inventory"],
     },
     {
+        "name": "ue_list_cxx_functions",
+        "category": "source",
+        "entrypoint": "sourcetools/ue_list_cxx_functions.py",
+        "inputs": ["source"],
+        "capabilities": ["cxx_ast", "function_inventory"],
+    },
+    {
         "name": "ue_inspect_cxx_type",
         "category": "source",
         "entrypoint": "sourcetools/ue_inspect_cxx_type.py",

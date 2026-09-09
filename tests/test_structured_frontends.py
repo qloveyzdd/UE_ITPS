@@ -18,6 +18,53 @@ from ue_project_tools.syntax_tree import parse_csharp_model
 
 
 class StructuredFrontendTests(unittest.TestCase):
+    def test_cpp_display_text_preserves_literals_and_comments(self) -> None:
+        text = r'''UCLASS (meta=(DisplayName="Keep  spaces", Tip=R"tag(raw  text)tag"))
+class A {};
+void Run(const char* Text = "default  text") {
+    Consume("a  b", R"tag(raw  text)tag", '\t', "escaped \"  quote");
+    Consume(/* keep  comment */ "left" "  right");
+    Factory("literal -> text . text")->Touch();
+}
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "Sample.cpp"
+            source.write_text(text, encoding="utf-8")
+            model = load_cpp_unit(source, [source], source.parent)
+        self.assertEqual(model["diagnostics"], [])
+        macro = model["macros"][0]
+        for literal in ('"Keep  spaces"', 'R"tag(raw  text)tag"'):
+            self.assertIn(literal, macro["expression"])
+            self.assertIn(literal, macro["arguments"][0]["expression"])
+        self.assertIn('"default  text"', model["functions"][0]["signature"])
+        calls = next(iter(model["references"].values()))["call_details"]
+        self.assertEqual(calls[0]["arguments"],
+                         ['"a  b"', 'R"tag(raw  text)tag"', r"'\t'", r'"escaped \"  quote"'])
+        self.assertIn('/* keep  comment */', calls[1]["expression"])
+        self.assertIn('"  right"', calls[1]["arguments"][-1])
+        self.assertEqual(calls[2]["callee"], 'Factory("literal -> text . text").Touch')
+
+    def test_constructor_execution_regions_exclude_declaration_expressions(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "Sample.cpp"
+            source.write_text('''struct A {
+    A(int X = Default()) noexcept(NoThrow())
+        : Value(Factory([] { Inner(); struct Local { void Run() { Separate(); } }; }))
+        { Body(); }
+    int Value;
+};
+struct B { B() try : Value(Acquire()) { Work(); } catch (...) { Recover(); } int Value; };
+''', encoding="utf-8")
+            model = load_cpp_unit(source, [source], source.parent)
+        self.assertEqual(model["diagnostics"], [])
+        refs = {f["qualified_name"]: model["references"][f["occurrence_id"]]
+                for f in model["functions"] if f["role"] == "definition"}
+        self.assertEqual([c["callee"] for c in refs["A::A"]["calls"]],
+                         ["Factory", "Inner", "Body"])
+        self.assertEqual([c["callee"] for c in refs["B::B"]["calls"]],
+                         ["Acquire", "Work", "Recover"])
+        self.assertEqual(refs["A::A"]["call_details"][1]["execution_scope"]["kind"], "lambda")
+
     def test_csharp_operations_expose_structured_paths(self) -> None:
         model = parse_csharp_model(
             """

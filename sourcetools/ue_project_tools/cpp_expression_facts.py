@@ -62,6 +62,8 @@ def expression(node, source):
         result["name"] = text(node.child_by_field_name("name"), source)
     elif node.type in {"pointer_expression", "parenthesized_expression"}:
         result["operand"] = expression(node.named_children[-1], source) if node.named_children else None
+        if node.type == "pointer_expression":
+            result["operator"] = text(node.child_by_field_name("operator"), source)
     elif node.type in {"template_type", "template_function", "template_method"}:
         result["name"] = text(node.child_by_field_name("name"), source)
     return result
@@ -90,7 +92,8 @@ def result_target(node, source):
     return None
 
 
-def visible_bindings(call, function, source, walk, type_fact, declarators, name_from_declarator):
+def visible_bindings(call, function, source, walk, type_fact, declarators, name_from_declarator,
+                     declaration_nodes=None):
     """Lexical declarations only. No propagation through assignments or control flow."""
     scopes = []
     current = call.parent
@@ -101,7 +104,7 @@ def visible_bindings(call, function, source, walk, type_fact, declarators, name_
         current = current.parent
     scope_ids = {(n.start_byte, n.end_byte) for n in scopes}
     bindings = {}
-    for node in walk(function):
+    for node in declaration_nodes if declaration_nodes is not None else walk(function):
         if node.start_byte >= call.start_byte:
             continue
         if node.type not in {"declaration", "parameter_declaration", "optional_parameter_declaration", "for_range_loop"}:

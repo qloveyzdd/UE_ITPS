@@ -80,7 +80,7 @@ def inspect_source_type(
             continue
         match = _compound(item)
         reasons = []
-        if any(macro.startswith("UINTERFACE(") for macro in item.get("macros", [])):
+        if "UINTERFACE" in item.get("macro_names", []):
             reasons.append("UINTERFACE macro")
         if "UInterface" in item["base_types"]:
             reasons.append("derives from UInterface")

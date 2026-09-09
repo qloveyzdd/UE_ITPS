@@ -23,7 +23,7 @@ def _function_id(item: dict[str, Any]) -> str:
 
 def _matches_function_selector(item: dict[str, Any], selector: str) -> bool:
     if "::" in selector:
-        return item["qualified_name"] == selector
+        return selector in {item["qualified_name"], item.get("source_qualified_name")}
     return item["name"] == selector
 
 
@@ -41,6 +41,29 @@ def _callable_parts(loaded: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _unit(path: str) -> str:
     return "header" if path.casefold().endswith((".h", ".hpp")) else "cpp"
+
+
+def list_source_functions(
+    source_files: Path | Sequence[Path], engine_override: Path | None = None,
+) -> dict[str, Any]:
+    loaded = load_source_context(source_files, engine_override)
+    functions = [{
+        "function_id": _function_id(item),
+        **{key: item[key] for key in ("kind", "name", "namespace", "owner", "qualified_name", "signature")},
+        "source_qualified_name": item.get("source_qualified_name", item["qualified_name"]),
+        "evidence": {"unit": _unit(item["file"]), "line": item["line"],
+                     "column": item["column"], "end_line": item["end_line"]},
+    } for item in _callable_parts(loaded) if item["role"] == "definition"]
+    return source_result(
+        "ue_list_cxx_functions", loaded, {"functions": functions},
+        responsibility="List every C++ function definition in the selected files for navigation.",
+        boundaries=[
+            "Owner type definitions need not be visible in the selected files.",
+            "Overloads and conditional definitions remain separate occurrences.",
+            "Source spellings are retained; injected class names need local declaration evidence to normalize.",
+            "Function IDs are scoped to the selected file set and parser output, not persistent entity IDs.",
+        ],
+    )
 
 
 def inspect_source_function(

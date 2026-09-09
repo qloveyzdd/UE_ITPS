@@ -20,6 +20,7 @@ python sourcetools/ue_list_tools.py
 | 源码 | `ue_list_module_cxx_sources` | 汇总一个 Module 的 C++ 文件并配对同名头源文件 |
 | 源码 | `ue_list_cxx_includes` | 提取显式文件的直接 Include 及物理来源 |
 | 源码 | `ue_list_cxx_types` | 列出显式文件中的类型、变量、自由函数和宏定义基础信息 |
+| 源码 | `ue_list_cxx_functions` | 列出显式文件的全部函数定义及检查选择名，不要求所属类定义可见 |
 | 源码 | `ue_inspect_cxx_type` | 按精确限定名解析类或结构体的继承、直接成员和接口候选原因 |
 | 源码 | `ue_inspect_cxx_function` | 提取指定函数的外部符号候选 |
 | Module | `ue_inspect_module_entry` | 定位支持的模块注册宏及可唯一匹配的头文件 |

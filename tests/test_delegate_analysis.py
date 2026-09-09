@@ -6,6 +6,20 @@ from tests.support import create_fixture, run_cli, write_text
 
 
 class DelegateAnalysisTests(unittest.TestCase):
+    def test_conflicting_aliases_do_not_select_a_delegate_branch(self):
+        match = self.scan("""
+            DECLARE_DELEGATE(FSingle);
+            DECLARE_MULTICAST_DELEGATE(FMulti);
+            #if CONFIG
+            using FSelected = FSingle;
+            #else
+            using FSelected = FMulti;
+            #endif
+            class FWorker { FSelected Signal; void Run(); };
+        """, "void FWorker::Run() { Signal.Execute(); }")
+        self.assertEqual(match["delegate_operations"][0]["resolution"]["status"], "candidate")
+        self.assertFalse(any(s["kind"] == "member_call" for s in match["external_symbols"]))
+
     def scan(self, header, body):
         with tempfile.TemporaryDirectory() as directory:
             fixture = create_fixture(Path(directory))

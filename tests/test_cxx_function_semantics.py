@@ -9,6 +9,86 @@ from tests.support import create_fixture, run_cli, write_text
 
 class CxxFunctionSemanticsTests(unittest.TestCase):
 
+    def test_static_member_declarations_and_definitions_share_object_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            write_text(fixture.header, """
+                struct FHolder {
+                    struct FInner {};
+                    static TBox<FInner> Shared;
+                    static TBox<class FForward> Forward;
+                    void Run(TBox<FInner>* Pointer);
+                };
+            """)
+            write_text(fixture.source, """
+                TBox<FHolder::FInner> FHolder::Shared;
+                TBox<FForward> FHolder::Forward;
+                void FHolder::Run(TBox<FInner>* Pointer) {
+                    Shared.Touch(); Forward.Touch(); (*Pointer).Touch();
+                }
+            """)
+            completed, result = run_cli("sourcetools/ue_inspect_cxx_function.py", "--source",
+                                        fixture.source, fixture.header, "--function", "FHolder::Run")
+            self.assertEqual(completed.returncode, 0, result)
+            symbols = result["matches"][0]["external_symbols"]
+            self.assertEqual({s["spelling"] for s in symbols if s["kind"] == "global_variable"},
+                             {"FHolder::Shared", "FHolder::Forward"})
+            self.assertFalse(any(s["kind"] == "unknown" for s in symbols))
+
+    def test_local_name_resolution_respects_scope_and_type_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            write_text(fixture.source, """
+                struct FGlobal { void Touch(); }; FGlobal Global;
+                struct FHandle { FHandle(int); };
+                void Callback();
+                namespace N {
+                    struct FScoped { void Touch(); }; FScoped Global;
+                    struct FWorker {
+                        void Own();
+                        void Run() {
+                            this->Own(); Global.Touch(); ::Global.Touch();
+                            { auto Global = Acquire(); Global.Touch(); }
+                            Global.Touch(); FHandle(1);
+                            { auto FHandle = Factory(); FHandle(1); }
+                            { auto Callback = Factory(); Callback(); Consume(&Callback); }
+                            Callback(); Consume(&Callback);
+                        }
+                    };
+                }
+            """)
+            completed, result = run_cli("sourcetools/ue_inspect_cxx_function.py", "--source",
+                                        fixture.source, "--function", "N::FWorker::Run")
+            self.assertEqual(completed.returncode, 0, result)
+            symbols = result["matches"][0]["external_symbols"]
+            members = [s["spelling"] for s in symbols if s["kind"] == "member_call"]
+            self.assertEqual(members, ["N::FWorker->Own()", "N::FScoped->Touch()",
+                                       "FGlobal->Touch()", "N::FScoped->Touch()"])
+            self.assertIn("FHandle", [s["spelling"] for s in symbols if s["kind"] == "type"])
+            self.assertTrue({"Global.Touch()", "FHandle()", "Callback()"} <=
+                            {s["spelling"] for s in symbols if s["kind"] == "unknown"})
+            self.assertEqual([s["spelling"] for s in symbols if s["kind"] == "free_function"], ["Callback"])
+            self.assertEqual([s["spelling"] for s in symbols if s["kind"] == "function_address"], ["Callback"])
+            self.assertEqual([s["spelling"] for s in symbols if s["kind"] == "global_variable"],
+                             ["N::Global", "Global", "N::Global"])
+
+    def test_conflicting_receiver_declarations_do_not_choose_a_branch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            write_text(fixture.source, """
+                #if OPTION
+                FFirst Global;
+                #else
+                FSecond Global;
+                #endif
+                void Run() { Global.Touch(); }
+            """)
+            _, result = run_cli("sourcetools/ue_inspect_cxx_function.py", "--source",
+                                fixture.source, "--function", "Run")
+            symbols = result["matches"][0]["external_symbols"]
+            self.assertFalse(any(s["kind"] == "member_call" for s in symbols))
+            self.assertIn("Global.Touch()", [s["spelling"] for s in symbols if s["kind"] == "unknown"])
+
     def test_builtin_casts_preserve_operand_and_ambiguous_parenthesized_calls(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = create_fixture(Path(directory))

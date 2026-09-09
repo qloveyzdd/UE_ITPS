@@ -4,7 +4,7 @@ UE ITPS 是一组面向 Unreal Engine 工程的确定性、只读检查工具。
 
 ## 当前组成
 
-- `sourcetools/`：根目录保留 14 个静态检查 CLI，负责工程、Engine、Module、Target、Plugin 和 C++ 源文件分析；`lyra/` 集中存放 Lyra 专用证据工具。
+- `sourcetools/`：根目录保留 15 个静态检查 CLI，负责工程、Engine、Module、Target、Plugin 和 C++ 源文件分析；`lyra/` 集中存放 Lyra 专用证据工具。
 - `schemas/`：核心 CLI 的 JSON Schema，采用 Draft 2020-12。
 - `edittools/`：16 个 Editor/离线检查 CLI；连接 Editor 的命令只读取已连接节点的现场状态。
 - `information_pool/`：把工程、模块、Target、源码和 Include 关系写入 SQLite 文件图谱。
@@ -16,6 +16,8 @@ UE ITPS 是一组面向 Unreal Engine 工程的确定性、只读检查工具。
 源码语法统一由 Tree-sitter 前端处理：C++/UE 宏通过 `tree-sitter-ue-cpp` 和 `cpp_frontend.py` 生成结构化事实，C# 通过 `tree-sitter-c-sharp` 和 `syntax_tree.py` 生成结构化事实。下游工具只负责名称解析和 UE 领域语义，不再用正则或字符串切割恢复 C++/C# 语法；INI、对象路径等独立数据格式仍由各自解析器处理。
 
 Lyra 全量 Tree-sitter 回归基线覆盖项目与插件 `Source` 目录内 707 个 `.h/.cpp` 文件，要求原始 AST 无语法恢复，校验 Slate 参数声明与自动化测试声明的 UE 专用节点，并固定关键事实计数。另逐一对照原始 AST 的类型、函数定义及调用所属函数，检查每处定义的引用独立性和宏结束行，避免只有计数正确却存在遗漏或覆盖。可运行 `python -m pytest -q tests/test_lyra_tree_sitter_baseline.py --import-mode=importlib` 单独验证。
+
+只使用 SourceTools 检查 Lyra 时，可运行 `python -m unittest tests.test_lyra_sourcetools_regressions -q`，覆盖宏文本、构造初始化列表、接收者及限定名导航。本轮全量复查覆盖 383 组显式文件、707 个文件、3,395 处函数定义；函数导航遗漏由 33 降为 0，修正 257 处宏文本并补回 23 个调用，4,672 份公开结果通过 Schema 校验。证据不足或条件声明冲突的调用继续保留 `unknown`。
 
 函数外部符号按源码位置排序（包括同一行）；调用模板实参中 AST 标记为类型的项保留为完整类型表达式，数字和表达式实参不作为类型输出。结果仍是语法候选，不执行模板语义绑定。
 
@@ -51,6 +53,7 @@ python sourcetools/ue_find_projects.py --search-root D:/Projects
 
 ```bash
 python sourcetools/ue_list_cxx_types.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp D:/Projects/MyGame/Source/MyGame/Public/MyActor.h
+python sourcetools/ue_list_cxx_functions.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp D:/Projects/MyGame/Source/MyGame/Public/MyActor.h
 python sourcetools/ue_inspect_cxx_type.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp D:/Projects/MyGame/Source/MyGame/Public/MyActor.h --type AMyActor
 python sourcetools/ue_inspect_cxx_function.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp D:/Projects/MyGame/Source/MyGame/Public/MyActor.h --function BeginPlay
 ```
@@ -63,11 +66,15 @@ python sourcetools/ue_inspect_cxx_function.py --source D:/Projects/MyGame/Source
 
 `ue_inspect_cxx_type.py --type <qualified_name>` 精确选择类或结构体，返回 `matches`，包含继承、直接成员 `member_anchors`、成员函数定义 `member_functions` 和接口候选原因。嵌套类型须单独选择；类外实现只来自显式传入的文件，找不到类型返回退出码 1。成员覆盖类内定义、构造函数、模板和条件编译中的成员；类外静态成员变量定义仍在基础清单保留完整限定名。旧清单的 `member_anchors`、`base_types` 和顶层 `member_functions`、`interface_candidates` 已迁往类型详情，`enumerators` 及空的 `unresolved_declarations` 已移除。
 
-函数扫描按本地作用域区分自由函数与成员调用，保留类型限定名及模板参数。成员归属复用调用点的词法绑定，处理局部变量、Lambda 参数及范围循环变量的遮蔽；`auto` 和 `decltype(auto)` 不作为已解析的所属类型。通过 `.*`、`->*` 发起的成员函数指针调用保留原始表达式，目标无法确定时输出 `unknown`，不生成虚构的具名成员方法。
+`ue_list_cxx_functions.py` 列出所选文件的全部函数定义，包括所选文件中没有所属类定义的成员实现，保留重载、条件分支、签名、位置及与函数检查共用的 `function_id`。通过清单中的 `qualified_name` 选择函数；`source_qualified_name` 保留源码写法。仅在所选文件有类型和成员声明证据时归一 `C::C::Method`，原写法仍可作为选择名。没有定义时返回空数组和退出码 0。
+
+宏、签名和调用参数的显示文本使用 AST 范围格式化，保留字符串、原始字符串、字符常量及注释内部空白；UE 宏识别使用结构化名称与参数。函数扫描覆盖函数体、构造初始化列表及函数 try/catch，其中的 Lambda 单独标记；默认参数、`noexcept` 和函数声明区域不计入调用。
+
+普通调用、取地址和委托复用本地名称查询。成员归属结合调用点词法绑定、`this`、成员声明和所选文件全局变量，处理命名空间及遮蔽；本地可见类型的构造表达式归入 `type`。冲突声明、`auto` 和 `decltype(auto)` 不作为已解析的所属类型。通过 `.*`、`->*` 发起的成员函数指针调用保留原始表达式，目标无法确定时输出 `unknown`，不生成虚构的具名成员方法。
 
 取地址表达式依据所选文件中的函数、变量和成员声明分类，并考虑参数、局部变量、Lambda 参数及范围循环变量的遮蔽；有函数声明证据才输出 `function_address`，已知数据地址不进入该类别，无法确认的地址保留原表达式并输出 `unknown`。已识别委托操作的指定回调参数继续由委托分析生成 `callback_target`。C++ 的 `const_cast`、`static_cast`、`reinterpret_cast` 和 `dynamic_cast` 不进入调用列表或外部函数候选，但保留目标类型及内部实际调用；基本类型的函数式转换（例如 `int(Value)`）同样不作为调用，内部实际调用仍保留。普通模板调用（例如 UE `Cast<T>`）仍按调用处理；缺少类型证据的 `(UnknownName)(Value)` 无法仅凭语法区分转换与调用，继续保留未知调用候选。
 
-`function_id` 标识所选文件中的一处具体定义，格式在原签名后增加 `|unit:line:column`。条件编译分支、头源文件和同一行上的定义各自保存符号、调用及委托结果；内部函数签名身份仍用于实体描述。依赖旧 `function_id` 的缓存需重新生成，源码位置变化也会改变该标识。
+`function_id` 标识所选文件中的一处具体定义，格式在原签名后增加 `|unit:line:column`。条件编译分支、头源文件和同一行上的定义各自保存符号、调用及委托结果；内部函数签名身份仍用于实体描述。它不是跨版本或跨文件选择的稳定实体 ID；文本保真及限定名归一会修正 ID，依赖旧输出的缓存需重新生成，源码位置变化也会改变该标识。
 
 委托分析使用唯一的 `delegate_contract_revision: 2` 契约：`delegate_operations` 区分创建、绑定、添加、解除绑定、移除、清空、执行、广播和查询；以 `subject` 表达被操作的成员、参数、局部变量或返回值，旧 `event` 字段已移除。`delegate_type` 来自所选文件的声明宏、显式模板或可解析别名；`identified` 表示类型及 API 形状有依据，`candidate` 保留无法确认的调用和原因，不代表真实委托关系。未知类型不会生成虚构的限定成员名。
 

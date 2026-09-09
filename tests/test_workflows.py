@@ -59,16 +59,22 @@ class ProjectWorkflowTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0)
             self.assertIn("AWorker", {item["name"] for item in types["classes"]})
 
+            completed, definitions = run_cli(
+                "sourcetools/ue_list_cxx_functions.py", "--source", fixture.source, fixture.header,
+            )
+            self.assertEqual(completed.returncode, 0)
+            selected = next(item for item in definitions["functions"] if item["name"] == "BeginPlay")
             completed, function = run_cli(
                 "sourcetools/ue_inspect_cxx_function.py",
                 "--source",
                 fixture.source,
                 fixture.header,
                 "--function",
-                "BeginPlay",
+                selected["qualified_name"],
             )
             self.assertEqual(completed.returncode, 0)
             self.assertIn("AWorker|BeginPlay", function["matches"][0]["function_id"])
+            self.assertEqual(selected["function_id"], function["matches"][0]["function_id"])
 
     def test_gameplay_tag_macros_are_reported_as_definitions_only(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

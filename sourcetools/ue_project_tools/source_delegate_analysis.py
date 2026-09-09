@@ -1,4 +1,5 @@
 """One evidence-based delegate analysis shared by operations and callback symbols."""
+from .source_name_resolution import LocalNameResolver, lookup as _lookup, syntax_name
 from .ue_cpp_conventions import (
     delegate_api_rule, UE_DELEGATE_DECLARATIONS, UE_DELEGATE_TEMPLATE_TYPES,
 )
@@ -14,26 +15,9 @@ def _operation_id(unit, syntax):
     return f'{unit}:{syntax["line"]}:{syntax["column"]}:{syntax["end_offset"]}'
 
 
-def _lookup(name, scope, table):
-    if name.startswith("::"):
-        return table.get(name[2:])
-    parts = scope.split("::") if scope else []
-    for depth in range(len(parts), -1, -1):
-        found = table.get("::".join([*parts[:depth], name]))
-        if found is not None:
-            return found
-    return None
-
-
-class DelegateAnalyzer:
+class DelegateAnalyzer(LocalNameResolver):
     def __init__(self, model):
-        self.model = model
-        self.types = {t["qualified_name"]: t for t in model["types"]}
-        self.aliases = {a["qualified_name"]: a for a in model["aliases"]}
-        self.globals = {v["qualified_name"]: v for v in model["variables"]}
-        self.functions = {}
-        for function in model["functions"]:
-            self.functions.setdefault(function["qualified_name"], []).append(function)
+        super().__init__(model)
         self.delegates = {}
         for macro in model["macros"]:
             rule = UE_DELEGATE_DECLARATIONS.get(macro["name"])
@@ -61,7 +45,7 @@ class DelegateAnalyzer:
             return {"expression": expression, **delegate}, False
         alias = _lookup(name, scope, self.aliases)
         if alias:
-            if alias["qualified_name"] in seen:
+            if alias.get("ambiguous") or alias["qualified_name"] in seen:
                 return None, False
             resolved, ordinary = self.type_info(alias["type"], alias["qualified_name"].rpartition("::")[0],
                                                 (*seen, alias["qualified_name"]))
@@ -80,40 +64,9 @@ class DelegateAnalyzer:
         return None, bool(_lookup(name, scope, self.types) or template)
 
     def subject(self, node, call, scope):
-        unknown = {"expression": node["expression"] if node else "", "kind": "unknown",
-                   "qualified_name": None}
-        if node is None:
-            return unknown, None
-        kind = node["kind"]
-        name = node["expression"]
-        if kind == "parenthesized_expression":
-            return self.subject(node["operand"], call, scope)
-        if kind in {"identifier", "qualified_identifier", "type_identifier"}:
-            binding = call["bindings"].get(name)
-            if binding:
-                return {**unknown, "kind": binding["kind"]}, binding["type"]
-            owner_name, separator, field_name = name.rpartition("::")
-            owner = _lookup(owner_name, scope, self.types) if separator else self.enclosing_type(scope)
-            if owner:
-                field = next((f for f in owner["fields"] if f["name"] == (field_name if separator else name)), None)
-                if field:
-                    return {**unknown, "kind": "member", "qualified_name": owner["qualified_name"] + "::" + field["name"]}, {**field["type"], "scope": owner["qualified_name"]}
-            variable = _lookup(name, scope, self.globals)
-            if variable:
-                return {**unknown, "kind": "global", "qualified_name": variable["qualified_name"]}, {**variable["type"], "scope": variable["qualified_name"].rpartition("::")[0]}
-            return unknown, None
-        if kind == "field_expression":
-            receiver, receiver_type = self.subject(node["receiver"], call, scope)
-            owner = (self.enclosing_type(scope) if node["receiver"]["expression"] == "this"
-                     else _lookup((receiver_type or {}).get("expression", ""), scope, self.types))
-            if owner:
-                field = next((f for f in owner["fields"] if f["name"] == node["name"]), None)
-                if field:
-                    return {**unknown, "kind": "member", "qualified_name": owner["qualified_name"] + "::" + field["name"]}, {**field["type"], "scope": owner["qualified_name"]}
-            return {**unknown, "kind": "member"}, None
-        if kind == "call_expression":
+        if node and node["kind"] == "call_expression":
+            unknown = {"expression": node["expression"], "kind": "unknown", "qualified_name": None}
             callee = node["function"]
-            target = callee["expression"]
             factory = delegate_api_rule(callee.get("name", ""), None)
             if factory and factory["operation"] == "create" and callee.get("scope"):
                 fact = {"expression": callee["scope"]["expression"],
@@ -121,22 +74,9 @@ class DelegateAnalyzer:
                 delegate, _ = self.type_info(fact, scope)
                 if delegate and delegate["cardinality"] == factory["cardinality"] and delegate["dispatch"] == factory["dispatch"]:
                     return {**unknown, "kind": "temporary"}, fact
-            if callee["kind"] == "field_expression":
-                _, receiver_type = self.subject(callee["receiver"], call, scope)
-                target = (receiver_type or {}).get("expression", "") + "::" + callee["name"]
-            functions = _lookup(target, scope, self.functions) or []
-            returns = {f["return_type"]["expression"] for f in functions}
-            return {**unknown, "kind": "return_value"}, {**functions[0]["return_type"], "scope": functions[0]["qualified_name"].rpartition("::")[0]} if len(returns) == 1 else None
-        return unknown, None
+        return super().subject(node, call, scope)
 
-    def enclosing_type(self, scope):
-        while scope:
-            if scope in self.types:
-                return self.types[scope]
-            scope = scope.rpartition("::")[0]
-        return None
-
-    def callback(self, argument, role, scope):
+    def callback(self, argument, role, scope, call):
         if argument is None:
             return None
         raw = argument["expression"]
@@ -150,8 +90,11 @@ class DelegateAnalyzer:
             return {**result, "kind": "lambda"}
         target = argument.get("operand") if argument["kind"] == "pointer_expression" else argument
         if target and target["kind"] in {"identifier", "qualified_identifier"}:
-            name = target["expression"]
-            functions = _lookup(name, scope, self.functions)
+            name = syntax_name(target)
+            found = self.resolve(name, scope, call["bindings"])
+            if found and found["kind"] != "function":
+                return result
+            functions = found["value"] if found else None
             member = "::" in name
             if functions:
                 member = bool(functions[0].get("owner")) and "static" not in functions[0].get("qualifiers", [])
@@ -205,7 +148,7 @@ class DelegateAnalyzer:
                 arguments.append({"role": role, "expression": argument["expression"]})
                 if role in {"callback", "delegate", "function_name"}:
                     callback_arg = argument
-                    callback = self.callback(argument, role, scope)
+                    callback = self.callback(argument, role, scope, call)
                     if role == "callback" and rule["callback_form"] == "functor" and argument["kind"] != "lambda_expression":
                         callback["kind"] = "unknown"
                         callback["qualified_name"] = None

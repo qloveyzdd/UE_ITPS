@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:schema:ue_list_cxx_functions",
+  "title": "ue_list_cxx_functions.py result",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/success"
+    },
+    {
+      "allOf": [
+        {
+          "$ref": "urn:ue-itps:schema:common#/$defs/errorDocument"
+        },
+        {
+          "properties": {
+            "schema_version": {
+              "const": "ue_list_cxx_functions"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "success": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "functions",
+        "validation",
+        "limits"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "ue_list_cxx_functions"
+        },
+        "functions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/function"
+          }
+        },
+        "validation": {
+          "$ref": "urn:ue-itps:schema:common#/$defs/validation"
+        },
+        "limits": {
+          "$ref": "urn:ue-itps:schema:common#/$defs/limits"
+        }
+      },
+      "additionalProperties": false
+    },
+    "function": {
+      "type": "object",
+      "required": [
+        "function_id",
+        "name",
+        "qualified_name",
+        "source_qualified_name",
+        "signature",
+        "kind",
+        "namespace",
+        "owner",
+        "evidence"
+      ],
+      "properties": {
+        "function_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "qualified_name": {
+          "type": "string"
+        },
+        "source_qualified_name": {
+          "type": "string"
+        },
+        "signature": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "method",
+            "free_function"
+          ]
+        },
+        "namespace": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "owner": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "evidence": {
+          "$ref": "#/$defs/unitEvidence"
+        }
+      },
+      "additionalProperties": false
+    },
+    "unitEvidence": {
+      "type": "object",
+      "required": [
+        "unit",
+        "line",
+        "column",
+        "end_line"
+      ],
+      "properties": {
+        "unit": {
+          "enum": [
+            "cpp",
+            "header"
+          ]
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "end_line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
