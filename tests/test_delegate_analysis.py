@@ -20,17 +20,73 @@ class DelegateAnalysisTests(unittest.TestCase):
         self.assertEqual(match["delegate_operations"][0]["resolution"]["status"], "candidate")
         self.assertFalse(any(s["kind"] == "member_call" for s in match["external_symbols"]))
 
-    def scan(self, header, body):
+    def scan(self, header, body, selector="FWorker::Run"):
         with tempfile.TemporaryDirectory() as directory:
             fixture = create_fixture(Path(directory))
             write_text(fixture.header, header)
             write_text(fixture.source, body)
             completed, result = run_cli(
                 "sourcetools/ue_inspect_cxx_function.py", "--source", fixture.source,
-                fixture.header, "--function", "FWorker::Run",
+                fixture.header, "--function", selector,
             )
             self.assertEqual(completed.returncode, 0, result)
             return result["matches"][0]
+
+    def test_direct_initializers_and_parenthesized_assignments_keep_results(self):
+        match = self.scan("""
+            DECLARE_DELEGATE(FDone);
+            class FWorker { FDone First, Second; FWorker(); };
+        """, """
+            FWorker::FWorker()
+                : First((FDone::CreateLambda([] {}))),
+                  Second{FDone::CreateLambda([] {})} {
+                FDone Local(/* comment */ FDone::CreateLambda([] {}));
+                FDone Braced{FDone::CreateLambda([] {})};
+                Local = (FDone::CreateLambda([] {}));
+                Local = Wrap(FDone::CreateLambda([] {}));
+                Consume(FDone::CreateLambda([] {}));
+            }
+        """, "FWorker::FWorker")
+        operations = match["delegate_operations"]
+        self.assertTrue(all(o["resolution"]["status"] == "identified" for o in operations))
+        self.assertEqual([o["result"] for o in operations], [
+            {"expression": name, "kind": "delegate"}
+            for name in ("First", "Second", "Local", "Braced", "Local")
+        ] + [None, None])
+
+    def test_multi_argument_initializers_do_not_invent_delegate_result_targets(self):
+        match = self.scan("""
+            DECLARE_DELEGATE(FDone);
+            class FWorker { FHolder Holder; FWorker(); };
+        """, """
+            FWorker::FWorker() : Holder(FDone::CreateLambda([] {}), 1) {
+                FHolder Local{FDone::CreateLambda([] {}), 2};
+            }
+        """, "FWorker::FWorker")
+        self.assertEqual(len(match["delegate_operations"]), 2)
+        self.assertTrue(all(o["result"] is None for o in match["delegate_operations"]))
+
+    def test_comments_do_not_shift_delegate_argument_roles(self):
+        match = self.scan("""
+            DECLARE_DELEGATE(FDone);
+            class FWorker { void Run(); void Ready(); };
+        """, """
+            void FWorker::Run() {
+                auto Done = FDone::CreateUObject(/* owner */ this,
+                    /* callback */ &FWorker::Ready, /* payload */ 42);
+                Done.Execute(/* no arguments */);
+            }
+        """)
+        create, execute = match["delegate_operations"]
+        self.assertEqual(create["arguments"], [
+            {"role": "object", "expression": "this"},
+            {"role": "callback", "expression": "&FWorker::Ready"},
+            {"role": "payload", "expression": "42"},
+        ])
+        self.assertEqual(create["callback"]["qualified_name"], "FWorker::Ready")
+        self.assertEqual(execute["arguments"], [])
+        self.assertEqual([s["spelling"] for s in match["external_symbols"]
+                          if s["kind"] == "callback_target"], ["FWorker::Ready"])
 
     def test_function_local_declaration_and_local_callback_keep_lexical_scope(self):
         match = self.scan("""

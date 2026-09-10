@@ -9,6 +9,25 @@ from ue_editor_tools.cxx_messages import scan_cxx_gameplay_messages
 
 
 class CxxMessageTests(unittest.TestCase):
+    def test_same_signature_definitions_keep_separate_message_calls(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            project = root / "Sample.uproject"
+            project.write_text(json.dumps({"FileVersion": 3}), encoding="utf-8")
+            source = root / "Source" / "Sample.cpp"
+            source.parent.mkdir()
+            source.write_text('''
+                #if WITH_EDITOR
+                void UThing::Run() { Router.BroadcastMessage<FPayload>("Game.Editor", Payload); }
+                #else
+                void UThing::Run() { Router.BroadcastMessage<FPayload>("Game.Runtime", Payload); }
+                #endif
+            ''', encoding="utf-8")
+            result = scan_cxx_gameplay_messages(project)
+        self.assertEqual([o["channel"]["tag"] for o in result["operations"]],
+                         ["Game.Editor", "Game.Runtime"])
+        self.assertEqual([o["evidence"]["line"] for o in result["operations"]], [3, 5])
+
     def test_extracts_channel_payload_and_callback_type(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -8,6 +8,25 @@ from tests.support import create_fixture, run_cli, write_text
 
 
 class ProjectWorkflowTests(unittest.TestCase):
+    def test_variable_module_dependencies_remain_unresolved(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            write_text(fixture.module_rules, """
+                class Sample : ModuleRules {
+                    public Sample(ReadOnlyTargetRules Target) : base(Target) {
+                        PublicDependencyModuleNames.Add(ModuleName);
+                        PrivateDependencyModuleNames.AddRange(ModuleNames);
+                        DynamicallyLoadedModuleNames.AddRange(new string[] { });
+                    }
+                }
+            """)
+            completed, result = run_cli("sourcetools/ue_inspect_module_rules.py",
+                                        "--rules", fixture.module_rules)
+            self.assertEqual(completed.returncode, 0, result)
+            self.assertEqual(result["validation"]["status"], "warning")
+            self.assertEqual([p["code"] for p in result["validation"]["problems"]],
+                             ["module-dependency-expression-unresolved"] * 2)
+
     def test_project_navigation_workflow(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = create_fixture(Path(directory))

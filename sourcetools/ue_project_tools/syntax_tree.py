@@ -80,7 +80,6 @@ def _evaluation(source: bytes, node: Node) -> dict[str, Any]:
     unresolved = any(
         descendant.type in unresolved_kinds
         for descendant in _walk(node)
-        if descendant is not node
     )
     return {
         "status": "unresolved" if unresolved else "literal",

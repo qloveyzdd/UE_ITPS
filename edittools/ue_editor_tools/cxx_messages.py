@@ -157,7 +157,7 @@ def scan_cxx_gameplay_messages(project_file: Path) -> dict[str, Any]:
             **global_tags,
             **local_tags.get(file_key, {}),
         }
-        references = model["references"].get(function["usr"], {})
+        references = model["references"].get(function["occurrence_id"], {})
         variable_types = _symbol_types(function, references)
         for call in references.get("call_details", []):
             callee = str(call.get("callee", ""))

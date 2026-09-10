@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
 
 from tree_sitter import Language, Parser
 import tree_sitter_ue_cpp
@@ -12,12 +13,28 @@ from tests.support import ROOT
 
 sys.path.insert(0, str(ROOT / "sourcetools"))
 
+from ue_project_tools import cpp_frontend
 from ue_project_tools.cpp_frontend import load_cpp_unit
 from ue_project_tools.project_graph import build_project_graph
 from ue_project_tools.syntax_tree import parse_csharp_model
 
 
 class StructuredFrontendTests(unittest.TestCase):
+    def test_incompatible_grammar_is_rejected_before_scanning(self) -> None:
+        language = Language(tree_sitter_ue_cpp.language())
+        for missing in ("ue_macro_argument", "ue_test_class_declaration",
+                        "ue_test_spec_declaration", "ue_slate_arguments_declaration"):
+            with self.subTest(missing=missing):
+                incompatible = Mock(wraps=language)
+                incompatible.id_for_node_kind.side_effect = (
+                    lambda name, named: None if name == missing
+                    else language.id_for_node_kind(name, named)
+                )
+                with patch.object(cpp_frontend, "Language", return_value=incompatible):
+                    with self.assertRaisesRegex(cpp_frontend.CppFrontendError,
+                                                "Incompatible.*" + missing):
+                        cpp_frontend._parser()
+
     def test_cpp_display_text_preserves_literals_and_comments(self) -> None:
         text = r'''UCLASS (meta=(DisplayName="Keep  spaces", Tip=R"tag(raw  text)tag"))
 class A {};

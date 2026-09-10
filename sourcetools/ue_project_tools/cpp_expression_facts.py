@@ -83,10 +83,17 @@ def execution_scope(node, source):
 
 def result_target(node, source):
     parent = node.parent
-    while parent and parent.type in {"parenthesized_expression"}:
-        parent = parent.parent
-    if parent and parent.type == "init_declarator":
+    while parent and parent.type == "parenthesized_expression":
+        node, parent = parent, parent.parent
+    if parent and parent.type in {"argument_list", "initializer_list"}:
+        values = [child for child in parent.named_children if child.type != "comment"]
+        if values != [node]:
+            return None
+        node, parent = parent, parent.parent
+    if parent and parent.type == "init_declarator" and parent.child_by_field_name("value") == node:
         return text(parent.child_by_field_name("declarator"), source)
+    if parent and parent.type == "field_initializer":
+        return text(parent.named_children[0], source)
     if parent and parent.type == "assignment_expression" and parent.child_by_field_name("right") == node:
         return text(parent.child_by_field_name("left"), source)
     return None

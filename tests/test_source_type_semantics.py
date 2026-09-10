@@ -12,6 +12,55 @@ from tests.support import ROOT, create_fixture, run_cli, write_text
 
 
 class SourceTypeSemanticsTests(unittest.TestCase):
+    def test_each_declarator_is_classified_independently(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            declarations = """
+                int First, PrototypeA();
+                int PrototypeB(), Second;
+                void MethodA(), MethodB();
+            """
+            write_text(fixture.header, "struct FWorker {" + declarations + "};")
+            write_text(fixture.source, declarations)
+            completed, result = run_cli("sourcetools/ue_list_cxx_types.py", "--source",
+                                        fixture.source, fixture.header)
+            self.assertEqual(completed.returncode, 0, result)
+            self.assert_contract(result)
+            self.assertEqual({v["name"] for v in result["global_variables"]}, {"First", "Second"})
+            self.assertEqual(result["free_functions"], [])
+            completed, details = run_cli("sourcetools/ue_inspect_cxx_type.py", "--source",
+                                         fixture.source, fixture.header, "--type", "FWorker")
+            self.assertEqual(completed.returncode, 0, details)
+            self.assertEqual({m["name"]: m["kind"] for m in details["matches"][0]["member_anchors"]},
+                             {"First": "variable", "Second": "variable", "PrototypeA": "function",
+                              "PrototypeB": "function", "MethodA": "function", "MethodB": "function"})
+
+    def test_variable_definitions_are_not_lost_to_type_or_function_declarators(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = create_fixture(Path(directory))
+            write_text(fixture.header, """
+                struct FWorker { void (*Handler)(int); void Method(); };
+            """)
+            write_text(fixture.source, """
+                struct FValue { void Nested() {} } GlobalValue;
+                extern int Initialized = 42, DeclarationOnly;
+                void (*Callback)(int) = nullptr;
+                void (*MakeCallback())(int) { return nullptr; }
+                int* PointerReturn() { return nullptr; }
+            """)
+            completed, result = run_cli("sourcetools/ue_list_cxx_types.py", "--source",
+                                        fixture.source, fixture.header)
+            self.assertEqual(completed.returncode, 0, result)
+            self.assert_contract(result)
+            self.assertEqual({v["name"] for v in result["global_variables"]},
+                             {"GlobalValue", "Initialized", "Callback"})
+            self.assertEqual({f["name"] for f in result["free_functions"]},
+                             {"MakeCallback", "PointerReturn"})
+            _, details = run_cli("sourcetools/ue_inspect_cxx_type.py", "--source",
+                                 fixture.source, fixture.header, "--type", "FWorker")
+            self.assertEqual({m["name"]: m["kind"] for m in details["matches"][0]["member_anchors"]},
+                             {"Handler": "variable", "Method": "function"})
+
     def assert_contract(self, result) -> None:
         schema = json.loads((ROOT / "schemas" / (result["schema_version"] + ".schema.json")).read_text(encoding="utf-8"))
         common = json.loads((ROOT / "schemas/common.schema.json").read_text(encoding="utf-8"))

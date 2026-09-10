@@ -69,7 +69,20 @@ def frontend_version() -> str:
 
 def _parser() -> Parser:
     try:
-        return Parser(Language(tree_sitter_ue_cpp.language()))
+        language = Language(tree_sitter_ue_cpp.language())
+        missing = [name for name in (
+            "ue_macro_argument", "ue_test_class_declaration",
+            "ue_test_spec_declaration", "ue_slate_arguments_declaration",
+        ) if language.id_for_node_kind(name, True) is None]
+        if missing:
+            raise CppFrontendError(
+                f"Incompatible Tree-sitter UE C++ grammar ({frontend_version()}): "
+                f"missing {', '.join(missing)}. Reinstall ./parsers/tree-sitter-ue-cpp "
+                "in the Python environment running this command."
+            )
+        return Parser(language)
+    except CppFrontendError:
+        raise
     except Exception as exc:
         raise CppFrontendError(
             f"Unable to load Tree-sitter UE C++ grammar: {exc}"
@@ -641,7 +654,22 @@ def _declarators(declaration: Node) -> list[Node]:
 
 
 def _function_declarator(node: Node) -> Node | None:
-    return _descendant(node, {"function_declarator"})
+    # The modifier nearest the name determines whether this declares a function
+    # or an object containing a function pointer. Do not enter parameter types.
+    function = None
+    current = node
+    while current is not None:
+        child = current.child_by_field_name("declarator")
+        if current.type in {"parenthesized_declarator", "reference_declarator", "reference_field_declarator"}:
+            child = next((c for c in current.named_children if c.type != "comment"), None)
+        if child is None:
+            break
+        if current.type == "function_declarator":
+            function = current
+        elif current.type in {"pointer_declarator", "reference_declarator", "reference_field_declarator", "array_declarator"}:
+            function = None
+        current = child
+    return function
 
 
 def _function_qualifiers(
@@ -892,11 +920,11 @@ def _function_references(
             if receiver_node.type == "call_expression":
                 receiver_fact["call_expression"] = source_fragment(receiver_node, source, canonical=True)
         target_name = str(callee_fact["target_name"])
-        arguments = (
-            [source_fragment(child, source) for child in arguments_node.named_children]
-            if arguments_node is not None
-            else []
+        argument_nodes = (
+            [child for child in arguments_node.named_children if child.type != "comment"]
+            if arguments_node is not None else []
         )
+        arguments = [source_fragment(child, source) for child in argument_nodes]
         argument_details = (
             [
                 {
@@ -905,7 +933,7 @@ def _function_references(
                     "literal_values": _string_literals(child, source),
                     "name_path": _cpp_name_path(child, source),
                 }
-                for child in arguments_node.named_children
+                for child in argument_nodes
             ]
             if arguments_node is not None
             else []
@@ -915,7 +943,7 @@ def _function_references(
         call_details.append(
             {
                 "syntax": expression_facts.expression(current, source),
-                "argument_syntax": [expression_facts.expression(arg, source) for arg in arguments_node.named_children] if arguments_node else [],
+                "argument_syntax": [expression_facts.expression(arg, source) for arg in argument_nodes],
                 "execution_scope": expression_facts.execution_scope(current, source),
                 "result_target": expression_facts.result_target(current, source),
                 "bindings": bindings_at(current),
@@ -1065,42 +1093,38 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
             def append_member_declaration(
                 child: Node, *, append_function: bool
             ) -> None:
-                function_declarator = next(
-                    (function for declarator in _declarators(child)
-                     if (function := _function_declarator(declarator)) is not None),
-                    None,
-                )
-                if function_declarator is not None:
-                    role = "definition" if child.type == "function_definition" else "declaration"
-                    function = _function_fact(
-                        child,
-                        function_declarator,
-                        source,
-                        file_key,
-                        namespaces,
-                        (*owners, name),
-                        role,
-                    )
-                    if function is not None:
-                        function["macros"] = _leading_macro_expressions(
-                            child, macros_by_start, "function"
-                        )
-                        if append_function:
-                            functions.append(function)
-                        methods.append(
-                            {
-                                "name": function["name"],
-                                "signature": function["signature"],
-                                "role": role,
-                                "macros": function["macros"],
-                                "line": _line(child),
-                                "end_line": _end_line(child),
-                            }
-                        )
-                    return
                 type_expression = _type_expression(child, source)
                 type_fact = _type_fact(child.child_by_field_name("type"), source)
                 for declarator in _declarators(child):
+                    function_declarator = _function_declarator(declarator)
+                    if function_declarator is not None:
+                        role = "definition" if child.type == "function_definition" else "declaration"
+                        function = _function_fact(
+                            child,
+                            function_declarator,
+                            source,
+                            file_key,
+                            namespaces,
+                            (*owners, name),
+                            role,
+                        )
+                        if function is not None:
+                            function["macros"] = _leading_macro_expressions(
+                                child, macros_by_start, "function"
+                            )
+                            if append_function:
+                                functions.append(function)
+                            methods.append(
+                                {
+                                    "name": function["name"],
+                                    "signature": function["signature"],
+                                    "role": role,
+                                    "macros": function["macros"],
+                                    "line": _line(child),
+                                    "end_line": _end_line(child),
+                                }
+                            )
+                        continue
                     field_name, _ = _name_from_declarator(declarator, source)
                     if field_name:
                         fields.append(
@@ -1209,29 +1233,28 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
             if direct_types:
                 for child in direct_types:
                     visit(child, namespaces, owners)
-                return
-            declarator = _function_declarator(node)
-            if declarator is not None:
-                function = _function_fact(
-                    node,
-                    declarator,
-                    source,
-                    file_key,
-                    namespaces,
-                    owners,
-                    "declaration",
-                )
-                if function is not None:
-                    function["macros"] = _leading_macro_expressions(
-                        node, macros_by_start, "function"
+            type_expression = _type_expression(node, source)
+            type_fact = _type_fact(node.child_by_field_name("type"), source)
+            storage_classes = _storage_classes(node, source)
+            for item in _declarators(node):
+                declarator = _function_declarator(item)
+                if declarator is not None:
+                    function = _function_fact(
+                        node,
+                        declarator,
+                        source,
+                        file_key,
+                        namespaces,
+                        owners,
+                        "declaration",
                     )
-                    functions.append(function)
-                return
-            if not owners:
-                type_expression = _type_expression(node, source)
-                type_fact = _type_fact(node.child_by_field_name("type"), source)
-                storage_classes = _storage_classes(node, source)
-                for item in _declarators(node):
+                    if function is not None:
+                        function["macros"] = _leading_macro_expressions(
+                            node, macros_by_start, "function"
+                        )
+                        functions.append(function)
+                    continue
+                if not owners:
                     name, declared_name = _name_from_declarator(item, source)
                     if not name:
                         continue
@@ -1250,7 +1273,7 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                             "type_expression": type_expression,
                             "type": type_fact,
                             "role": "declaration"
-                            if "extern" in storage_classes
+                            if "extern" in storage_classes and item.child_by_field_name("value") is None
                             else "definition",
                             "linkage": "internal"
                             if "static" in storage_classes

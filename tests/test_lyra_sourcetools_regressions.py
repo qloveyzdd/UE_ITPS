@@ -33,6 +33,8 @@ class LyraSourceToolsRegressionTests(unittest.TestCase):
                          ["FAsyncConditionDelegate::CreateLambda", "MoveTemp", "UserFunction"])
         self.assertEqual(constructor["delegate_operations"][0]["resolution"]["status"], "identified")
         self.assertEqual(constructor["delegate_operations"][0]["callback"]["kind"], "lambda")
+        self.assertEqual(constructor["delegate_operations"][0]["result"],
+                         {"expression": "UserCondition", "kind": "delegate"})
 
     def test_this_and_global_receivers(self):
         matches = self.inspect([
@@ -57,4 +59,3 @@ class LyraSourceToolsRegressionTests(unittest.TestCase):
                                      "--function", entry["qualified_name"])
         self.assertEqual(completed.returncode, 0, details)
         self.assertEqual(entry["function_id"], details["matches"][0]["function_id"])
-
