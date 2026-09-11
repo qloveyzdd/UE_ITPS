@@ -23,6 +23,7 @@ _TREE_SITTER_CSHARP_TOOLS = {
     "ue_inspect_targets",
 }
 _TREE_SITTER_CPP_TOOLS = {
+    "source_navigation_map",
     "ue_inspect_cxx_scope",
     "ue_inspect_cxx_function",
     "ue_inspect_cxx_type",

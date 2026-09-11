@@ -90,6 +90,16 @@ python sourcetools/ue_inspect_cxx_scope.py --project LyraStarterGame/LyraStarter
 
 新入口使用内部逐位置符号事实，保留旧 `external_symbols` 同一行合并的出现位置；旧 CLI 输出维持原契约。2026-09-12 装备试点覆盖 13 个类型、60 处函数定义，旧的 58 份函数查询及类型/函数清单保持一致，772 份分层结果通过 Schema 与证据检查，四级独立 CLI 对照一致。118 项相关测试通过，包含 Lyra AsyncMixin 委托证据补测。默认概览 6,707 字节，对比同范围完整类型清单、函数清单及函数详情的 124,602 字节减少 94.6%；概览→管理类型→EquipItem→AddEntry 调用证据的四次查询共 21,980 字节，减少 82.4%。这是该试点的紧凑 JSON 字节比较，不代表全 Lyra 或执行耗时；已知具体函数时仍可直接使用单函数工具（EquipItem 的旧函数输出 1,607 字节，新函数层含导航信息为 3,327 字节）。
 
+首次接入时也可导出可复用的检索地图，后续按地图定位，直接调用旧工具。试验入口位于 `sourcetools/lyra/`，复用 `SourceScope.navigation_map()`；根目录核心 CLI 清单保持 16 项：
+
+```bash
+python sourcetools/lyra/export_navigation_map.py --project LyraStarterGame/LyraStarterGame.uproject --profile sourcetools/profiles/lyra_equipment.json --output lyra-equipment-map.json
+```
+
+地图保存显式文件组、类型名称、配置职责及入口名称，不缓存函数体或调用结论。将 `units[].sources` 按地图中 `project` 的父目录还原为 `--source`；业务查询使用 `entry_points[].name` 调用 `ue_inspect_cxx_function.py --function`，结构查询使用类/结构体名称调用 `ue_inspect_cxx_type.py --type`。没有配置入口时，先用 `ue_list_cxx_functions.py` 获取该文件组的当前名称；枚举仍通过 `ue_list_cxx_types.py` 查看。需要调用实参时使用函数工具的 `--view behavior --include-syntax-flow`，低优先级调用仍在语法详情保留。`definition_count` 提示同名定义的数量，查询时保留全部匹配。定位选择由使用者完成，试验未实现自然语言自动路由或变更监控；`snapshot` 只记录建图来源。普通实现修改由旧工具读取最新事实；文件迁移、入口改名或职责调整后需修订配置并重新导出。
+
+2026-09-12 装备试点地图为 4,140 字节。装备、卸装、快捷栏切换、装备配置四类预选问题各调用一次旧工具；装备 Actor 生成问题先列函数再检查，共六次独立调用，结果通过 Schema 校验。首次建图实测 19.6 秒，后续每次调用 2.4–2.6 秒，六次合计 14.8 秒；这是本机单轮测量，不含人工选择时间。地图读取一次加六份结果共 27,472 字节。以获取 EquipItem 的 AddEntry 调用实参为例，同一源码快照下，地图加旧查询共 6,992 字节，比此前四级路径的 21,980 字节减少 68.2%；地图已经在上下文中时只新增 2,852 字节。所有字节数按 UTF-8 紧凑 JSON 计算。29 项相关测试通过，覆盖地图复用、源码变更、入口失效、同名歧义及上述真实查询；该结果仅代表装备试点。
+
 `ue_list_cxx_types.py` 只输出所给文件中类、结构体（含 union）、枚举、自由函数、全局变量及 `#define` 宏定义的基础清单。保留名称、限定名、所属作用域、位置、函数签名、变量类型和附带的 UE 宏；不展开继承、成员、枚举项或接口推断。类型的 `evidence.line` 从附带的 `UCLASS`、`USTRUCT`、`UENUM` 或 `UINTERFACE` 宏起始行计算，`end_line` 仍为类型结束行；无附带宏时从类型声明行开始。独立宏仅返回名称、参数及位置，`parameters: null` 表示对象宏，`[]` 表示无参数函数宏，不输出宏体。前向声明、extern 声明和函数原型仍不进入清单。
 
 声明中的每个变量或函数分别分类：保留内联类型后附带的变量、函数指针变量及带初始化的 `extern` 定义；同一条声明混写变量和函数时也分别处理。

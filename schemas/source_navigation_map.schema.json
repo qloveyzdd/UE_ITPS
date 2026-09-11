@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:schema:source_navigation_map",
+  "title": "Reusable source navigation map (pilot)",
+  "oneOf": [
+    {"$ref": "#/$defs/success"},
+    {"allOf": [
+      {"$ref": "urn:ue-itps:schema:common#/$defs/errorDocument"},
+      {"properties": {"schema_version": {"const": "source_navigation_map"}}}
+    ]}
+  ],
+  "$defs": {
+    "text": {"type": "string", "minLength": 1},
+    "count": {"type": "integer", "minimum": 0},
+    "definitionCount": {"type": "integer", "minimum": 1},
+    "type": {
+      "type": "object", "required": ["name", "kind", "roles", "definition_count"],
+      "properties": {
+        "name": {"$ref": "#/$defs/text"},
+        "kind": {"enum": ["class", "struct", "union", "enum"]},
+        "roles": {"type": "array", "items": {"$ref": "#/$defs/text"}},
+        "definition_count": {"$ref": "#/$defs/definitionCount"}
+      }, "additionalProperties": false
+    },
+    "entry": {
+      "type": "object", "required": ["name", "definition_count"],
+      "properties": {"name": {"$ref": "#/$defs/text"}, "definition_count": {"$ref": "#/$defs/definitionCount"}},
+      "additionalProperties": false
+    },
+    "unit": {
+      "type": "object", "required": ["id", "sources", "types", "entry_points", "function_definition_count"],
+      "properties": {
+        "id": {"$ref": "#/$defs/text"},
+        "sources": {"type": "array", "minItems": 1, "maxItems": 2, "uniqueItems": true, "items": {"$ref": "#/$defs/text"}},
+        "types": {"type": "array", "items": {"$ref": "#/$defs/type"}},
+        "entry_points": {"type": "array", "items": {"$ref": "#/$defs/entry"}},
+        "function_definition_count": {"$ref": "#/$defs/count"}
+      }, "additionalProperties": false
+    },
+    "success": {
+      "type": "object",
+      "required": ["schema_version", "project", "snapshot", "scope", "classification_source", "units", "summary", "validation", "limits"],
+      "properties": {
+        "schema_version": {"const": "source_navigation_map"},
+        "project": {"$ref": "#/$defs/text"},
+        "snapshot": {"type": "string", "pattern": "^[0-9a-f]{24}$"},
+        "scope": {
+          "type": "object", "required": ["id", "name", "description"],
+          "properties": {"id": {"$ref": "#/$defs/text"}, "name": {"$ref": "#/$defs/text"}, "description": {"$ref": "#/$defs/text"}},
+          "additionalProperties": false
+        },
+        "classification_source": {"const": "profile"},
+        "units": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/unit"}},
+        "summary": {
+          "type": "object", "required": ["units", "files", "types", "functions"],
+          "properties": {"units": {"$ref": "#/$defs/count"}, "files": {"$ref": "#/$defs/count"}, "types": {"$ref": "#/$defs/count"}, "functions": {"$ref": "#/$defs/count"}},
+          "additionalProperties": false
+        },
+        "validation": {"$ref": "urn:ue-itps:schema:common#/$defs/validation"},
+        "limits": {"$ref": "urn:ue-itps:schema:common#/$defs/limits"}
+      }, "additionalProperties": false
+    }
+  }
+}

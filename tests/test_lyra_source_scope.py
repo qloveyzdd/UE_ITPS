@@ -7,7 +7,7 @@ import sys
 import tempfile
 import unittest
 
-from tests.support import ROOT, write_json
+from tests.support import ROOT, run_cli, write_json
 
 sys.path.insert(0, str(ROOT / "sourcetools"))
 from ue_project_tools.source_scope import SourceScope
@@ -92,6 +92,65 @@ class LyraScopeTests(unittest.TestCase):
                     actual.extend(i["fact"] for i in result["items"] if i["kind"] == "delegate")
                     offset = result["page"]["next_offset"]
             self.assertEqual(actual, expected)
+
+    def test_saved_map_routes_five_questions_to_old_tools(self):
+        # Round-trip only the compact map. Later calls are independent legacy CLIs.
+        document = json.loads(json.dumps(self.scope.navigation_map()))
+
+        def by_role(role):
+            return next((unit, item) for unit in document["units"] for item in unit["types"]
+                        if role in item["roles"])
+
+        def query(unit, tool, *arguments):
+            sources = [Path(document["project"]).parent / p for p in unit["sources"]]
+            completed, result = run_cli("sourcetools/" + tool + ".py", "--source", *sources, *arguments)
+            self.assertEqual(completed.returncode, 0, result)
+            self.assertEqual(completed.stderr, "")
+            return result
+
+        def entry_calls(role, suffix):
+            unit, _ = by_role(role)
+            name = next(e["name"] for e in unit["entry_points"] if e["name"].endswith("::" + suffix))
+            result = query(unit, "ue_inspect_cxx_function", "--function", name,
+                           "--view", "behavior", "--include-syntax-flow")
+            self.assertEqual(result["match_count"], 1)
+            return result["matches"][0]["syntax_flow"]["calls"]
+
+        calls = entry_calls("装备入口", "EquipItem")
+        add = next(c for c in calls if c["callee"] == "EquipmentList.AddEntry")
+        self.assertEqual(add["arguments"], ["EquipmentClass"])
+        entry = next(f["anchor"] for f in self.scope.functions.values()
+                     if f["anchor"]["name"] == "ULyraEquipmentManagerComponent::EquipItem")
+        facts = self.scope.query(level="evidence", select=entry["id"], limit=100)["items"]
+        evidence = next(i for i in facts if i.get("call", {}).get("callee") == add["callee"])
+        self.assertEqual(add["expression"], evidence["call"]["expression"])
+        self.assertEqual(add["location"]["line"], evidence["evidence"]["line"])
+
+        calls = entry_calls("装备入口", "UnequipItem")
+        names = [c["callee"] for c in calls]
+        self.assertLess(names.index("ItemInstance.OnUnequipped"), names.index("EquipmentList.RemoveEntry"))
+        calls = entry_calls("快捷栏入口", "SetActiveSlotIndex_Implementation")
+        names = [c["callee"] for c in calls]
+        self.assertLess(names.index("UnequipItemInSlot"), names.index("EquipItemInSlot"))
+        # Even a low-priority container query survives when syntax details are requested.
+        self.assertIn("Slots.IsValidIndex", names)
+
+        unit, item = by_role("装备配置")
+        result = query(unit, "ue_inspect_cxx_type", "--type", item["name"])
+        members = {m["name"] for m in result["matches"][0]["member_anchors"]}
+        self.assertTrue({"InstanceType", "AbilitySetsToGrant", "ActorsToSpawn"} <= members)
+
+        unit, item = by_role("装备实例")
+        self.assertEqual(unit["entry_points"], [])
+        inventory = query(unit, "ue_list_cxx_functions")
+        name = next(f["qualified_name"] for f in inventory["functions"]
+                    if f["owner"] == item["name"] and f["name"] == "SpawnEquipmentActors")
+        result = query(unit, "ue_inspect_cxx_function", "--function", name,
+                       "--view", "behavior", "--include-syntax-flow")
+        calls = result["matches"][0]["syntax_flow"]["calls"]
+        spawn = next(c for c in calls if c["callee"] == "GetWorld().SpawnActorDeferred<AActor>")
+        self.assertEqual(spawn["arguments"], ["SpawnInfo.ActorToSpawn", "FTransform::Identity", "OwningPawn"])
+        self.assertIn("SpawnedActors.Add", {c["callee"] for c in calls})
 
 
 if __name__ == "__main__":

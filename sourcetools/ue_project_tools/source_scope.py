@@ -17,6 +17,7 @@ from .ue_cpp_conventions import UE_RETRIEVAL_RULES_VERSION
 
 
 RESPONSIBILITY = "Navigate a configured source scope from overview to exact syntax evidence."
+MAP_RESPONSIBILITY = "Export reusable file and name hints for ordinary SourceTools queries."
 BOUNDARIES = [
     "Only explicit profile source units are parsed; referenced bodies and transitive headers are not read.",
     "Profile roles and entry points are authored navigation labels, not inferred program behavior.",
@@ -101,6 +102,7 @@ class SourceScope:
         if project.suffix.casefold() != ".uproject" or not project.is_file():
             raise ValueError("Expected an explicitly selected .uproject file")
         descriptor = read_json(project)
+        self.project = project
         self.root = project.parent
         self.profile = _profile(profile)
         self.units = {}
@@ -137,6 +139,50 @@ class SourceScope:
         self.functions = {}
         self.records = []
         self._build()
+
+    def navigation_map(self):
+        """Persist navigation hints, leaving current evidence to the focused tools."""
+        units = []
+        for spec in self.profile["units"]:
+            types = {}
+            entries = Counter()
+            functions = 0
+            for item in self.types.values():
+                if item["unit"] != spec["id"]:
+                    continue
+                name, kind = item["anchor"]["name"], item["raw"]["kind"]
+                key = (name, kind)
+                if key not in types:
+                    types[key] = {"name": name, "kind": kind,
+                                  "roles": list(item["anchor"]["roles"]), "definition_count": 0}
+                types[key]["definition_count"] += 1
+            for item in self.functions.values():
+                if item["unit"] == spec["id"]:
+                    functions += 1
+                    if item["anchor"].get("entry_point"):
+                        entries[item["anchor"]["name"]] += 1
+            units.append({
+                "id": spec["id"], "sources": list(spec["sources"]),
+                "types": list(types.values()),
+                "entry_points": [{"name": name, "definition_count": count} for name, count in entries.items()],
+                "function_definition_count": functions,
+            })
+        return result_document(
+            "source_navigation_map", {
+                "project": self.project.as_posix(), "snapshot": self.snapshot,
+                "scope": {key: self.profile[key] for key in ("id", "name", "description")},
+                "classification_source": "profile", "units": units,
+                "summary": {"units": len(units), "files": len(self.paths),
+                            "types": len(self.types), "functions": len(self.functions)},
+            }, self.problems, responsibility=MAP_RESPONSIBILITY, boundaries=[
+                "Roles and entry points are profile-authored navigation hints, not inferred behavior.",
+                "Resolve sources relative to the reported project; use names with the existing type/function tools.",
+                "Only type names and configured entry points are indexed; list functions in the selected unit for other names.",
+                "Definition counts preserve name ambiguity. Current queries must retain every matching definition.",
+                "Snapshot records generation provenance only. Read current evidence with focused tools; refresh hints after file/name/profile changes.",
+                "This map does not monitor changes or automatically route natural-language questions.",
+            ],
+        )
 
     def _evidence(self, file, line, column=None, end_line=None):
         evidence = {"path": self.paths[file.casefold()][0], "line": line}
