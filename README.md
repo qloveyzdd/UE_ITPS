@@ -4,7 +4,7 @@ UE ITPS 是一组面向 Unreal Engine 工程的确定性、只读检查工具。
 
 ## 当前组成
 
-- `sourcetools/`：根目录保留 15 个静态检查 CLI，负责工程、Engine、Module、Target、Plugin 和 C++ 源文件分析；`lyra/` 集中存放 Lyra 专用证据工具。
+- `sourcetools/`：根目录保留 16 个静态检查 CLI，负责工程、Engine、Module、Target、Plugin 和 C++ 源文件分析；`lyra/` 集中存放 Lyra 专用证据工具。
 - `schemas/`：核心 CLI 的 JSON Schema，采用 Draft 2020-12。
 - `edittools/`：16 个 Editor/离线检查 CLI；连接 Editor 的命令只读取已连接节点的现场状态。
 - `information_pool/`：把工程、模块、Target、源码和 Include 关系写入 SQLite 文件图谱。
@@ -61,6 +61,34 @@ python sourcetools/ue_inspect_cxx_function.py --source D:/Projects/MyGame/Source
 ```
 
 `ue_list_cxx_types.py` 会把 Engine 5.8 的原生 GameplayTag 声明/定义宏投影为 `FNativeGameplayTag` 变量事实；extern 声明不进入最终定义列表，static 定义保留内部 linkage。
+
+`ue_list_cxx_types.py` 和 `ue_inspect_cxx_function.py` 支持试验性的 `--view behavior`（业务）和 `--view structure`（结构），默认 `--view full` 保持原有输出。规则集中在 `ue_cpp_conventions.py`，按已有 AST 类型与方法事实匹配：容器查询、智能指针取值、文本包装和日志统计默认隐藏，容器增删折叠；业务同名方法、类型不明的调用和全部委托记录保留。函数中的普通类型引用在业务视图折叠、结构视图展开，模板类型表达式完整保留。类型清单保留全部定义，仅通过 `view.sections` 指示各类别的展开优先级；此处不新增继承或跨文件关系推断。
+
+函数视图以 `symbol_groups` 替代 `external_symbols`：`count` 与 `lines` 保留出现次数和每次行号，文件类别统一存放在匹配项的 `unit`；不同接收者和 Lambda 分开分组。`display` 省略表示展开，`execution_scope` 省略表示外层函数；命中规则保留 `rule`，隐藏原因和数量汇总在 `view_summary.hidden_by_rule`。这些分组只用于展示，不代表等价调用、执行次数或语义关系。`--focus NAME` 可重复指定精确的符号、方法或类型名称，恢复并展开关注项；它只用于业务或结构视图。`--include-syntax-flow` 在这两种视图中额外保留全部调用的表达式、参数与位置，包括隐藏项，便于核对。
+
+例如检查 Lyra 的容器查找与指针取值，可在仓库根目录运行：
+
+```bash
+python sourcetools/ue_inspect_cxx_function.py --source LyraStarterGame/Plugins/AsyncMixin/Source/Private/AsyncMixin.cpp LyraStarterGame/Plugins/AsyncMixin/Source/Public/AsyncMixin.h --function FAsyncMixin::GetLoadingState --view behavior
+```
+
+追加 `--focus TMap --focus Get` 可恢复这些通用操作；切换到 `--view full` 时去掉 `--focus`。
+
+2026-09-11 仅通过 SourceTools 对 Lyra 的 383 组、707 个文件复测：默认输出与修改前一致；业务视图将 20,024 条符号记录整理为 14,719 组（展示条目减少 26.5%），隐藏 2,765 条低优先级记录，546 条委托记录原样保留。106 项测试通过，两种视图的 6,640 份函数结果通过最终 Schema 校验，并与 9 次独立 CLI 调用抽查对照。优先级视图新增接收者与规则信息，全量紧凑 JSON 体积仍增加约 1.5%；此版主要改善阅读密度，不保证整体字节数减少。
+
+`ue_inspect_cxx_scope.py` 试验性地提供系统、类型、函数和证据四级导航。职责目录使用 `version: 1`、`id`、`name`、`description` 和 `units`；每个单元包含唯一 `id`、项目根目录内的一至两个显式 `sources`，以及可选的 `roles`（精确类型名到职责标签数组）、`entry_points`（精确函数限定名数组）。标签属于人工配置；工具验证对应定义存在，拒绝重复文件、越界路径及未知字段，未分类类型仍保留。职责目录不会产生跨文件语义绑定。
+
+Lyra 装备系统试点包含 6 组、12 个文件，可直接运行：
+
+```bash
+python sourcetools/ue_inspect_cxx_scope.py --project LyraStarterGame/LyraStarterGame.uproject --profile sourcetools/profiles/lyra_equipment.json
+```
+
+默认返回 `--level system --view behavior`。在相同命令后追加 `--level type --select <类型id>` 或 `--level function --select <函数id>` 展开对应项；`--level evidence --select <关系id或函数id>` 返回完整证据，恢复隐藏项。关系项的 `source` 是来源函数标识（Include 使用配置单元标识），不等于已绑定的目标。不同接收者、Lambda、条件定义与文件组分别保留；类外方法按限定所属名导航，不消除条件分支歧义。
+
+`--view structure` 优先展示类型，`--focus NAME` 可重复指定精确关注项。`--limit` 为每页 1 至 100 项，默认 20；使用 `page.next_offset` 继续翻页，`page.total` 是当前层级可返回的总项数。`view: full` 展开当前层级全部符号组，仍然分页；补充调用和函数原文在证据层返回。`summary.facts.call` 专指未进入符号清单的补充调用，其余调用随符号证据返回。标识绑定 `snapshot`，源码或配置改变后需重新获取。单次查询内每组只加载一次，复用 `SourceScope` 对象可复用上下文；独立 CLI 调用会重新加载所选范围。
+
+新入口使用内部逐位置符号事实，保留旧 `external_symbols` 同一行合并的出现位置；旧 CLI 输出维持原契约。2026-09-12 装备试点覆盖 13 个类型、60 处函数定义，旧的 58 份函数查询及类型/函数清单保持一致，772 份分层结果通过 Schema 与证据检查，四级独立 CLI 对照一致。118 项相关测试通过，包含 Lyra AsyncMixin 委托证据补测。默认概览 6,707 字节，对比同范围完整类型清单、函数清单及函数详情的 124,602 字节减少 94.6%；概览→管理类型→EquipItem→AddEntry 调用证据的四次查询共 21,980 字节，减少 82.4%。这是该试点的紧凑 JSON 字节比较，不代表全 Lyra 或执行耗时；已知具体函数时仍可直接使用单函数工具（EquipItem 的旧函数输出 1,607 字节，新函数层含导航信息为 3,327 字节）。
 
 `ue_list_cxx_types.py` 只输出所给文件中类、结构体（含 union）、枚举、自由函数、全局变量及 `#define` 宏定义的基础清单。保留名称、限定名、所属作用域、位置、函数签名、变量类型和附带的 UE 宏；不展开继承、成员、枚举项或接口推断。类型的 `evidence.line` 从附带的 `UCLASS`、`USTRUCT`、`UENUM` 或 `UINTERFACE` 宏起始行计算，`end_line` 仍为类型结束行；无附带宏时从类型声明行开始。独立宏仅返回名称、参数及位置，`parameters: null` 表示对象宏，`[]` 表示无参数函数宏，不输出宏体。前向声明、extern 声明和函数原型仍不进入清单。
 

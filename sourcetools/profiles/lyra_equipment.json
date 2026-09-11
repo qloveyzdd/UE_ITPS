@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "id": "lyra-equipment",
+  "name": "Lyra 装备系统",
+  "description": "装备定义、装备实例、装备列表、快捷栏与装备技能的源码导航；职责标签由配置指定。",
+  "units": [
+    {
+      "id": "definition",
+      "sources": ["Source/LyraGame/Equipment/LyraEquipmentDefinition.cpp", "Source/LyraGame/Equipment/LyraEquipmentDefinition.h"],
+      "roles": {"ULyraEquipmentDefinition": ["装备配置"], "FLyraEquipmentActorToSpawn": ["生成配置"]}
+    },
+    {
+      "id": "instance",
+      "sources": ["Source/LyraGame/Equipment/LyraEquipmentInstance.cpp", "Source/LyraGame/Equipment/LyraEquipmentInstance.h"],
+      "roles": {"ULyraEquipmentInstance": ["装备实例", "生命周期"]}
+    },
+    {
+      "id": "manager",
+      "sources": ["Source/LyraGame/Equipment/LyraEquipmentManagerComponent.cpp", "Source/LyraGame/Equipment/LyraEquipmentManagerComponent.h"],
+      "roles": {"ULyraEquipmentManagerComponent": ["装备入口"], "FLyraEquipmentList": ["装备列表", "复制"], "FLyraAppliedEquipmentEntry": ["装备记录"]},
+      "entry_points": ["ULyraEquipmentManagerComponent::EquipItem", "ULyraEquipmentManagerComponent::UnequipItem"]
+    },
+    {
+      "id": "ability",
+      "sources": ["Source/LyraGame/Equipment/LyraGameplayAbility_FromEquipment.cpp", "Source/LyraGame/Equipment/LyraGameplayAbility_FromEquipment.h"],
+      "roles": {"ULyraGameplayAbility_FromEquipment": ["装备技能"]}
+    },
+    {
+      "id": "pickup",
+      "sources": ["Source/LyraGame/Equipment/LyraPickupDefinition.cpp", "Source/LyraGame/Equipment/LyraPickupDefinition.h"],
+      "roles": {"ULyraPickupDefinition": ["拾取配置"], "ULyraWeaponPickupDefinition": ["武器拾取配置"]}
+    },
+    {
+      "id": "quickbar",
+      "sources": ["Source/LyraGame/Equipment/LyraQuickBarComponent.cpp", "Source/LyraGame/Equipment/LyraQuickBarComponent.h"],
+      "roles": {"ULyraQuickBarComponent": ["快捷栏入口"], "FLyraQuickBarSlotsChangedMessage": ["槽位消息"], "FLyraQuickBarActiveIndexChangedMessage": ["切换消息"]},
+      "entry_points": ["ULyraQuickBarComponent::AddItemToSlot", "ULyraQuickBarComponent::SetActiveSlotIndex_Implementation"]
+    }
+  ]
+}

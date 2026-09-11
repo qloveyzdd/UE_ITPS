@@ -26,11 +26,16 @@ def main() -> int:
         help="一至两个显式文件；两个文件必须为同名源文件和头文件 / One or two explicit files; two files must be a same-basename source and header",
     )
     parser.add_argument("--engine-root", metavar="PATH", help="显式 Engine 根目录覆盖 / Explicit Engine root override")
+    parser.add_argument("--view", choices=("full", "behavior", "structure"), default="full",
+                        help="完整输出、业务视图或结构视图 / Full output or purpose-specific view")
+    parser.add_argument("--focus", action="append", default=[], metavar="NAME",
+                        help="优先展开明确关注的定义，可重复 / Prioritize an exact definition name; repeatable")
     args = parser.parse_args()
     try:
         result = list_source_types(
             [Path(value) for value in args.source],
             engine_override=Path(args.engine_root) if args.engine_root else None,
+            view=args.view, focus=args.focus,
         )
     except (OSError, ValueError) as exc:
         result = cli_error_document(

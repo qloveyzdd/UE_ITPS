@@ -39,6 +39,10 @@ def main() -> int:
         help="包含调用与控制语法流 / Include call and control syntax flow",
     )
     parser.add_argument("--engine-root", metavar="PATH", help="显式 Engine 根目录覆盖 / Explicit Engine root override")
+    parser.add_argument("--view", choices=("full", "behavior", "structure"), default="full",
+                        help="完整输出、业务视图或结构视图 / Full output or purpose-specific view")
+    parser.add_argument("--focus", action="append", default=[], metavar="NAME",
+                        help="恢复并优先展开明确关注的符号或类型，可重复 / Prioritize an exact symbol or type name; repeatable")
     args = parser.parse_args()
     try:
         result = inspect_source_function(
@@ -46,6 +50,7 @@ def main() -> int:
             args.function,
             engine_override=Path(args.engine_root) if args.engine_root else None,
             include_syntax_flow=args.include_syntax_flow,
+            view=args.view, focus=args.focus,
         )
     except (OSError, ValueError) as exc:
         result = cli_error_document(

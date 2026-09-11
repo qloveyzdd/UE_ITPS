@@ -41,10 +41,7 @@
           "minimum": 0
         },
         "matches": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/match"
-          }
+          "type": "array"
         },
         "validation": {
           "$ref": "urn:ue-itps:schema:common#/$defs/validation"
@@ -54,9 +51,39 @@
         },
         "delegate_contract_revision": {
           "const": 2
+        },
+        "view": {
+          "$ref": "urn:ue-itps:schema:common#/$defs/priorityView"
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "view"
+            ]
+          },
+          "then": {
+            "properties": {
+              "matches": {
+                "items": {
+                  "$ref": "#/$defs/priorityMatch"
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "matches": {
+                "items": {
+                  "$ref": "#/$defs/match"
+                }
+              }
+            }
+          }
+        }
+      ]
     },
     "match": {
       "type": "object",
@@ -477,6 +504,111 @@
           "type": [
             "string",
             "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "symbolGroup": {
+      "type": "object",
+      "required": [
+        "kind",
+        "spelling",
+        "count",
+        "lines"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "type",
+            "global_variable",
+            "free_function",
+            "macro",
+            "member_call",
+            "function_address",
+            "callback_target",
+            "unknown"
+          ]
+        },
+        "spelling": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "display": {
+          "enum": [
+            "expand",
+            "fold"
+          ],
+          "description": "Omitted means expand; fold is a presentation hint."
+        },
+        "rule": {
+          "type": "string",
+          "minLength": 1
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "receiver": {
+          "type": "string"
+        },
+        "execution_scope": {
+          "type": "object",
+          "description": "Omitted means the outer function body."
+        },
+        "lines": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "priorityMatch": {
+      "type": "object",
+      "required": [
+        "function_id",
+        "symbol_groups",
+        "view_summary",
+        "delegate_operations",
+        "unit"
+      ],
+      "properties": {
+        "function_id": {
+          "type": "string",
+          "description": "Identifies one definition occurrence in the selected source unit; includes its signature and unit:line:column location.",
+          "minLength": 1
+        },
+        "symbol_groups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/symbolGroup"
+          }
+        },
+        "view_summary": {
+          "$ref": "urn:ue-itps:schema:common#/$defs/prioritySummary"
+        },
+        "delegate_operations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/delegateOperation"
+          }
+        },
+        "syntax_flow": {
+          "type": "object",
+          "description": "Present only when --include-syntax-flow is requested"
+        },
+        "unit": {
+          "enum": [
+            "cpp",
+            "header"
           ]
         }
       },

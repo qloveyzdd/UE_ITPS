@@ -80,6 +80,9 @@
           "items": {
             "$ref": "#/$defs/macroDefinition"
           }
+        },
+        "view": {
+          "$ref": "urn:ue-itps:schema:common#/$defs/priorityView"
         }
       },
       "additionalProperties": false

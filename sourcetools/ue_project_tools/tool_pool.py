@@ -114,6 +114,13 @@ _TOOLS: tuple[dict[str, Any], ...] = (
         "capabilities": ["cxx_ast", "external_symbols"],
     },
     {
+        "name": "ue_inspect_cxx_scope",
+        "category": "source",
+        "entrypoint": "sourcetools/ue_inspect_cxx_scope.py",
+        "inputs": ["project", "profile", "level", "select"],
+        "capabilities": ["cxx_ast", "scope_navigation", "evidence_drilldown"],
+    },
+    {
         "name": "ue_list_tools",
         "category": "pool",
         "entrypoint": "sourcetools/ue_list_tools.py",

@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:schema:ue_inspect_cxx_scope",
+  "title": "ue_inspect_cxx_scope.py result",
+  "oneOf": [
+    {"$ref": "#/$defs/success"},
+    {"allOf": [
+      {"$ref": "urn:ue-itps:schema:common#/$defs/errorDocument"},
+      {"properties": {"schema_version": {"const": "ue_inspect_cxx_scope"}}}
+    ]}
+  ],
+  "$defs": {
+    "text": {"type": "string", "minLength": 1},
+    "id": {"type": "string", "pattern": "^(type|function|relation|evidence):[0-9a-f]{24}$"},
+    "count": {"type": "integer", "minimum": 0},
+    "counts": {"type": "object", "additionalProperties": {"$ref": "#/$defs/count"}},
+    "location": {
+      "type": "object", "required": ["path", "line"],
+      "properties": {
+        "path": {"$ref": "#/$defs/text"},
+        "line": {"type": "integer", "minimum": 1},
+        "column": {"type": "integer", "minimum": 1},
+        "end_line": {"type": "integer", "minimum": 1},
+        "byte_offset": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "anchor": {
+      "type": "object", "required": ["kind", "id", "name", "evidence"],
+      "properties": {
+        "kind": {"enum": ["type", "function"]}, "id": {"$ref": "#/$defs/id"},
+        "name": {"$ref": "#/$defs/text"}, "evidence": {"$ref": "#/$defs/location"},
+        "roles": {"type": "array", "items": {"$ref": "#/$defs/text"}},
+        "entry_point": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "relation": {
+      "type": "object",
+      "required": ["kind", "id", "source", "source_name", "relation_kind", "target", "status", "display", "count"],
+      "properties": {
+        "kind": {"const": "relation"}, "id": {"$ref": "#/$defs/id"},
+        "source": {"$ref": "#/$defs/text"}, "source_name": {"$ref": "#/$defs/text"},
+        "relation_kind": {"enum": ["type", "global_variable", "free_function", "macro", "member_call", "function_address", "callback_target", "unknown", "include", "delegate"]},
+        "target": {"$ref": "#/$defs/text"},
+        "status": {"enum": ["syntax_candidate", "unresolved", "identified", "candidate", "source_reference"]},
+        "display": {"enum": ["expand", "fold", "hide"]}, "count": {"type": "integer", "minimum": 1},
+        "rule": {"$ref": "#/$defs/text"},
+        "receiver": {"$ref": "#/$defs/text"},
+        "execution_scope": {"$ref": "#/$defs/call/properties/execution_scope"}
+      },
+      "additionalProperties": false
+    },
+    "call": {
+      "type": "object", "required": ["callee", "expression", "arguments", "execution_scope"],
+      "properties": {
+        "callee": {"type": "string"}, "expression": {"type": "string"},
+        "arguments": {"type": "array", "items": {"type": "string"}},
+        "execution_scope": {"type": "object", "required": ["kind"], "properties": {"kind": {"enum": ["function", "lambda"]}}}
+      },
+      "additionalProperties": false
+    },
+    "evidence": {
+      "type": "object", "required": ["kind", "id", "source", "evidence", "fact"],
+      "properties": {
+        "kind": {"enum": ["symbol", "delegate", "include", "call"]}, "id": {"$ref": "#/$defs/id"},
+        "source": {"$ref": "#/$defs/text"}, "evidence": {"$ref": "#/$defs/location"},
+        "fact": {"type": "object"}, "call": {"$ref": "#/$defs/call"}
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {"if": {"properties": {"kind": {"const": "delegate"}}},
+         "then": {"properties": {"fact": {"$ref": "urn:ue-itps:schema:ue_inspect_cxx_function#/$defs/delegateOperation"}}}},
+        {"if": {"properties": {"kind": {"const": "symbol"}}},
+         "then": {"properties": {"fact": {
+           "type": "object", "required": ["kind", "spelling"],
+           "properties": {"kind": {"$ref": "urn:ue-itps:schema:ue_inspect_cxx_function#/$defs/externalSymbol/properties/kind"},
+                          "spelling": {"$ref": "#/$defs/text"}, "owner_type": {"$ref": "#/$defs/text"}},
+           "additionalProperties": false
+         }}}},
+        {"if": {"properties": {"kind": {"const": "call"}}},
+         "then": {"properties": {"fact": {"$ref": "#/$defs/call"}}}}
+      ]
+    },
+    "success": {
+      "type": "object",
+      "required": ["schema_version", "scope", "snapshot", "level", "view", "focus", "summary", "items", "page", "validation", "limits"],
+      "properties": {
+        "schema_version": {"const": "ue_inspect_cxx_scope"},
+        "scope": {"type": "object", "required": ["id", "name"], "properties": {"id": {"$ref": "#/$defs/text"}, "name": {"$ref": "#/$defs/text"}}, "additionalProperties": false},
+        "snapshot": {"type": "string", "pattern": "^[0-9a-f]{24}$"},
+        "level": {"enum": ["system", "type", "function", "evidence"]},
+        "view": {"enum": ["full", "behavior", "structure"]},
+        "focus": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/text"}},
+        "description": {"$ref": "#/$defs/text"}, "classification_source": {"const": "profile"},
+        "selection": {"oneOf": [{"$ref": "#/$defs/anchor"}, {"$ref": "#/$defs/relation"}]},
+        "type_details": {"type": "object", "required": ["name", "qualified_name", "kind", "base_types", "member_anchors", "evidence"],
+          "properties": {"member_anchors": {"type": "array", "items": {"$ref": "urn:ue-itps:schema:ue_inspect_cxx_type#/$defs/memberAnchor"}}}},
+        "controls": {"type": "array"}, "source_excerpt": {"type": "string"},
+        "summary": {
+          "type": "object", "required": ["facts", "hidden_by_rule"],
+          "properties": {"facts": {"$ref": "#/$defs/counts"}, "hidden_by_rule": {"$ref": "#/$defs/counts"},
+                         "units": {"$ref": "#/$defs/count"}, "files": {"$ref": "#/$defs/count"},
+                         "types": {"$ref": "#/$defs/count"}, "functions": {"$ref": "#/$defs/count"},
+                         "unclassified_types": {"$ref": "#/$defs/count"}, "unresolved_symbols": {"$ref": "#/$defs/count"}},
+          "additionalProperties": false
+        },
+        "items": {"type": "array", "items": {"oneOf": [{"$ref": "#/$defs/anchor"}, {"$ref": "#/$defs/relation"}, {"$ref": "#/$defs/evidence"}]}},
+        "page": {
+          "type": "object", "required": ["offset", "limit", "total", "next_offset"],
+          "properties": {"offset": {"$ref": "#/$defs/count"}, "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+                         "total": {"$ref": "#/$defs/count"}, "next_offset": {"type": ["integer", "null"], "minimum": 0}},
+          "additionalProperties": false
+        },
+        "validation": {"$ref": "urn:ue-itps:schema:common#/$defs/validation"},
+        "limits": {"$ref": "urn:ue-itps:schema:common#/$defs/limits"}
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {"if": {"properties": {"level": {"const": "system"}}},
+         "then": {"required": ["description", "classification_source"]}},
+        {"if": {"properties": {"level": {"const": "type"}}},
+         "then": {"required": ["selection"], "properties": {"selection": {"properties": {"kind": {"const": "type"}}}}}},
+        {"if": {"properties": {"level": {"const": "function"}}},
+         "then": {"required": ["selection"], "properties": {
+           "selection": {"properties": {"kind": {"const": "function"}}}, "items": {"items": {"$ref": "#/$defs/relation"}}
+         }}},
+        {"if": {"properties": {"level": {"const": "evidence"}}},
+         "then": {"properties": {"items": {"items": {"$ref": "#/$defs/evidence"}}}}}
+      ]
+    }
+  }
+}

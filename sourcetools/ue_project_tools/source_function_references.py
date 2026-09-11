@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from .source_context import load_source_context, source_result
+from .source_priority import FunctionPriorityView, detailed_syntax_flow, validate_view, view_metadata
 from .ue_cpp_conventions import UE_DELEGATE_CONTRACT_REVISION
 
 
@@ -47,6 +48,10 @@ def list_source_functions(
     source_files: Path | Sequence[Path], engine_override: Path | None = None,
 ) -> dict[str, Any]:
     loaded = load_source_context(source_files, engine_override)
+    return _list_functions_from_context(loaded)
+
+
+def _list_functions_from_context(loaded: dict[str, Any]) -> dict[str, Any]:
     functions = [{
         "function_id": _function_id(item),
         **{key: item[key] for key in ("kind", "name", "namespace", "owner", "qualified_name", "signature")},
@@ -72,8 +77,21 @@ def inspect_source_function(
     engine_override: Path | None = None,
     *,
     include_syntax_flow: bool = False,
+    view: str = "full",
+    focus: Sequence[str] = (),
 ) -> dict[str, Any]:
+    validate_view(view, focus)
     loaded = load_source_context(source_files, engine_override)
+    return _inspect_function_from_context(
+        loaded, function_name, include_syntax_flow=include_syntax_flow, view=view, focus=focus,
+    )
+
+
+def _inspect_function_from_context(
+    loaded: dict[str, Any], function_name: str, *, include_syntax_flow: bool = False,
+    view: str = "full", focus: Sequence[str] = (),
+) -> dict[str, Any]:
+    priority = FunctionPriorityView(loaded["cpp_model"], view, focus) if view != "full" else None
     parts = _callable_parts(loaded)
     matches = []
     for item in parts:
@@ -97,8 +115,11 @@ def inspect_source_function(
             "external_symbols": external_symbols,
             "delegate_operations": references["delegate_operations"],
         }
+        if priority is not None:
+            del match["external_symbols"]
+            match.update(priority.project(item, references, _unit(item["file"])))
         if include_syntax_flow:
-            match["syntax_flow"] = {
+            match["syntax_flow"] = detailed_syntax_flow(references) if priority is not None else {
                 "calls": references.get("calls", []),
                 "controls": references.get("controls", []),
             }
@@ -117,11 +138,14 @@ def inspect_source_function(
         "ue_inspect_cxx_function",
         loaded,
         {
+            **({"view": view_metadata(view, focus)} if priority is not None else {}),
             "delegate_contract_revision": UE_DELEGATE_CONTRACT_REVISION,
             "match_count": len(matches),
             "matches": matches,
         },
-        responsibility="Report syntax-derived external symbol candidates for selected C++ functions.",
+        responsibility=("Prioritize syntax candidates; display groups do not establish semantic relationships."
+                        if priority is not None else
+                        "Report syntax-derived external symbol candidates for selected C++ functions."),
         boundaries=[
             "Call and symbol targets are local syntax candidates and are not compiler-resolved.",
             "Called function bodies are not followed.",

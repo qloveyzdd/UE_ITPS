@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from .source_context import load_source_context, source_result
+from .source_priority import definition_view, validate_view
 
 
 def _unit(path: str) -> str:
@@ -31,8 +32,18 @@ def _basic_type(item: dict[str, Any]) -> dict[str, Any]:
 def list_source_types(
     source_files: Path | Sequence[Path],
     engine_override: Path | None = None,
+    *,
+    view: str = "full",
+    focus: Sequence[str] = (),
 ) -> dict[str, Any]:
+    validate_view(view, focus)
     loaded = load_source_context(source_files, engine_override)
+    return _list_types_from_context(loaded, view=view, focus=focus)
+
+
+def _list_types_from_context(
+    loaded: dict[str, Any], *, view: str = "full", focus: Sequence[str] = (),
+) -> dict[str, Any]:
     model = loaded["cpp_model"]
     types = [item for item in model["types"] if item["role"] == "definition"]
     type_namespaces = {item["qualified_name"]: item["namespace"] for item in model["types"]}
@@ -71,6 +82,8 @@ def list_source_types(
     }
     for group in groups.values():
         group.sort(key=lambda item: (item["evidence"]["unit"], item["evidence"]["line"], item["name"]))
+    if view != "full":
+        groups = {"view": definition_view(groups, view, focus), **groups}
     return source_result(
         "ue_list_cxx_types", loaded, groups,
         responsibility="List basic definition information from the selected files.",

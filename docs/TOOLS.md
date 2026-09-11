@@ -23,6 +23,7 @@ python sourcetools/ue_list_tools.py
 | 源码 | `ue_list_cxx_functions` | 列出显式文件的全部函数定义及检查选择名，不要求所属类定义可见 |
 | 源码 | `ue_inspect_cxx_type` | 按精确限定名解析类或结构体的继承、直接成员和接口候选原因 |
 | 源码 | `ue_inspect_cxx_function` | 提取指定函数的外部符号候选 |
+| 源码 | `ue_inspect_cxx_scope` | 按职责配置，在系统、类型、函数和证据层级间导航，支持分页和关注项 |
 | Module | `ue_inspect_module_entry` | 定位支持的模块注册宏及可唯一匹配的头文件 |
 | 工具池 | `ue_list_tools` | 输出全部核心工具的入口、输入和能力 |
 

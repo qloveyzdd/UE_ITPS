@@ -1472,6 +1472,11 @@ def _finalize_references(
                     "start_offset": int(reference["start_offset"]),
                 }
             )
+        # Preserve occurrence facts before the legacy line-based presentation.
+        references["symbol_occurrences"] = sorted(
+            _deduplicate(symbols, ("kind", "spelling", "owner_type", "start_offset")),
+            key=lambda item: int(item["start_offset"]),
+        )
         references["external_symbols"] = sorted(
             _deduplicate(symbols, ("kind", "spelling", "owner_type", "line")),
             key=lambda item: int(item["start_offset"]),

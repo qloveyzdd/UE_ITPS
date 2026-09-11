@@ -201,10 +201,11 @@ class DelegateAnalyzer(LocalNameResolver):
                 nested = by_location.get(nested_id)
                 if nested and nested["operation"] == "create" and nested_id != operation["operation_id"]:
                     callback["source_operation"] = nested_id
-        symbols = [s for s in references["external_symbols"]
-                   if not (s["kind"] in {"function_address", "unknown"} and s["start_offset"] in callback_offsets)]
-        symbols.extend(callback_symbols)
-        references["external_symbols"] = sorted(symbols, key=lambda s: s["start_offset"])
+        for field in ("external_symbols", "symbol_occurrences"):
+            symbols = [s for s in references[field]
+                       if not (s["kind"] in {"function_address", "unknown"} and s["start_offset"] in callback_offsets)]
+            symbols.extend(callback_symbols)
+            references[field] = sorted(symbols, key=lambda s: s["start_offset"])
         references["delegate_operations"] = operations
 
 

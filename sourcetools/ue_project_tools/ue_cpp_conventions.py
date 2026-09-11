@@ -45,6 +45,57 @@ UE_IGNORED_EXTERNAL_MEMBER_CALLS = frozenset(
     }
 )
 
+# Presentation policy only. Matching uses frontend type/callee facts, not text
+# patterns. Unlisted methods (including forwarded calls through pointers) remain.
+UE_RETRIEVAL_RULES_VERSION = 1
+UE_RETRIEVAL_RULES = (
+    {
+        "id": "container-query", "match": "member",
+        "owners": frozenset({"TMap", "TMultiMap", "TArray", "TSet"}),
+        "names": frozenset({"Find", "FindChecked", "FindRef", "Contains", "Num", "IsEmpty", "IsValidIndex", "GetData"}),
+        "behavior": "hide", "structure": "hide",
+    },
+    {
+        "id": "container-update", "match": "member",
+        "owners": frozenset({"TMap", "TMultiMap", "TArray", "TSet"}),
+        "names": frozenset({"Add", "AddUnique", "Emplace", "Append", "FindOrAdd", "Remove", "RemoveAll", "RemoveAt", "Reset", "Empty", "Reserve", "SetNum"}),
+        "behavior": "fold", "structure": "fold",
+    },
+    {
+        "id": "pointer-access", "match": "member",
+        "owners": frozenset({"TSharedPtr", "TSharedRef", "TWeakPtr", "TWeakObjectPtr", "TWeakInterfacePtr", "TObjectPtr", "TSoftObjectPtr", "TSoftClassPtr", "TUniquePtr"}),
+        "names": frozenset({"Get", "IsValid", "IsSet", "Pin"}),
+        "behavior": "hide", "structure": "hide",
+    },
+    {
+        "id": "text-formatting", "match": "member",
+        "owners": frozenset({"FString", "FText", "FName"}),
+        "names": frozenset({"Printf", "Format", "FromName", "FromString", "ToString"}),
+        "behavior": "hide", "structure": "hide",
+    },
+    {
+        "id": "text-macro", "match": "macro",
+        "names": frozenset({"TEXT", "LOCTEXT", "NSLOCTEXT", "INVTEXT"}),
+        "behavior": "hide", "structure": "hide",
+    },
+    {
+        "id": "instrumentation", "match": "macro",
+        "names": frozenset({"UE_LOG", "UE_CLOG", "CSV_CATEGORY_INDEX", "CSV_EVENT", "CSV_METADATA", "QUICK_SCOPE_CYCLE_COUNTER", "RETURN_QUICK_DECLARE_CYCLE_STAT", "SCOPED_BOOT_TIMING", "SCOPE_LOG_TIME_IN_SECONDS", "TRACE_CPUPROFILER_EVENT_SCOPE"}),
+        "behavior": "hide", "structure": "hide",
+    },
+    {
+        "id": "basic-value-type", "match": "type",
+        "names": frozenset({"int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64", "FString", "FName", "FText", "FVector", "FVector2D", "FRotator", "FQuat", "FTransform"}),
+        "behavior": "hide", "structure": "fold",
+    },
+)
+
+UE_RETRIEVAL_TYPE_DISPLAY = {"behavior": "fold", "structure": "expand"}
+UE_RETRIEVAL_DEFINITION_DISPLAY = {
+    "behavior": {"classes": "fold", "structs": "fold", "enums": "fold", "global_variables": "expand", "free_functions": "expand", "macros": "fold"},
+    "structure": {"classes": "expand", "structs": "expand", "enums": "expand", "global_variables": "expand", "free_functions": "fold", "macros": "fold"},
+}
+
 UE_DECLARATION_ANNOTATION_MACROS = {
     "type": frozenset({"UCLASS", "USTRUCT", "UENUM", "UINTERFACE"}),
     "field": frozenset({"UPROPERTY"}),
