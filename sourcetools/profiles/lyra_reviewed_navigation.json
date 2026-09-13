@@ -1,0 +1,740 @@
+{
+  "version": 1,
+  "id": "lyra-reviewed-navigation",
+  "name": "Lyra 已核对的检索提示",
+  "description": "21 个人工核对问题的定位提示；未覆盖问题保持未分类，6 个保留问题不参与导航配置。",
+  "units": [
+    {
+      "id": "async",
+      "sources": [
+        "Plugins/AsyncMixin/Source/Private/AsyncMixin.cpp",
+        "Plugins/AsyncMixin/Source/Public/AsyncMixin.h"
+      ],
+      "reviewed_sources": {
+        "Plugins/AsyncMixin/Source/Private/AsyncMixin.cpp": "8ac461820b43c280d2b94cf9796502c54f4c67d2fc5cbe5cd1ff286f404a6119",
+        "Plugins/AsyncMixin/Source/Public/AsyncMixin.h": "9833603a794a6779b9c0ee0481b4df3d0b5d022aa2e94d86e525e39efa8594c4"
+      },
+      "navigation": [
+        {
+          "id": "async",
+          "intent": "异步加载状态如何获取",
+          "purpose": "behavior",
+          "kind": "function",
+          "target": "FAsyncMixin::GetLoadingState",
+          "role": "internal_function",
+          "reason": "按当前对象查找或创建加载状态；查找结果和智能指针取值决定返回对象。",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "Loading.Find"
+            },
+            {
+              "kind": "call",
+              "name": "(*LoadingState).Get"
+            },
+            {
+              "kind": "call",
+              "name": "Loading.Add"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dialog",
+      "sources": [
+        "Plugins/CommonGame/Source/Private/Messaging/CommonGameDialog.cpp",
+        "Plugins/CommonGame/Source/Public/Messaging/CommonGameDialog.h"
+      ],
+      "reviewed_sources": {
+        "Plugins/CommonGame/Source/Private/Messaging/CommonGameDialog.cpp": "81a99e1e60b7bce156958f65255827878ea58b6cc3af30ae79ed442ef85d575f",
+        "Plugins/CommonGame/Source/Public/Messaging/CommonGameDialog.h": "b90287fc8f17f5baa4b43b01b6447f6532272f25c2cc6d2e15b8e431c139892c"
+      },
+      "navigation": [
+        {
+          "id": "dialog",
+          "intent": "对话框描述包含哪些字段",
+          "purpose": "structure",
+          "kind": "type",
+          "target": "UCommonGameDialogDescriptor",
+          "role": "type_structure",
+          "reason": "描述类型直接声明标题、正文和按钮操作；不代表对话框运行时行为。",
+          "checks": [
+            {
+              "kind": "member",
+              "name": "Header"
+            },
+            {
+              "kind": "member",
+              "name": "Body"
+            },
+            {
+              "kind": "member",
+              "name": "ButtonActions"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "loading",
+      "sources": [
+        "Plugins/CommonLoadingScreen/Source/CommonLoadingScreen/Private/LoadingScreenManager.cpp",
+        "Plugins/CommonLoadingScreen/Source/CommonLoadingScreen/Public/LoadingScreenManager.h"
+      ],
+      "reviewed_sources": {
+        "Plugins/CommonLoadingScreen/Source/CommonLoadingScreen/Private/LoadingScreenManager.cpp": "0a078d347edf134393d84b16419357777367773a7fd5ae06871299bb68b9800a",
+        "Plugins/CommonLoadingScreen/Source/CommonLoadingScreen/Public/LoadingScreenManager.h": "5fa695ca278c3f3dbc0eeac2d74591a3962437571c95c75261ac2ed6e60f04f6"
+      },
+      "navigation": [
+        {
+          "id": "loading",
+          "intent": "加载屏幕显示条件在哪里判断",
+          "purpose": "behavior",
+          "kind": "function",
+          "target": "ULoadingScreenManager::ShouldShowLoadingScreen",
+          "role": "internal_function",
+          "reason": "在命令行开关和视口检查后，合并加载需要与额外延迟条件；具体加载需要由被调函数检查。",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "CheckForAnyNeedToShowLoadingScreen"
+            },
+            {
+              "kind": "call",
+              "name": "FPlatformTime::Seconds"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "startup",
+      "sources": [
+        "Plugins/CommonStartupLoadingScreen/Source/CommonStartupLoadingScreen/Private/CommonPreLoadScreen.cpp",
+        "Plugins/CommonStartupLoadingScreen/Source/CommonStartupLoadingScreen/Private/CommonPreLoadScreen.h"
+      ],
+      "reviewed_sources": {
+        "Plugins/CommonStartupLoadingScreen/Source/CommonStartupLoadingScreen/Private/CommonPreLoadScreen.cpp": "e034e7caf89fa69bac1623f13633c572b60f015304b02b7f52831672c7a733d5",
+        "Plugins/CommonStartupLoadingScreen/Source/CommonStartupLoadingScreen/Private/CommonPreLoadScreen.h": "59165a27a162d394ecb16f206efd1c35ca9b3b08757b0d8329012e74df921fc0"
+      },
+      "navigation": [
+        {
+          "id": "startup",
+          "intent": "启动加载屏幕如何初始化",
+          "purpose": "behavior",
+          "kind": "function",
+          "target": "FCommonPreLoadScreen::Init",
+          "role": "system_entry",
+          "reason": "启动加载屏幕的初始化回调在非编辑器且能够渲染时创建界面；入口标签依据这段初始化实现。",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "FApp::CanEverRender"
+            },
+            {
+              "kind": "call",
+              "name": "SNew"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "user",
+      "sources": [
+        "Plugins/CommonUser/Source/CommonUser/Private/CommonUserSubsystem.cpp",
+        "Plugins/CommonUser/Source/CommonUser/Public/CommonUserSubsystem.h"
+      ],
+      "reviewed_sources": {
+        "Plugins/CommonUser/Source/CommonUser/Private/CommonUserSubsystem.cpp": "ed3f9ffb5f65ae64fa23b325ef5b9224335a855c4949bb42267c7c8adc98d01a",
+        "Plugins/CommonUser/Source/CommonUser/Public/CommonUserSubsystem.h": "f20753848cf2c00daa3082a5b1e9bcc2f6680df4430347c0cc2da206c3d32f07"
+      },
+      "navigation": [
+        {
+          "id": "user",
+          "intent": "用户初始化的入口在哪里",
+          "purpose": "behavior",
+          "kind": "function",
+          "target": "UCommonUserSubsystem::TryToInitializeUser",
+          "role": "system_entry",
+          "reason": "校验用户参数、准备本地用户信息并发起登录；返回 true 表示发起初始化，不表示登录成功。",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "CreateLocalUserInfo"
+            },
+            {
+              "kind": "call",
+              "name": "RefreshLocalUserInfo"
+            },
+            {
+              "kind": "call",
+              "name": "LoginLocalUser"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "message-node",
+      "sources": [
+        "Plugins/GameplayMessageRouter/Source/GameplayMessageNodes/Private/K2Node_AsyncAction_ListenForGameplayMessages.cpp",
+        "Plugins/GameplayMessageRouter/Source/GameplayMessageNodes/Public/K2Node_AsyncAction_ListenForGameplayMessages.h"
+      ],
+      "reviewed_sources": {
+        "Plugins/GameplayMessageRouter/Source/GameplayMessageNodes/Private/K2Node_AsyncAction_ListenForGameplayMessages.cpp": "50cf4d3e3d5421e7fb87d96618f88f75a5f52f863e80163060bf3396e5415779",
+        "Plugins/GameplayMessageRouter/Source/GameplayMessageNodes/Public/K2Node_AsyncAction_ListenForGameplayMessages.h": "8dcf76a9ce2277672927cf92045c197513c05db62dea36c92eb5994c96f348b4"
+      },
+      "navigation": [
+        {
+          "id": "message-node",
+          "intent": "消息监听节点如何生成负载处理逻辑",
+          "purpose": "behavior",
+          "kind": "function",
+          "target": "UK2Node_AsyncAction_ListenForGameplayMessages::HandlePayloadImplementation",
+          "role": "internal_function",
+          "reason": "为消息负载生成临时变量和节点连接，返回连线检查结果；范围限定为该负载处理函数。",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "CompilerContext.SpawnInternalVariable"
+            },
+            {
+              "kind": "call",
+              "name": "Schema.TryCreateConnection"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "message",
+      "sources": [
+        "Plugins/GameplayMessageRouter/Source/GameplayMessageRuntime/Private/GameFramework/GameplayMessageSubsystem.cpp",
+        "Plugins/GameplayMessageRouter/Source/GameplayMessageRuntime/Public/GameFramework/GameplayMessageSubsystem.h"
+      ],
+      "reviewed_sources": {
+        "Plugins/GameplayMessageRouter/Source/GameplayMessageRuntime/Private/GameFramework/GameplayMessageSubsystem.cpp": "6b3dfaece4f804c33e52db23f7aa6acff92a7e513eb49b0aecc4f2101cc0ede8",
+        "Plugins/GameplayMessageRouter/Source/GameplayMessageRuntime/Public/GameFramework/GameplayMessageSubsystem.h": "c10491861e35e103fcd3d4f054251ecd18c151dd998932afe7c7dbb89bc68caa"
+      },
+      "navigation": [
+        {
+          "id": "message",
+          "intent": "消息广播如何处理监听者",
+          "purpose": "behavior",
+          "kind": "function",
+          "target": "UGameplayMessageSubsystem::BroadcastMessageInternal",
+          "role": "internal_function",
+          "reason": "逐层检查频道及父标签的监听列表，按匹配方式和负载类型决定是否调用回调；查表结果控制处理分支。",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "ListenerMap.Find"
+            },
+            {
+              "kind": "call",
+              "name": "Tag.RequestDirectParent"
+            },
+            {
+              "kind": "call",
+              "name": "Listener.ReceivedCallback"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "settings",
+      "sources": [
+        "Plugins/GameSettings/Source/Private/Widgets/GameSettingScreen.cpp",
+        "Plugins/GameSettings/Source/Public/Widgets/GameSettingScreen.h"
+      ],
+      "reviewed_sources": {
+        "Plugins/GameSettings/Source/Private/Widgets/GameSettingScreen.cpp": "a8ac17bfde17c96a36642fcf452617a77253a9e1177acee39217d5766f6386c5",
+        "Plugins/GameSettings/Source/Public/Widgets/GameSettingScreen.h": "bf54ece68c504756f7df006e0f8e4adf10d5b24c774edb38b5aee4843509b0d2"
+      },
+      "navigation": [
+        {
+          "id": "settings",
+          "intent": "设置页面如何获取注册表",
+          "purpose": "behavior",
+          "kind": "function",
+          "target": "UGameSettingScreen::GetOrCreateRegistry",
+          "role": "internal_function",
+          "reason": "首次获取时创建注册表、绑定设置变化回调并交给面板，后续返回缓存。",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "this.CreateRegistry"
+            },
+            {
+              "kind": "call",
+              "name": "NewRegistry.OnSettingChangedEvent.AddUObject"
+            },
+            {
+              "kind": "call",
+              "name": "Settings_Panel.SetRegistry"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "subtitle",
+      "sources": [
+        "Plugins/GameSubtitles/Source/Private/SubtitleDisplaySubsystem.cpp",
+        "Plugins/GameSubtitles/Source/Public/SubtitleDisplaySubsystem.h"
+      ],
+      "reviewed_sources": {
+        "Plugins/GameSubtitles/Source/Private/SubtitleDisplaySubsystem.cpp": "779119a3be04a9aa81a2ffc3f3b2cf20ce70cb2dd40033bf1bf10d0966039772",
+        "Plugins/GameSubtitles/Source/Public/SubtitleDisplaySubsystem.h": "ad68eef139f8721e3ccdad129e7f011cb09aa20dbe234d516b188bb44ddd64dd"
+      },
+      "navigation": [
+        {
+          "id": "subtitle",
+          "intent": "字幕格式可以配置哪些内容",
+          "purpose": "structure",
+          "kind": "type",
+          "target": "FSubtitleFormat",
+          "role": "type_structure",
+          "reason": "字幕格式直接声明字号、颜色、边框及背景透明度。",
+          "checks": [
+            {
+              "kind": "member",
+              "name": "SubtitleTextSize"
+            },
+            {
+              "kind": "member",
+              "name": "SubtitleTextColor"
+            },
+            {
+              "kind": "member",
+              "name": "SubtitleTextBorder"
+            },
+            {
+              "kind": "member",
+              "name": "SubtitleBackgroundOpacity"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "editor",
+      "sources": [
+        "Source/LyraEditor/Validation/EditorValidator_Blueprints.cpp",
+        "Source/LyraEditor/Validation/EditorValidator_Blueprints.h"
+      ],
+      "reviewed_sources": {
+        "Source/LyraEditor/Validation/EditorValidator_Blueprints.cpp": "c82db1cbaae931d509d0f8749ded880d66076bea9d06a5ff0fded7c867a80cb5",
+        "Source/LyraEditor/Validation/EditorValidator_Blueprints.h": "2bb7833790cdd525250049b27efc884cc0daae4b1d74df8c011d24bf367efffd"
+      },
+      "navigation": [
+        {
+          "id": "editor",
+          "intent": "蓝图资产如何接受编辑器校验",
+          "purpose": "behavior",
+          "kind": "function",
+          "target": "UEditorValidator_Blueprints::ValidateLoadedAsset_Implementation",
+          "role": "internal_function",
+          "reason": "按蓝图类别和校验策略搜集硬引用，并对符合条件的引用包收集加载警告或错误。",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "AssetRegistry.GetReferencers"
+            },
+            {
+              "kind": "call",
+              "name": "AllHardReferencers.Contains"
+            },
+            {
+              "kind": "call",
+              "name": "UEditorValidator_Load::GetLoadWarningsAndErrorsForPackage"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "extension-tool",
+      "sources": [
+        "Plugins/LyraExtTool/Source/LyraExtTool/Private/BPFunctionLibrary.cpp",
+        "Plugins/LyraExtTool/Source/LyraExtTool/Public/BPFunctionLibrary.h"
+      ],
+      "reviewed_sources": {
+        "Plugins/LyraExtTool/Source/LyraExtTool/Private/BPFunctionLibrary.cpp": "93300a98f3a5737c449ddc3446f002c2194f791eb12a731ebd1c4dbc38517242",
+        "Plugins/LyraExtTool/Source/LyraExtTool/Public/BPFunctionLibrary.h": "19594037f9c3a3347637179da879067b4dcc275e653948542b1ae3910de6c575"
+      },
+      "navigation": [
+        {
+          "id": "extension-tool",
+          "intent": "工具扩展暴露了哪些成员",
+          "purpose": "structure",
+          "kind": "type",
+          "target": "UBPFunctionLibrary",
+          "role": "type_structure",
+          "reason": "函数库声明更换网格材质的接口；这里只确认接口成员，不推断实现效果。",
+          "checks": [
+            {
+              "kind": "member",
+              "name": "ChangeMeshMaterials"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "equip",
+      "sources": [
+        "Source/LyraGame/Equipment/LyraEquipmentManagerComponent.cpp",
+        "Source/LyraGame/Equipment/LyraEquipmentManagerComponent.h"
+      ],
+      "reviewed_sources": {
+        "Source/LyraGame/Equipment/LyraEquipmentManagerComponent.cpp": "236f68b45671b5573d860c009e59c3101e1f01e3bc2bbc442deb3247edfb7209",
+        "Source/LyraGame/Equipment/LyraEquipmentManagerComponent.h": "dafdc9547945e35c99aa354f35df84bbbb0fbf0fc068fd520bed7ce8637f9d20"
+      },
+      "navigation": [
+        {
+          "id": "equip",
+          "intent": "装备物品的入口调用哪些函数",
+          "purpose": "behavior",
+          "kind": "function",
+          "target": "ULyraEquipmentManagerComponent::EquipItem",
+          "role": "system_entry",
+          "reason": "传入装备类后创建装备条目，成功时调用装备回调，并按复制条件注册子对象。",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "EquipmentList.AddEntry"
+            },
+            {
+              "kind": "call",
+              "name": "Result.OnEquipped"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "modular",
+      "sources": [
+        "Plugins/ModularGameplayActors/Source/ModularGameplayActors/Private/ModularCharacter.cpp",
+        "Plugins/ModularGameplayActors/Source/ModularGameplayActors/Public/ModularCharacter.h"
+      ],
+      "reviewed_sources": {
+        "Plugins/ModularGameplayActors/Source/ModularGameplayActors/Private/ModularCharacter.cpp": "887f183bc43e769212faa2b3d86cbfa66555a53205f5ea765d0e0951183796a4",
+        "Plugins/ModularGameplayActors/Source/ModularGameplayActors/Public/ModularCharacter.h": "32095fc6885f35a56e6c36773325d0e393edf72c16f244d40d36b24cee117589"
+      },
+      "navigation": [
+        {
+          "id": "modular",
+          "intent": "模块化角色开始运行时注册了什么",
+          "purpose": "behavior",
+          "kind": "function",
+          "target": "AModularCharacter::BeginPlay",
+          "role": "system_entry",
+          "reason": "角色 BeginPlay 生命周期入口发送 GameActorReady 扩展事件后调用父类实现；本函数没有直接注册组件。",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "UGameFrameworkComponentManager::SendGameFrameworkComponentExtensionEvent"
+            },
+            {
+              "kind": "call",
+              "name": "Super::BeginPlay"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pocket",
+      "sources": [
+        "Plugins/PocketWorlds/Source/Private/PocketLevel.cpp",
+        "Plugins/PocketWorlds/Source/Public/PocketLevel.h"
+      ],
+      "reviewed_sources": {
+        "Plugins/PocketWorlds/Source/Private/PocketLevel.cpp": "ecdafeadb9690f7a8461c48d7ce0c0d6e8884e4ae3b1ce724a2e97391ebac88d",
+        "Plugins/PocketWorlds/Source/Public/PocketLevel.h": "30b52a5f660c79672305504c0a576b7b2ee4b184609929809780d3a79e0a36f6"
+      },
+      "navigation": [
+        {
+          "id": "pocket",
+          "intent": "口袋关卡资源包含哪些字段",
+          "purpose": "structure",
+          "kind": "type",
+          "target": "UPocketLevel",
+          "role": "type_structure",
+          "reason": "关卡资源类型直接保存关卡引用和边界。",
+          "checks": [
+            {
+              "kind": "member",
+              "name": "Level"
+            },
+            {
+              "kind": "member",
+              "name": "Bounds"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "assist",
+      "sources": [
+        "Plugins/GameFeatures/ShooterCore/Source/ShooterCoreRuntime/Private/MessageProcessors/AssistProcessor.cpp",
+        "Plugins/GameFeatures/ShooterCore/Source/ShooterCoreRuntime/Public/MessageProcessors/AssistProcessor.h"
+      ],
+      "reviewed_sources": {
+        "Plugins/GameFeatures/ShooterCore/Source/ShooterCoreRuntime/Private/MessageProcessors/AssistProcessor.cpp": "aa42c3fbf5a8fef5df506b5ed5f1aa8ae7d6b4231e6b74ed08085b9fdc12ce20",
+        "Plugins/GameFeatures/ShooterCore/Source/ShooterCoreRuntime/Public/MessageProcessors/AssistProcessor.h": "ac99b4a752736666ca22dfbde9c234289a6dee0c6d2bb90aa14cc401190195c5"
+      },
+      "navigation": [
+        {
+          "id": "assist",
+          "intent": "助攻处理器如何处理伤害消息",
+          "purpose": "behavior",
+          "kind": "function",
+          "target": "UAssistProcessor::OnDamageMessage",
+          "role": "internal_function",
+          "reason": "伤害消息回调按目标和攻击者查找或创建累计记录，随后加上伤害值；两个 FindOrAdd 返回引用是更新链路的一部分。",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "DamageHistory.FindOrAdd"
+            },
+            {
+              "kind": "call",
+              "name": "Damage.AccumulatedDamageByPlayer.FindOrAdd"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-message",
+      "sources": [
+        "Plugins/GameFeatures/ShooterTests/Source/ShooterTestsRuntime/Private/ShooterTestAsyncMessageTestActor.cpp",
+        "Plugins/GameFeatures/ShooterTests/Source/ShooterTestsRuntime/Private/ShooterTestAsyncMessageTestActor.h"
+      ],
+      "reviewed_sources": {
+        "Plugins/GameFeatures/ShooterTests/Source/ShooterTestsRuntime/Private/ShooterTestAsyncMessageTestActor.cpp": "d4545262c2a3ec01a03f3d91d08b74079da8a1674b890fe8dbf3465a192d72de",
+        "Plugins/GameFeatures/ShooterTests/Source/ShooterTestsRuntime/Private/ShooterTestAsyncMessageTestActor.h": "66ebc2ca12c2acce7ea3398920290deff914db52ed124d77c992d39b60be665b"
+      },
+      "navigation": [
+        {
+          "id": "test-message",
+          "intent": "测试颜色消息包含哪些字段",
+          "purpose": "structure",
+          "kind": "type",
+          "target": "FColorChangingMessage",
+          "role": "type_structure",
+          "reason": "颜色消息直接保存待切换的颜色字段。",
+          "checks": [
+            {
+              "kind": "member",
+              "name": "DesiredColorToChange"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "arena",
+      "sources": [
+        "Plugins/GameFeatures/TopDownArena/Source/TopDownArenaRuntime/Private/TopDownArenaPickupUIData.cpp",
+        "Plugins/GameFeatures/TopDownArena/Source/TopDownArenaRuntime/Private/TopDownArenaPickupUIData.h"
+      ],
+      "reviewed_sources": {
+        "Plugins/GameFeatures/TopDownArena/Source/TopDownArenaRuntime/Private/TopDownArenaPickupUIData.cpp": "45ca9d97a3964ed0421dea633a9aa92748244d04a1cfa91ce0b7c4fca3ce5182",
+        "Plugins/GameFeatures/TopDownArena/Source/TopDownArenaRuntime/Private/TopDownArenaPickupUIData.h": "2555feb94d68ff18f0b5ef0c24f82054896d28a7cab1ac5e45dd3e4bbe002ee3"
+      },
+      "navigation": [
+        {
+          "id": "arena",
+          "intent": "俯视玩法的拾取界面配置是什么",
+          "purpose": "structure",
+          "kind": "type",
+          "target": "UTopDownArenaPickupUIData",
+          "role": "type_structure",
+          "reason": "拾取界面数据直接保存描述、图标及拾取视听资源引用。",
+          "checks": [
+            {
+              "kind": "member",
+              "name": "Description"
+            },
+            {
+              "kind": "member",
+              "name": "ShortDescriptionForToast"
+            },
+            {
+              "kind": "member",
+              "name": "IconTexture"
+            },
+            {
+              "kind": "member",
+              "name": "PickupVFX"
+            },
+            {
+              "kind": "member",
+              "name": "PickupSFX"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ui-extension",
+      "sources": [
+        "Plugins/UIExtension/Source/Private/UIExtensionSystem.cpp",
+        "Plugins/UIExtension/Source/Public/UIExtensionSystem.h"
+      ],
+      "reviewed_sources": {
+        "Plugins/UIExtension/Source/Private/UIExtensionSystem.cpp": "a46fc99cec1741ee5e2ae11e923dfae2a042159184b7c786114691d347cf6ab7",
+        "Plugins/UIExtension/Source/Public/UIExtensionSystem.h": "9b99261914074b4125d810585d9503730b5eb6b296015929771eecc34744c9ff"
+      },
+      "navigation": [
+        {
+          "id": "ui-extension",
+          "intent": "界面扩展如何注册数据",
+          "purpose": "behavior",
+          "kind": "function",
+          "target": "UUIExtensionSubsystem::RegisterExtensionAsData",
+          "role": "system_entry",
+          "reason": "校验扩展标签及数据后写入扩展列表、通知扩展点并返回句柄；空参数会提前返回。",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "ExtensionMap.FindOrAdd"
+            },
+            {
+              "kind": "call",
+              "name": "List.Add_GetRef"
+            },
+            {
+              "kind": "call",
+              "name": "NotifyExtensionPointsOfExtension"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "health",
+      "sources": [
+        "Source/LyraGame/AbilitySystem/Attributes/LyraHealthSet.cpp",
+        "Source/LyraGame/AbilitySystem/Attributes/LyraHealthSet.h"
+      ],
+      "reviewed_sources": {
+        "Source/LyraGame/AbilitySystem/Attributes/LyraHealthSet.cpp": "6f1dbfadc2ff4774dc56e6539024e50d47a96c1fff52ed8fc1d365b76b46e1cd",
+        "Source/LyraGame/AbilitySystem/Attributes/LyraHealthSet.h": "8d66bb9ca79660096ac8972c055ee8089c0092bf40f0ff9baa707d9002414f0d"
+      },
+      "navigation": [
+        {
+          "id": "health",
+          "intent": "生命属性在效果执行后如何处理",
+          "purpose": "behavior",
+          "kind": "function",
+          "target": "ULyraHealthSet::PostGameplayEffectExecute",
+          "role": "internal_function",
+          "reason": "效果执行后按属性分支处理伤害、治疗和生命范围，并在满足条件时广播变化或生命耗尽；不代表每次都会触发所有广播。",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "MessageSystem.BroadcastMessage"
+            },
+            {
+              "kind": "call",
+              "name": "SetHealth"
+            },
+            {
+              "kind": "call",
+              "name": "OnOutOfHealth.Broadcast"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "experience",
+      "sources": [
+        "Source/LyraGame/GameModes/LyraExperienceManagerComponent.cpp",
+        "Source/LyraGame/GameModes/LyraExperienceManagerComponent.h"
+      ],
+      "reviewed_sources": {
+        "Source/LyraGame/GameModes/LyraExperienceManagerComponent.cpp": "180cf77ea7f57c80d0c1339fdd4ee2bd4c9198af68db7636da45d19e367c1d6d",
+        "Source/LyraGame/GameModes/LyraExperienceManagerComponent.h": "1dab8eaf7c98f99dae2c6d1234b7f3b249a7727a25dfba20d03d6c9f747cf2b5"
+      },
+      "navigation": [
+        {
+          "id": "experience",
+          "intent": "体验加载如何开始",
+          "purpose": "behavior",
+          "kind": "function",
+          "target": "ULyraExperienceManagerComponent::StartExperienceLoad",
+          "role": "internal_function",
+          "reason": "从未加载状态开始收集和请求资源，组合加载句柄并安排完成回调；这里只发起资源加载，不保证体验已经就绪。",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "AssetManager.ChangeBundleStateForPrimaryAssets"
+            },
+            {
+              "kind": "call",
+              "name": "Handle.IsValid"
+            },
+            {
+              "kind": "call",
+              "name": "Handle.BindCompleteDelegate"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pawn-data",
+      "sources": [
+        "Source/LyraGame/Character/LyraPawnData.cpp",
+        "Source/LyraGame/Character/LyraPawnData.h"
+      ],
+      "reviewed_sources": {
+        "Source/LyraGame/Character/LyraPawnData.cpp": "71574fc39beb4e28f326b04b8432c288576aa642cac6889507ec105b690745d4",
+        "Source/LyraGame/Character/LyraPawnData.h": "4c612802519de4c008d63b33dde38249ee467b9fe6ecdc12beb07a666805e30b"
+      },
+      "navigation": [
+        {
+          "id": "pawn-data",
+          "intent": "角色数据配置有哪些直接成员",
+          "purpose": "structure",
+          "kind": "type",
+          "target": "ULyraPawnData",
+          "role": "type_structure",
+          "reason": "角色数据直接保存 Pawn 类、能力集合、标签关系、输入与默认相机配置。",
+          "checks": [
+            {
+              "kind": "member",
+              "name": "PawnClass"
+            },
+            {
+              "kind": "member",
+              "name": "AbilitySets"
+            },
+            {
+              "kind": "member",
+              "name": "TagRelationshipMapping"
+            },
+            {
+              "kind": "member",
+              "name": "InputConfig"
+            },
+            {
+              "kind": "member",
+              "name": "DefaultCameraMode"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

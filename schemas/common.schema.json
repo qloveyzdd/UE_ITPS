@@ -137,8 +137,8 @@
             "structure"
           ]
         },
-        "rules_version": {
-          "const": 1
+          "rules_version": {
+            "enum": [1, 2]
         },
         "focus": {
           "type": "array",

@@ -62,9 +62,11 @@ python sourcetools/ue_inspect_cxx_function.py --source D:/Projects/MyGame/Source
 
 `ue_list_cxx_types.py` 会把 Engine 5.8 的原生 GameplayTag 声明/定义宏投影为 `FNativeGameplayTag` 变量事实；extern 声明不进入最终定义列表，static 定义保留内部 linkage。
 
-`ue_list_cxx_types.py` 和 `ue_inspect_cxx_function.py` 支持试验性的 `--view behavior`（业务）和 `--view structure`（结构），默认 `--view full` 保持原有输出。规则集中在 `ue_cpp_conventions.py`，按已有 AST 类型与方法事实匹配：容器查询、智能指针取值、文本包装和日志统计默认隐藏，容器增删折叠；业务同名方法、类型不明的调用和全部委托记录保留。函数中的普通类型引用在业务视图折叠、结构视图展开，模板类型表达式完整保留。类型清单保留全部定义，仅通过 `view.sections` 指示各类别的展开优先级；此处不新增继承或跨文件关系推断。
+`ue_list_cxx_types.py` 和 `ue_inspect_cxx_function.py` 支持试验性的 `--view behavior`（业务）和 `--view structure`（结构），默认 `--view full` 保持原有输出。规则集中在 `ue_cpp_conventions.py`，按已有 AST 类型与方法事实匹配。规则 v2 对结果未被使用的容器查询、智能指针取值，以及文本包装和日志统计默认隐藏，容器增删折叠；若容器或指针操作的返回表达式被条件、赋值、参数、接收者或 return 承接，则优先展开。这个保守判断只检查语法使用，不做数据流证明；日志参数内的调用也可能保留。业务同名方法、类型不明的调用和全部委托记录保留。函数中的普通类型引用在业务视图折叠、结构视图展开，模板类型表达式完整保留。类型清单保留全部定义，仅通过 `view.sections` 指示各类别的展开优先级；此处不新增继承或跨文件关系推断。
 
 函数视图以 `symbol_groups` 替代 `external_symbols`：`count` 与 `lines` 保留出现次数和每次行号，文件类别统一存放在匹配项的 `unit`；不同接收者和 Lambda 分开分组。`display` 省略表示展开，`execution_scope` 省略表示外层函数；命中规则保留 `rule`，隐藏原因和数量汇总在 `view_summary.hidden_by_rule`。这些分组只用于展示，不代表等价调用、执行次数或语义关系。`--focus NAME` 可重复指定精确的符号、方法或类型名称，恢复并展开关注项；它只用于业务或结构视图。`--include-syntax-flow` 在这两种视图中额外保留全部调用的表达式、参数与位置，包括隐藏项，便于核对。
+
+规则 v2 的 `count` 和 `source_count` 按内部逐位置事实计数；同一行出现两次相同调用时，可以分别判断是否使用了结果，行号也可能重复。默认 full 视图的 `external_symbols` 继续维持同名同一行合并的旧契约，因此不能直接把两种视图的记录数量作为等价校验。
 
 例如检查 Lyra 的容器查找与指针取值，可在仓库根目录运行：
 
@@ -96,7 +98,15 @@ python sourcetools/ue_inspect_cxx_scope.py --project LyraStarterGame/LyraStarter
 python sourcetools/lyra/export_navigation_map.py --project LyraStarterGame/LyraStarterGame.uproject --profile sourcetools/profiles/lyra_equipment.json --output lyra-equipment-map.json
 ```
 
-地图保存显式文件组、类型名称、配置职责及入口名称，不缓存函数体或调用结论。将 `units[].sources` 按地图中 `project` 的父目录还原为 `--source`；业务查询使用 `entry_points[].name` 调用 `ue_inspect_cxx_function.py --function`，结构查询使用类/结构体名称调用 `ue_inspect_cxx_type.py --type`。没有配置入口时，先用 `ue_list_cxx_functions.py` 获取该文件组的当前名称；枚举仍通过 `ue_list_cxx_types.py` 查看。需要调用实参时使用函数工具的 `--view behavior --include-syntax-flow`，低优先级调用仍在语法详情保留。`definition_count` 提示同名定义的数量，查询时保留全部匹配。定位选择由使用者完成，试验未实现自然语言自动路由或变更监控；`snapshot` 只记录建图来源。普通实现修改由旧工具读取最新事实；文件迁移、入口改名或职责调整后需修订配置并重新导出。
+基础地图保存显式文件组、类型名称、配置职责及入口名称；配置导航提示时，还保存所要求的局部证据。将 `units[].sources` 按地图中 `project` 的父目录还原为 `--source`；业务查询使用 `entry_points[].name` 调用 `ue_inspect_cxx_function.py --function`，结构查询使用类/结构体名称调用 `ue_inspect_cxx_type.py --type`。没有配置入口或导航提示时，先用 `ue_list_cxx_functions.py` 获取该文件组的当前名称；枚举仍通过 `ue_list_cxx_types.py` 查看。需要调用实参时使用函数工具的 `--view behavior --include-syntax-flow`，低优先级调用仍在语法详情保留。`definition_count` 提示同名定义的数量，查询时保留全部匹配。定位选择由使用者完成，试验未实现自然语言自动路由或变更监控；`snapshot` 只记录建图来源。普通实现修改由旧工具读取最新事实；文件迁移、入口改名或职责调整后需修订配置并重新导出。
+
+准确性试点配置为 `sourcetools/profiles/lyra_reviewed_navigation.json`，可替换上述导出命令中的 `--profile`。每组可选 `navigation` 保存问题意图、检索目的、精确目标、角色、判断理由及要求核对的调用名或成员名。角色区分 `system_entry`（系统/生命周期入口）、`internal_function`（内部函数）和 `type_structure`（类型结构）；这些是人工阅读证据后的解释，不自动等同于 public 函数或运行时关系。类型提示仅为 class/struct/union 生成旧检查工具的查询。
+
+导出时，`navigation[].definitions` 保存各定义的位置及匹配证据，调用证据包含表达式、参数、列号及 Lambda 作用域；`query` 给出旧工具、选择名和业务/结构视图的精确 `focus`。`reviewed_sources` 必须保存全部所选文件的 SHA-256 文本指纹；指纹与证据来自解析时同一次读取，文本按 UTF-8 解码、去 BOM 并统一换行。`review_status: current` 仅表示指纹一致，不表示已审查该文件的全部职责。只有指纹一致、定义唯一、要求的证据齐全且所选文件没有语法解析告警时，提示才为 `reviewed`；过期、缺证据或同名歧义保留为 `candidate`，找不到可检查目标为 `unresolved` 且不生成查询。重新建图不会自动更新人工复核指纹；旧地图也不会自行监测源码变化。
+
+基准 `tests/fixtures/lyra_retrieval_accuracy.json` 固定 21 个开发问题和 6 个保留问题。开发问题形成带证据的配置；保留问题不进入该配置，用来检查通用过滤、类型成员、委托和 Lambda 证据。可运行 `python -m unittest tests.test_lyra_retrieval_accuracy -v`，通过 SourceTools API 与独立旧 CLI 验证。本阶段优先保证证据准确性，数据库、增删改查及性能优化尚未实施；预选问题的通过数量不代表自然语言检索准确率。
+
+2026-09-13 准确性复核覆盖 21 组、42 个文件、61 处类型和 405 处函数定义：21 个导航提示通过当前证据检查，分为 5 个入口、9 个内部函数和 7 个类型结构提示。27 个问题分别通过独立旧 CLI 核对；两种优先级视图保留预期关键证据，所选范围的 375 份默认 full 查询与历史结果逐份一致。126 项相关测试通过，包含同一行混合调用、源码读取期间变化、语法恢复告警、过期配置及同名歧义。产物见 [本轮地图](Saved/SourceTools/lyra-accuracy-20260913/navigation-map.json) 和 [验证汇总](Saved/SourceTools/lyra-accuracy-20260913/verification-summary.json)。本轮没有重新扫描全部 707 个文件，也未把未覆盖的职责自动标为已确认。
 
 2026-09-12 装备试点地图为 4,140 字节。装备、卸装、快捷栏切换、装备配置四类预选问题各调用一次旧工具；装备 Actor 生成问题先列函数再检查，共六次独立调用，结果通过 Schema 校验。首次建图实测 19.6 秒，后续每次调用 2.4–2.6 秒，六次合计 14.8 秒；这是本机单轮测量，不含人工选择时间。地图读取一次加六份结果共 27,472 字节。以获取 EquipItem 的 AddEntry 调用实参为例，同一源码快照下，地图加旧查询共 6,992 字节，比此前四级路径的 21,980 字节减少 68.2%；地图已经在上下文中时只新增 2,852 字节。所有字节数按 UTF-8 紧凑 JSON 计算。29 项相关测试通过，覆盖地图复用、源码变更、入口失效、同名歧义及上述真实查询；该结果仅代表装备试点。
 

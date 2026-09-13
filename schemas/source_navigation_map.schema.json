@@ -13,6 +13,55 @@
     "text": {"type": "string", "minLength": 1},
     "count": {"type": "integer", "minimum": 0},
     "definitionCount": {"type": "integer", "minimum": 1},
+    "location": {
+      "type": "object", "required": ["path", "line"],
+      "properties": {"path": {"$ref": "#/$defs/text"}, "line": {"type": "integer", "minimum": 1},
+        "column": {"type": "integer", "minimum": 1}, "end_line": {"type": "integer", "minimum": 1},
+        "byte_offset": {"type": "integer", "minimum": 0}}, "additionalProperties": false
+    },
+    "check": {
+      "type": "object", "required": ["kind", "name"],
+      "properties": {"kind": {"enum": ["call", "member"]}, "name": {"$ref": "#/$defs/text"}},
+      "additionalProperties": false
+    },
+    "observedCheck": {
+      "type": "object", "required": ["kind", "name", "matches"],
+      "properties": {"kind": {"enum": ["call", "member"]}, "name": {"$ref": "#/$defs/text"},
+        "matches": {"type": "array", "items": {
+          "type": "object", "required": ["expression", "evidence"],
+          "properties": {"expression": {"$ref": "#/$defs/text"}, "evidence": {"$ref": "#/$defs/location"},
+            "arguments": {"type": "array", "items": {"type": "string"}},
+            "execution_scope": {"type": "object", "required": ["kind"],
+              "properties": {"kind": {"enum": ["function", "lambda"]}, "line": {"type": "integer", "minimum": 1},
+                "column": {"type": "integer", "minimum": 1}}, "additionalProperties": false}},
+          "additionalProperties": false}}}, "additionalProperties": false
+    },
+    "navigation": {
+      "type": "object",
+      "required": ["id", "intent", "purpose", "kind", "target", "role", "reason", "checks", "status", "evidence_status", "definitions"],
+      "properties": {
+        "id": {"$ref": "#/$defs/text"}, "intent": {"$ref": "#/$defs/text"},
+        "purpose": {"enum": ["behavior", "structure"]}, "kind": {"enum": ["function", "type"]},
+        "target": {"$ref": "#/$defs/text"}, "role": {"enum": ["system_entry", "internal_function", "type_structure"]},
+        "reason": {"$ref": "#/$defs/text"},
+        "checks": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/check"}},
+        "status": {"enum": ["reviewed", "candidate", "unresolved"]},
+        "evidence_status": {"enum": ["matched", "partial", "missing"]},
+        "definitions": {"type": "array", "items": {"type": "object", "required": ["evidence", "checks"],
+          "properties": {"evidence": {"$ref": "#/$defs/location"},
+            "checks": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/observedCheck"}}}, "additionalProperties": false}},
+        "query": {"type": "object", "required": ["tool", "selector"],
+          "properties": {"tool": {"enum": ["ue_inspect_cxx_type", "ue_inspect_cxx_function"]},
+            "selector": {"$ref": "#/$defs/text"}, "view": {"enum": ["behavior", "structure"]},
+            "focus": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/text"}}}, "additionalProperties": false}
+      }, "additionalProperties": false,
+      "allOf": [
+        {"if": {"properties": {"status": {"const": "unresolved"}}},
+         "then": {"not": {"required": ["query"]}}, "else": {"required": ["query"]}},
+        {"if": {"properties": {"status": {"const": "reviewed"}}},
+         "then": {"properties": {"evidence_status": {"const": "matched"}, "definitions": {"minItems": 1, "maxItems": 1}}}}
+      ]
+    },
     "type": {
       "type": "object", "required": ["name", "kind", "roles", "definition_count"],
       "properties": {
@@ -34,7 +83,11 @@
         "sources": {"type": "array", "minItems": 1, "maxItems": 2, "uniqueItems": true, "items": {"$ref": "#/$defs/text"}},
         "types": {"type": "array", "items": {"$ref": "#/$defs/type"}},
         "entry_points": {"type": "array", "items": {"$ref": "#/$defs/entry"}},
-        "function_definition_count": {"$ref": "#/$defs/count"}
+        "function_definition_count": {"$ref": "#/$defs/count"},
+        "source_hashes": {"type": "object", "minProperties": 1, "maxProperties": 2,
+          "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}},
+        "review_status": {"enum": ["unreviewed", "current", "stale"]},
+        "navigation": {"type": "array", "items": {"$ref": "#/$defs/navigation"}}
       }, "additionalProperties": false
     },
     "success": {

@@ -175,7 +175,7 @@ def load_source_context(
             path,
             {
                 "path": normalized(path),
-                "text": path.read_text(encoding="utf-8-sig", errors="replace"),
+                "text": cpp_model["source_texts"][path.as_posix().casefold()],
                 "problems": [],
                 "syntax_tree": syntax_projection(cpp_model, path),
             },

@@ -1,0 +1,720 @@
+{
+  "version": 1,
+  "purpose": "Source evidence and guidance checks; not an automatic natural-language routing score.",
+  "cases": [
+    {
+      "id": "async",
+      "split": "development",
+      "question": "异步加载状态如何获取",
+      "kind": "function",
+      "target": "FAsyncMixin::GetLoadingState",
+      "sources": [
+        "Plugins/AsyncMixin/Source/Private/AsyncMixin.cpp",
+        "Plugins/AsyncMixin/Source/Public/AsyncMixin.h"
+      ],
+      "expected_calls": [
+        {
+          "callee": "Loading.Find",
+          "arguments": [
+            "this"
+          ]
+        },
+        {
+          "callee": "(*LoadingState).Get",
+          "arguments": []
+        },
+        {
+          "callee": "Loading.Add",
+          "arguments": [
+            "this",
+            "MakeShared<FLoadingState>(*this)"
+          ]
+        }
+      ],
+      "expanded_calls": [
+        "Loading.Find",
+        "(*LoadingState).Get",
+        "Loading.Add"
+      ]
+    },
+    {
+      "id": "dialog",
+      "split": "development",
+      "question": "对话框描述包含哪些字段",
+      "kind": "type",
+      "target": "UCommonGameDialogDescriptor",
+      "sources": [
+        "Plugins/CommonGame/Source/Private/Messaging/CommonGameDialog.cpp",
+        "Plugins/CommonGame/Source/Public/Messaging/CommonGameDialog.h"
+      ],
+      "expected_members": [
+        "Header",
+        "Body",
+        "ButtonActions"
+      ]
+    },
+    {
+      "id": "loading",
+      "split": "development",
+      "question": "加载屏幕显示条件在哪里判断",
+      "kind": "function",
+      "target": "ULoadingScreenManager::ShouldShowLoadingScreen",
+      "sources": [
+        "Plugins/CommonLoadingScreen/Source/CommonLoadingScreen/Private/LoadingScreenManager.cpp",
+        "Plugins/CommonLoadingScreen/Source/CommonLoadingScreen/Public/LoadingScreenManager.h"
+      ],
+      "expected_calls": [
+        {
+          "callee": "CheckForAnyNeedToShowLoadingScreen",
+          "arguments": []
+        },
+        {
+          "callee": "FPlatformTime::Seconds",
+          "arguments": []
+        }
+      ],
+      "expanded_calls": []
+    },
+    {
+      "id": "startup",
+      "split": "development",
+      "question": "启动加载屏幕如何初始化",
+      "kind": "function",
+      "target": "FCommonPreLoadScreen::Init",
+      "sources": [
+        "Plugins/CommonStartupLoadingScreen/Source/CommonStartupLoadingScreen/Private/CommonPreLoadScreen.cpp",
+        "Plugins/CommonStartupLoadingScreen/Source/CommonStartupLoadingScreen/Private/CommonPreLoadScreen.h"
+      ],
+      "expected_calls": [
+        {
+          "callee": "FApp::CanEverRender",
+          "arguments": []
+        }
+      ],
+      "expanded_calls": []
+    },
+    {
+      "id": "user",
+      "split": "development",
+      "question": "用户初始化的入口在哪里",
+      "kind": "function",
+      "target": "UCommonUserSubsystem::TryToInitializeUser",
+      "sources": [
+        "Plugins/CommonUser/Source/CommonUser/Private/CommonUserSubsystem.cpp",
+        "Plugins/CommonUser/Source/CommonUser/Public/CommonUserSubsystem.h"
+      ],
+      "expected_calls": [
+        {
+          "callee": "RefreshLocalUserInfo",
+          "arguments": [
+            "LocalUserInfo"
+          ]
+        },
+        {
+          "callee": "LoginLocalUser"
+        }
+      ],
+      "expanded_calls": []
+    },
+    {
+      "id": "message-node",
+      "split": "development",
+      "question": "消息监听节点如何生成负载处理逻辑",
+      "kind": "function",
+      "target": "UK2Node_AsyncAction_ListenForGameplayMessages::HandlePayloadImplementation",
+      "sources": [
+        "Plugins/GameplayMessageRouter/Source/GameplayMessageNodes/Private/K2Node_AsyncAction_ListenForGameplayMessages.cpp",
+        "Plugins/GameplayMessageRouter/Source/GameplayMessageNodes/Public/K2Node_AsyncAction_ListenForGameplayMessages.h"
+      ],
+      "expected_calls": [
+        {
+          "callee": "CompilerContext.SpawnInternalVariable"
+        },
+        {
+          "callee": "Schema.TryCreateConnection"
+        }
+      ],
+      "expanded_calls": []
+    },
+    {
+      "id": "message",
+      "split": "development",
+      "question": "消息广播如何处理监听者",
+      "kind": "function",
+      "target": "UGameplayMessageSubsystem::BroadcastMessageInternal",
+      "sources": [
+        "Plugins/GameplayMessageRouter/Source/GameplayMessageRuntime/Private/GameFramework/GameplayMessageSubsystem.cpp",
+        "Plugins/GameplayMessageRouter/Source/GameplayMessageRuntime/Public/GameFramework/GameplayMessageSubsystem.h"
+      ],
+      "expected_calls": [
+        {
+          "callee": "ListenerMap.Find",
+          "arguments": [
+            "Tag"
+          ]
+        },
+        {
+          "callee": "Tag.RequestDirectParent",
+          "arguments": []
+        },
+        {
+          "callee": "Listener.ReceivedCallback",
+          "arguments": [
+            "Channel",
+            "StructType",
+            "MessageBytes"
+          ]
+        }
+      ],
+      "expanded_calls": [
+        "ListenerMap.Find"
+      ]
+    },
+    {
+      "id": "settings",
+      "split": "development",
+      "question": "设置页面如何获取注册表",
+      "kind": "function",
+      "target": "UGameSettingScreen::GetOrCreateRegistry",
+      "sources": [
+        "Plugins/GameSettings/Source/Private/Widgets/GameSettingScreen.cpp",
+        "Plugins/GameSettings/Source/Public/Widgets/GameSettingScreen.h"
+      ],
+      "expected_calls": [
+        {
+          "callee": "this.CreateRegistry",
+          "arguments": []
+        },
+        {
+          "callee": "NewRegistry.OnSettingChangedEvent.AddUObject",
+          "arguments": [
+            "this",
+            "&ThisClass::HandleSettingChanged"
+          ]
+        },
+        {
+          "callee": "Settings_Panel.SetRegistry",
+          "arguments": [
+            "NewRegistry"
+          ]
+        }
+      ],
+      "expanded_calls": []
+    },
+    {
+      "id": "subtitle",
+      "split": "development",
+      "question": "字幕格式可以配置哪些内容",
+      "kind": "type",
+      "target": "FSubtitleFormat",
+      "sources": [
+        "Plugins/GameSubtitles/Source/Private/SubtitleDisplaySubsystem.cpp",
+        "Plugins/GameSubtitles/Source/Public/SubtitleDisplaySubsystem.h"
+      ],
+      "expected_members": [
+        "SubtitleTextSize",
+        "SubtitleTextColor",
+        "SubtitleTextBorder",
+        "SubtitleBackgroundOpacity"
+      ]
+    },
+    {
+      "id": "editor",
+      "split": "development",
+      "question": "蓝图资产如何接受编辑器校验",
+      "kind": "function",
+      "target": "UEditorValidator_Blueprints::ValidateLoadedAsset_Implementation",
+      "sources": [
+        "Source/LyraEditor/Validation/EditorValidator_Blueprints.cpp",
+        "Source/LyraEditor/Validation/EditorValidator_Blueprints.h"
+      ],
+      "expected_calls": [
+        {
+          "callee": "AssetRegistry.GetReferencers"
+        },
+        {
+          "callee": "AllHardReferencers.Contains",
+          "arguments": [
+            "HardReferencer"
+          ]
+        },
+        {
+          "callee": "UEditorValidator_Load::GetLoadWarningsAndErrorsForPackage"
+        }
+      ],
+      "expanded_calls": [
+        "AllHardReferencers.Contains"
+      ]
+    },
+    {
+      "id": "extension-tool",
+      "split": "development",
+      "question": "工具扩展暴露了哪些成员",
+      "kind": "type",
+      "target": "UBPFunctionLibrary",
+      "sources": [
+        "Plugins/LyraExtTool/Source/LyraExtTool/Private/BPFunctionLibrary.cpp",
+        "Plugins/LyraExtTool/Source/LyraExtTool/Public/BPFunctionLibrary.h"
+      ],
+      "expected_members": [
+        "ChangeMeshMaterials"
+      ]
+    },
+    {
+      "id": "equip",
+      "split": "development",
+      "question": "装备物品的入口调用哪些函数",
+      "kind": "function",
+      "target": "ULyraEquipmentManagerComponent::EquipItem",
+      "sources": [
+        "Source/LyraGame/Equipment/LyraEquipmentManagerComponent.cpp",
+        "Source/LyraGame/Equipment/LyraEquipmentManagerComponent.h"
+      ],
+      "expected_calls": [
+        {
+          "callee": "EquipmentList.AddEntry",
+          "arguments": [
+            "EquipmentClass"
+          ]
+        },
+        {
+          "callee": "Result.OnEquipped",
+          "arguments": []
+        }
+      ],
+      "expanded_calls": []
+    },
+    {
+      "id": "modular",
+      "split": "development",
+      "question": "模块化角色开始运行时注册了什么",
+      "kind": "function",
+      "target": "AModularCharacter::BeginPlay",
+      "sources": [
+        "Plugins/ModularGameplayActors/Source/ModularGameplayActors/Private/ModularCharacter.cpp",
+        "Plugins/ModularGameplayActors/Source/ModularGameplayActors/Public/ModularCharacter.h"
+      ],
+      "expected_calls": [
+        {
+          "callee": "UGameFrameworkComponentManager::SendGameFrameworkComponentExtensionEvent",
+          "arguments": [
+            "this",
+            "UGameFrameworkComponentManager::NAME_GameActorReady"
+          ]
+        },
+        {
+          "callee": "Super::BeginPlay",
+          "arguments": []
+        }
+      ],
+      "expanded_calls": []
+    },
+    {
+      "id": "pocket",
+      "split": "development",
+      "question": "口袋关卡资源包含哪些字段",
+      "kind": "type",
+      "target": "UPocketLevel",
+      "sources": [
+        "Plugins/PocketWorlds/Source/Private/PocketLevel.cpp",
+        "Plugins/PocketWorlds/Source/Public/PocketLevel.h"
+      ],
+      "expected_members": [
+        "Level",
+        "Bounds"
+      ]
+    },
+    {
+      "id": "assist",
+      "split": "development",
+      "question": "助攻处理器如何处理伤害消息",
+      "kind": "function",
+      "target": "UAssistProcessor::OnDamageMessage",
+      "sources": [
+        "Plugins/GameFeatures/ShooterCore/Source/ShooterCoreRuntime/Private/MessageProcessors/AssistProcessor.cpp",
+        "Plugins/GameFeatures/ShooterCore/Source/ShooterCoreRuntime/Public/MessageProcessors/AssistProcessor.h"
+      ],
+      "expected_calls": [
+        {
+          "callee": "DamageHistory.FindOrAdd",
+          "arguments": [
+            "TargetPS"
+          ]
+        },
+        {
+          "callee": "Damage.AccumulatedDamageByPlayer.FindOrAdd",
+          "arguments": [
+            "InstigatorPS"
+          ]
+        }
+      ],
+      "expanded_calls": [
+        "DamageHistory.FindOrAdd",
+        "Damage.AccumulatedDamageByPlayer.FindOrAdd"
+      ]
+    },
+    {
+      "id": "test-message",
+      "split": "development",
+      "question": "测试颜色消息包含哪些字段",
+      "kind": "type",
+      "target": "FColorChangingMessage",
+      "sources": [
+        "Plugins/GameFeatures/ShooterTests/Source/ShooterTestsRuntime/Private/ShooterTestAsyncMessageTestActor.cpp",
+        "Plugins/GameFeatures/ShooterTests/Source/ShooterTestsRuntime/Private/ShooterTestAsyncMessageTestActor.h"
+      ],
+      "expected_members": [
+        "DesiredColorToChange"
+      ]
+    },
+    {
+      "id": "arena",
+      "split": "development",
+      "question": "俯视玩法的拾取界面配置是什么",
+      "kind": "type",
+      "target": "UTopDownArenaPickupUIData",
+      "sources": [
+        "Plugins/GameFeatures/TopDownArena/Source/TopDownArenaRuntime/Private/TopDownArenaPickupUIData.cpp",
+        "Plugins/GameFeatures/TopDownArena/Source/TopDownArenaRuntime/Private/TopDownArenaPickupUIData.h"
+      ],
+      "expected_members": [
+        "Description",
+        "ShortDescriptionForToast",
+        "IconTexture",
+        "PickupVFX",
+        "PickupSFX"
+      ]
+    },
+    {
+      "id": "ui-extension",
+      "split": "development",
+      "question": "界面扩展如何注册数据",
+      "kind": "function",
+      "target": "UUIExtensionSubsystem::RegisterExtensionAsData",
+      "sources": [
+        "Plugins/UIExtension/Source/Private/UIExtensionSystem.cpp",
+        "Plugins/UIExtension/Source/Public/UIExtensionSystem.h"
+      ],
+      "expected_calls": [
+        {
+          "callee": "ExtensionMap.FindOrAdd",
+          "arguments": [
+            "ExtensionPointTag"
+          ]
+        },
+        {
+          "callee": "List.Add_GetRef",
+          "arguments": [
+            "MakeShared<FUIExtension>()"
+          ]
+        },
+        {
+          "callee": "NotifyExtensionPointsOfExtension",
+          "arguments": [
+            "EUIExtensionAction::Added",
+            "Entry"
+          ]
+        }
+      ],
+      "expanded_calls": [
+        "ExtensionMap.FindOrAdd",
+        "List.Add_GetRef"
+      ]
+    },
+    {
+      "id": "health",
+      "split": "development",
+      "question": "生命属性在效果执行后如何处理",
+      "kind": "function",
+      "target": "ULyraHealthSet::PostGameplayEffectExecute",
+      "sources": [
+        "Source/LyraGame/AbilitySystem/Attributes/LyraHealthSet.cpp",
+        "Source/LyraGame/AbilitySystem/Attributes/LyraHealthSet.h"
+      ],
+      "expected_calls": [
+        {
+          "callee": "MessageSystem.BroadcastMessage"
+        },
+        {
+          "callee": "SetHealth"
+        },
+        {
+          "callee": "OnOutOfHealth.Broadcast"
+        }
+      ],
+      "expanded_calls": []
+    },
+    {
+      "id": "experience",
+      "split": "development",
+      "question": "体验加载如何开始",
+      "kind": "function",
+      "target": "ULyraExperienceManagerComponent::StartExperienceLoad",
+      "sources": [
+        "Source/LyraGame/GameModes/LyraExperienceManagerComponent.cpp",
+        "Source/LyraGame/GameModes/LyraExperienceManagerComponent.h"
+      ],
+      "expected_calls": [
+        {
+          "callee": "AssetManager.ChangeBundleStateForPrimaryAssets"
+        },
+        {
+          "callee": "Handle.IsValid",
+          "arguments": []
+        },
+        {
+          "callee": "Handle.BindCompleteDelegate",
+          "arguments": [
+            "OnAssetsLoadedDelegate"
+          ]
+        }
+      ],
+      "expanded_calls": [
+        "Handle.IsValid"
+      ]
+    },
+    {
+      "id": "pawn-data",
+      "split": "development",
+      "question": "角色数据配置有哪些直接成员",
+      "kind": "type",
+      "target": "ULyraPawnData",
+      "sources": [
+        "Source/LyraGame/Character/LyraPawnData.cpp",
+        "Source/LyraGame/Character/LyraPawnData.h"
+      ],
+      "expected_members": [
+        "PawnClass",
+        "AbilitySets",
+        "TagRelationshipMapping",
+        "InputConfig",
+        "DefaultCameraMode"
+      ]
+    },
+    {
+      "id": "heldout-cancel",
+      "split": "holdout",
+      "question": "如何取消异步加载",
+      "kind": "function",
+      "target": "FAsyncMixin::CancelAsyncLoading",
+      "sources": [
+        "Plugins/AsyncMixin/Source/Private/AsyncMixin.cpp",
+        "Plugins/AsyncMixin/Source/Public/AsyncMixin.h"
+      ],
+      "expected_calls": [
+        {
+          "callee": "HasLoadingState",
+          "arguments": []
+        },
+        {
+          "callee": "GetLoadingState",
+          "arguments": []
+        },
+        {
+          "callee": "GetLoadingState().CancelAndDestroy",
+          "arguments": []
+        }
+      ],
+      "expanded_calls": [
+        "GetLoadingState().CancelAndDestroy"
+      ]
+    },
+    {
+      "id": "heldout-unregister-listener",
+      "split": "holdout",
+      "question": "如何移除指定消息监听者",
+      "kind": "function",
+      "target": "UGameplayMessageSubsystem::UnregisterListenerInternal",
+      "sources": [
+        "Plugins/GameplayMessageRouter/Source/GameplayMessageRuntime/Private/GameFramework/GameplayMessageSubsystem.cpp",
+        "Plugins/GameplayMessageRouter/Source/GameplayMessageRuntime/Public/GameFramework/GameplayMessageSubsystem.h"
+      ],
+      "expected_calls": [
+        {
+          "callee": "ListenerMap.Find",
+          "arguments": [
+            "Channel"
+          ]
+        },
+        {
+          "callee": "pList.Listeners.IndexOfByPredicate"
+        },
+        {
+          "callee": "pList.Listeners.RemoveAtSwap",
+          "arguments": [
+            "MatchIndex"
+          ]
+        },
+        {
+          "callee": "pList.Listeners.Num",
+          "arguments": []
+        },
+        {
+          "callee": "ListenerMap.Remove",
+          "arguments": [
+            "Channel"
+          ]
+        }
+      ],
+      "expanded_calls": [
+        "ListenerMap.Find",
+        "pList.Listeners.Num"
+      ]
+    },
+    {
+      "id": "heldout-unregister-extension",
+      "split": "holdout",
+      "question": "如何注销界面扩展",
+      "kind": "function",
+      "target": "UUIExtensionSubsystem::UnregisterExtension",
+      "sources": [
+        "Plugins/UIExtension/Source/Private/UIExtensionSystem.cpp",
+        "Plugins/UIExtension/Source/Public/UIExtensionSystem.h"
+      ],
+      "expected_calls": [
+        {
+          "callee": "ExtensionHandle.IsValid",
+          "arguments": []
+        },
+        {
+          "callee": "ExtensionMap.Find",
+          "arguments": [
+            "Extension->ExtensionPointTag"
+          ]
+        },
+        {
+          "callee": "NotifyExtensionPointsOfExtension",
+          "arguments": [
+            "EUIExtensionAction::Removed",
+            "Extension"
+          ]
+        },
+        {
+          "callee": "ListPtr.RemoveSwap",
+          "arguments": [
+            "Extension"
+          ]
+        },
+        {
+          "callee": "ListPtr.Num",
+          "arguments": []
+        }
+      ],
+      "expanded_calls": [
+        "ExtensionMap.Find",
+        "ListPtr.Num"
+      ]
+    },
+    {
+      "id": "heldout-clamp",
+      "split": "holdout",
+      "question": "如何限制生命属性范围",
+      "kind": "function",
+      "target": "ULyraHealthSet::ClampAttribute",
+      "sources": [
+        "Source/LyraGame/AbilitySystem/Attributes/LyraHealthSet.cpp",
+        "Source/LyraGame/AbilitySystem/Attributes/LyraHealthSet.h"
+      ],
+      "expected_calls": [
+        {
+          "callee": "GetHealthAttribute",
+          "arguments": []
+        },
+        {
+          "callee": "GetMaxHealth",
+          "arguments": []
+        },
+        {
+          "callee": "FMath::Clamp",
+          "arguments": [
+            "NewValue",
+            "0.0f",
+            "GetMaxHealth()"
+          ]
+        },
+        {
+          "callee": "FMath::Max",
+          "arguments": [
+            "NewValue",
+            "1.0f"
+          ]
+        }
+      ],
+      "expanded_calls": [
+        "GetMaxHealth"
+      ]
+    },
+    {
+      "id": "heldout-experience-ready",
+      "split": "holdout",
+      "question": "体验全部加载后执行哪些动作",
+      "kind": "function",
+      "target": "ULyraExperienceManagerComponent::OnExperienceFullLoadCompleted",
+      "sources": [
+        "Source/LyraGame/GameModes/LyraExperienceManagerComponent.cpp",
+        "Source/LyraGame/GameModes/LyraExperienceManagerComponent.h"
+      ],
+      "expected_calls": [
+        {
+          "callee": "Action.OnGameFeatureRegistering",
+          "arguments": []
+        },
+        {
+          "callee": "Action.OnGameFeatureLoading",
+          "arguments": []
+        },
+        {
+          "callee": "Action.OnGameFeatureActivating",
+          "arguments": [
+            "Context"
+          ]
+        },
+        {
+          "callee": "ActivateListOfActions",
+          "arguments": [
+            "CurrentExperience->Actions"
+          ]
+        },
+        {
+          "callee": "OnExperienceLoaded_HighPriority.Broadcast",
+          "arguments": [
+            "CurrentExperience"
+          ]
+        },
+        {
+          "callee": "OnExperienceLoaded.Broadcast",
+          "arguments": [
+            "CurrentExperience"
+          ]
+        },
+        {
+          "callee": "OnExperienceLoaded_LowPriority.Broadcast",
+          "arguments": [
+            "CurrentExperience"
+          ]
+        }
+      ],
+      "expanded_calls": [
+        "Action.OnGameFeatureActivating"
+      ]
+    },
+    {
+      "id": "heldout-user-info",
+      "split": "holdout",
+      "question": "用户信息类型保存哪些状态",
+      "kind": "type",
+      "target": "UCommonUserInfo",
+      "sources": [
+        "Plugins/CommonUser/Source/CommonUser/Private/CommonUserSubsystem.cpp",
+        "Plugins/CommonUser/Source/CommonUser/Public/CommonUserSubsystem.h"
+      ],
+      "expected_members": [
+        "PrimaryInputDevice",
+        "PlatformUser",
+        "LocalPlayerIndex",
+        "InitializationState",
+        "CachedDataMap"
+      ]
+    }
+  ]
+}

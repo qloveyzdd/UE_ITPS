@@ -47,22 +47,25 @@ UE_IGNORED_EXTERNAL_MEMBER_CALLS = frozenset(
 
 # Presentation policy only. Matching uses frontend type/callee facts, not text
 # patterns. Unlisted methods (including forwarded calls through pointers) remain.
-UE_RETRIEVAL_RULES_VERSION = 1
+UE_RETRIEVAL_RULES_VERSION = 2
 UE_RETRIEVAL_RULES = (
     {
         "id": "container-query", "match": "member",
+        "preserve_used_result": True,
         "owners": frozenset({"TMap", "TMultiMap", "TArray", "TSet"}),
         "names": frozenset({"Find", "FindChecked", "FindRef", "Contains", "Num", "IsEmpty", "IsValidIndex", "GetData"}),
         "behavior": "hide", "structure": "hide",
     },
     {
         "id": "container-update", "match": "member",
+        "preserve_used_result": True,
         "owners": frozenset({"TMap", "TMultiMap", "TArray", "TSet"}),
         "names": frozenset({"Add", "AddUnique", "Emplace", "Append", "FindOrAdd", "Remove", "RemoveAll", "RemoveAt", "Reset", "Empty", "Reserve", "SetNum"}),
         "behavior": "fold", "structure": "fold",
     },
     {
         "id": "pointer-access", "match": "member",
+        "preserve_used_result": True,
         "owners": frozenset({"TSharedPtr", "TSharedRef", "TWeakPtr", "TWeakObjectPtr", "TWeakInterfacePtr", "TObjectPtr", "TSoftObjectPtr", "TSoftClassPtr", "TUniquePtr"}),
         "names": frozenset({"Get", "IsValid", "IsSet", "Pin"}),
         "behavior": "hide", "structure": "hide",

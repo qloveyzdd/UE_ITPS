@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .common import read_json, result_document
 from .cpp_frontend import frontend_version
+from .navigation_guidance import navigation_metadata, validate_navigation
 from .source_context import load_source_context
 from .source_function_references import _function_id, _list_functions_from_context
 from .source_priority import FunctionPriorityView, validate_view
@@ -57,7 +58,7 @@ def _profile(path):
     for unit in data["units"]:
         if not isinstance(unit, dict):
             raise ValueError("Expected a unit object")
-        if set(unit) - {"id", "sources", "roles", "entry_points"}:
+        if set(unit) - {"id", "sources", "roles", "entry_points", "reviewed_sources", "navigation"}:
             raise ValueError("Unknown scope unit fields")
         key = _string(unit.get("id"), "unit id")
         if key in seen:
@@ -81,6 +82,7 @@ def _profile(path):
             raise ValueError("entry_points must be an array of exact function names")
         for entry in entries:
             _string(entry, "entry point")
+        validate_navigation(unit)
     return data
 
 
@@ -141,7 +143,7 @@ class SourceScope:
         self._build()
 
     def navigation_map(self):
-        """Persist navigation hints, leaving current evidence to the focused tools."""
+        """Persist navigation hints and review evidence for focused tool queries."""
         units = []
         for spec in self.profile["units"]:
             types = {}
@@ -166,6 +168,7 @@ class SourceScope:
                 "types": list(types.values()),
                 "entry_points": [{"name": name, "definition_count": count} for name, count in entries.items()],
                 "function_definition_count": functions,
+                **navigation_metadata(self, spec),
             })
         return result_document(
             "source_navigation_map", {
@@ -177,10 +180,13 @@ class SourceScope:
             }, self.problems, responsibility=MAP_RESPONSIBILITY, boundaries=[
                 "Roles and entry points are profile-authored navigation hints, not inferred behavior.",
                 "Resolve sources relative to the reported project; use names with the existing type/function tools.",
-                "Only type names and configured entry points are indexed; list functions in the selected unit for other names.",
+                "Type names, configured entry points and authored navigation targets are indexed; list functions in the selected unit for other names.",
                 "Definition counts preserve name ambiguity. Current queries must retain every matching definition.",
                 "Snapshot records generation provenance only. Read current evidence with focused tools; refresh hints after file/name/profile changes.",
                 "This map does not monitor changes or automatically route natural-language questions.",
+                "Navigation intent, role and reason are authored interpretations. Reviewed means matching source hashes, one definition and all requested syntax evidence, not a proven runtime relationship.",
+                "Candidate or stale guidance needs review. Missing targets have no executable query; all matching definitions remain visible.",
+                "Syntax diagnostics in a selected unit prevent reviewed status; inspect validation for the reported source locations.",
             ],
         )
 

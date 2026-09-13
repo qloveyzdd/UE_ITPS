@@ -99,6 +99,22 @@ def result_target(node, source):
     return None
 
 
+def result_is_used(node):
+    """Conservative syntax use, without proving data flow or return types."""
+    parent = node.parent
+    while parent and parent.type == "parenthesized_expression":
+        node, parent = parent, parent.parent
+    if parent is None or parent.type == "expression_statement":
+        return False
+    if parent.type == "for_statement" and node in (
+        parent.child_by_field_name("initializer"), parent.child_by_field_name("update")
+    ):
+        return False
+    # Conditions, initializers, arguments, receivers and returned expressions
+    # consume the expression syntactically. Unknown contexts stay visible.
+    return True
+
+
 def visible_bindings(call, function, source, walk, type_fact, declarators, name_from_declarator,
                      declaration_nodes=None):
     """Lexical declarations only. No propagation through assignments or control flow."""

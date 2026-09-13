@@ -97,6 +97,8 @@ class FunctionPriorityView:
         for rule in UE_RETRIEVAL_RULES:
             if (rule["match"] == match and name in rule["names"]
                     and ("owners" not in rule or owner in rule["owners"])):
+                if rule.get("preserve_used_result") and call and call.get("result_used"):
+                    return "expand", rule["id"] + "-used-result"
                 return rule[self.view], rule["id"]
         if kind == "type":
             return UE_RETRIEVAL_TYPE_DISPLAY[self.view], "type-reference"
@@ -107,7 +109,7 @@ class FunctionPriorityView:
         groups = {}
         hidden = Counter()
         source_count = 0
-        for symbol in references["external_symbols"]:
+        for symbol in references["symbol_occurrences"]:
             source_count += 1
             call = calls.get(symbol.get("start_offset"))
             display, rule = self.classify(symbol, call, function)

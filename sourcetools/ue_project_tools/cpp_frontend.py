@@ -946,6 +946,7 @@ def _function_references(
                 "argument_syntax": [expression_facts.expression(arg, source) for arg in argument_nodes],
                 "execution_scope": expression_facts.execution_scope(current, source),
                 "result_target": expression_facts.result_target(current, source),
+                "result_used": expression_facts.result_is_used(current),
                 "bindings": bindings_at(current),
                 "callee": callee,
                 "raw_callee": raw_callee,
@@ -1339,6 +1340,8 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
     return {
         "aliases": aliases,
         "file": file_key,
+        # Evidence and fingerprints must describe the bytes used by this parse.
+        "source_text": source.decode("utf-8-sig", errors="replace").replace("\r\n", "\n").replace("\r", "\n"),
         "types": types,
         "functions": functions,
         "variables": variables,
@@ -1525,6 +1528,7 @@ def load_cpp_unit(
     model: dict[str, Any] = {
         "engine": ENGINE,
         "version": frontend_version(),
+        "source_texts": {result["file"]: result["source_text"] for result in parsed},
         "types": [item for result in parsed for item in result["types"]],
         "aliases": [item for result in parsed for item in result["aliases"]],
         "functions": [item for result in parsed for item in result["functions"]],

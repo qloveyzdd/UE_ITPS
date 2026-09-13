@@ -131,6 +131,36 @@ class SourcePriorityTests(unittest.TestCase):
         self.assertEqual(match["view_summary"]["hidden_by_rule"], {})
         self.assertEqual(len(match["symbol_groups"]), 2)
 
+    def test_used_container_and_pointer_results_remain_visible(self):
+        write_text(self.fixture.source, """
+            void FWorker::Run() {
+                Items.Find(Discarded);
+                if (Items.Find(Branch)) { Service.Get(); }
+                auto Value = Pointer.Get();
+                Consume(Pointer.Get());
+                auto& Row = Items.FindOrAdd(Key);
+                auto Callback = [this] { return Pointer.Get(); };
+            }
+        """)
+        for view in ("behavior", "structure"):
+            match = self.inspect("--view", view)["matches"][0]
+            groups = match["symbol_groups"]
+            found = [g for g in groups if g.get("rule") == "container-query-used-result"]
+            self.assertEqual(len(found), 1)
+            self.assertEqual(found[0]["lines"], [3])
+            self.assertEqual(found[0].get("display", "expand"), "expand")
+            self.assertEqual(sum(g["count"] for g in groups if g.get("rule") == "pointer-access-used-result"), 3)
+            self.assertTrue(any(g.get("rule") == "container-update-used-result" for g in groups))
+            self.assertEqual(match["view_summary"]["hidden_by_rule"]["container-query"], 1)
+
+    def test_same_line_discarded_call_does_not_hide_used_occurrence(self):
+        write_text(self.fixture.source, "void FWorker::Run() { Items.Find(A); if (Items.Find(B)) {} }")
+        match = self.inspect("--view", "behavior")["matches"][0]
+        found = [g for g in match["symbol_groups"] if g.get("rule") == "container-query-used-result"]
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0]["count"], 1)
+        self.assertEqual(match["view_summary"]["hidden_by_rule"]["container-query"], 1)
+
     def test_full_mode_and_internal_facts_are_unchanged(self):
         implicit = self.inspect("--include-syntax-flow")
         explicit = self.inspect("--view", "full", "--include-syntax-flow")
