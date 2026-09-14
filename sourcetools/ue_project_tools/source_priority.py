@@ -7,7 +7,7 @@ import json
 from .source_name_resolution import LocalNameResolver
 from .ue_cpp_conventions import (
     UE_RETRIEVAL_DEFINITION_DISPLAY, UE_RETRIEVAL_RULES,
-    UE_RETRIEVAL_RULES_VERSION, UE_RETRIEVAL_TYPE_DISPLAY,
+    UE_RETRIEVAL_RULES_VERSION, UE_RETRIEVAL_TYPE_DISPLAY, UE_LOG_ARGUMENT_START,
 )
 
 
@@ -34,6 +34,14 @@ def definition_view(groups, view, focus):
                for item in items):
             sections[group] = "expand"
     return {**view_metadata(view, focus), "sections": sections}
+
+
+def log_context(call):
+    for context in call.get("contexts", []) if call else []:
+        start = UE_LOG_ARGUMENT_START.get(context["callee"])
+        if start is not None and context["argument"] >= start:
+            return {"callee": context["callee"], "location": context["location"]}
+    return None
 
 
 class FunctionPriorityView:
@@ -94,12 +102,23 @@ class FunctionPriorityView:
                 names.add(owner)
         if self.focus & names:
             return "expand", "explicit-focus"
+        matched = None
         for rule in UE_RETRIEVAL_RULES:
             if (rule["match"] == match and name in rule["names"]
                     and ("owners" not in rule or owner in rule["owners"])):
-                if rule.get("preserve_used_result") and call and call.get("result_used"):
-                    return "expand", rule["id"] + "-used-result"
-                return rule[self.view], rule["id"]
+                matched = rule
+                break
+        if matched and matched.get("state_change"):
+            suffix = "-used-result" if call and call.get("result_used") else ""
+            return "expand", matched["id"] + suffix
+        if matched and matched["id"] in {"text-macro", "text-formatting", "instrumentation"}:
+            return matched[self.view], matched["id"]
+        if call and kind in {"member_call", "macro", "free_function", "unknown"} and log_context(call):
+            return "fold", "log-argument"
+        if matched:
+            if matched.get("preserve_used_result") and call and call.get("result_used"):
+                return "expand", matched["id"] + "-used-result"
+            return matched[self.view], matched["id"]
         if kind == "type":
             return UE_RETRIEVAL_TYPE_DISPLAY[self.view], "type-reference"
         return "expand", "unclassified-reference"
@@ -107,6 +126,7 @@ class FunctionPriorityView:
     def project(self, function, references, unit):
         calls = {call["start_offset"]: call for call in references["call_details"]}
         groups = {}
+        logs = {}
         hidden = Counter()
         source_count = 0
         for symbol in references["symbol_occurrences"]:
@@ -123,20 +143,30 @@ class FunctionPriorityView:
                     group["receiver"] = call["receiver"]
                 if call["execution_scope"]["kind"] != "function":
                     group["execution_scope"] = call["execution_scope"]
+            destination = groups
+            if rule == "log-argument":
+                context = log_context(call)
+                context_key = json.dumps(context, sort_keys=True)
+                if context_key not in logs:
+                    logs[context_key] = {**context, "display": "fold", "groups": {}}
+                destination = logs[context_key]["groups"]
             key = (json.dumps(group, sort_keys=True), display, rule)
-            if key not in groups:
-                groups[key] = {**group, "count": 0, "lines": []}
+            if key not in destination:
+                destination[key] = {**group, "count": 0, "lines": []}
                 if display != "expand":
-                    groups[key]["display"] = display
+                    destination[key]["display"] = display
                 if rule != "unclassified-reference":
-                    groups[key]["rule"] = rule
-            group = groups[key]
+                    destination[key]["rule"] = rule
+            group = destination[key]
             group["count"] += 1
             group["lines"].append(symbol["line"])
         ordered = sorted(groups.values(), key=lambda g: g.get("display", "expand") != "expand")
         return {
             "unit": unit,
             "symbol_groups": ordered,
+            **({"log_groups": [{k: v for k, v in log.items() if k != "groups"}
+                               | {"symbol_groups": list(log["groups"].values())} for log in logs.values()]} if logs else {}),
+            "statement_summary": dict(sorted(Counter(s["kind"] for s in references["statements"]).items())),
             "view_summary": {
                 "source_count": source_count,
                 "hidden_by_rule": dict(sorted(hidden.items())),
@@ -152,4 +182,5 @@ def detailed_syntax_flow(references):
                    "execution_scope": call["execution_scope"]}
                   for call in references["call_details"]],
         "controls": references["controls"],
+        "statements": references["statements"],
     }

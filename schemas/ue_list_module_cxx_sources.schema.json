@@ -33,6 +33,7 @@
       "type": "object",
       "required": ["header", "cpp"],
       "properties": {
+        "method": {"const": "unique-module-basename"},
         "header": {
           "type": "string",
           "minLength": 1

@@ -581,6 +581,59 @@
         "unit"
       ],
       "properties": {
+        "statement_summary": {
+          "$ref": "urn:ue-itps:schema:common#/$defs/statementSummary"
+        },
+        "log_groups": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "callee",
+              "location",
+              "display",
+              "symbol_groups"
+            ],
+            "properties": {
+              "callee": {
+                "enum": [
+                  "UE_LOG",
+                  "UE_CLOG"
+                ]
+              },
+              "location": {
+                "type": "object",
+                "required": [
+                  "line",
+                  "column"
+                ],
+                "properties": {
+                  "line": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "column": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "additionalProperties": false
+              },
+              "display": {
+                "const": "fold"
+              },
+              "symbol_groups": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "$ref": "#/$defs/symbolGroup"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
         "function_id": {
           "type": "string",
           "description": "Identifies one definition occurrence in the selected source unit; includes its signature and unit:line:column location.",
@@ -603,7 +656,15 @@
         },
         "syntax_flow": {
           "type": "object",
-          "description": "Present only when --include-syntax-flow is requested"
+          "description": "Present only when --include-syntax-flow is requested",
+          "properties": {
+            "statements": {
+              "type": "array",
+              "items": {
+                "$ref": "urn:ue-itps:schema:common#/$defs/retrievalStatement"
+              }
+            }
+          }
         },
         "unit": {
           "enum": [

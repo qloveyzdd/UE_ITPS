@@ -1,0 +1,581 @@
+{
+  "seed": 2026091302,
+  "description": "30 个已用于规则复核的样本，不是保留集。期望来自人工阅读的 SourceTools 证据。",
+  "cases": [
+    {
+      "id": "case-01",
+      "split": "random",
+      "scope": "ShooterCoreRuntime/Input",
+      "unit": "unit-d90252daff0d",
+      "sources": [
+        "Plugins/GameFeatures/ShooterCore/Source/ShooterCoreRuntime/Private/Input/AimAssistInputModifier.cpp",
+        "Plugins/GameFeatures/ShooterCore/Source/ShooterCoreRuntime/Public/Input/AimAssistInputModifier.h"
+      ],
+      "kind": "function",
+      "target": "FAimAssistFilter::FAimAssistFilter",
+      "expected": [],
+      "definition_count": 1,
+      "navigation_status": "reviewed",
+      "expected_statements": [
+        "bIncludeSameFriendlyTargets(false)",
+        "bExcludeInstigator(true)",
+        "bExcludeAllAttachedToInstigator(false)",
+        "bExcludeRequester(true)",
+        "bExcludeAllAttachedToRequester(false)",
+        "bTraceComplexCollision(false)",
+        "bExcludeDeadOrDying(true)"
+      ]
+    },
+    {
+      "id": "case-02",
+      "split": "random",
+      "scope": "ShooterCoreRuntime/Input",
+      "unit": "unit-d90252daff0d",
+      "sources": [
+        "Plugins/GameFeatures/ShooterCore/Source/ShooterCoreRuntime/Private/Input/AimAssistInputModifier.cpp",
+        "Plugins/GameFeatures/ShooterCore/Source/ShooterCoreRuntime/Public/Input/AimAssistInputModifier.h"
+      ],
+      "kind": "function",
+      "target": "FAimAssistOwnerViewData::ProjectReticleToScreen",
+      "expected": [
+        "FSceneView::ProjectWorldToScreen"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-03",
+      "split": "random",
+      "scope": "ShooterCoreRuntime/Input",
+      "unit": "unit-d90252daff0d",
+      "sources": [
+        "Plugins/GameFeatures/ShooterCore/Source/ShooterCoreRuntime/Private/Input/AimAssistInputModifier.cpp",
+        "Plugins/GameFeatures/ShooterCore/Source/ShooterCoreRuntime/Public/Input/AimAssistInputModifier.h"
+      ],
+      "kind": "type",
+      "target": "UAimAssistInputModifier",
+      "expected": [
+        "Settings",
+        "Filter",
+        "MoveInputAction",
+        "SensitivityLevelTable",
+        "GetPreviousTargetCache",
+        "GetCurrentTargetCache",
+        "DebugDrawHandle"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-04",
+      "split": "random",
+      "scope": "ShooterTestsRuntime/Utilities",
+      "unit": "unit-1c34fa113ce6",
+      "sources": [
+        "Plugins/GameFeatures/ShooterTests/Source/ShooterTestsRuntime/Private/Utilities/ShooterTestsAnimationTestHelper.cpp",
+        "Plugins/GameFeatures/ShooterTests/Source/ShooterTestsRuntime/Private/Utilities/ShooterTestsAnimationTestHelper.h"
+      ],
+      "kind": "function",
+      "target": "FShooterTestsAnimationTestHelper::IsAnimationPlaying",
+      "expected": [
+        "SkeletalMeshComponent.ForEachAnimInstance",
+        "AnimMontageInstance.IsPlaying",
+        "IsExpectedAnimationPlaying"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-05",
+      "split": "random",
+      "scope": "ShooterTestsRuntime/Utilities",
+      "unit": "unit-1c34fa113ce6",
+      "sources": [
+        "Plugins/GameFeatures/ShooterTests/Source/ShooterTestsRuntime/Private/Utilities/ShooterTestsAnimationTestHelper.cpp",
+        "Plugins/GameFeatures/ShooterTests/Source/ShooterTestsRuntime/Private/Utilities/ShooterTestsAnimationTestHelper.h"
+      ],
+      "kind": "function",
+      "target": "IsExpectedAnimationPlaying",
+      "expected": [
+        "Records.Num"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-06",
+      "split": "random",
+      "scope": "ShooterTestsRuntime/Utilities",
+      "unit": "unit-1c34fa113ce6",
+      "sources": [
+        "Plugins/GameFeatures/ShooterTests/Source/ShooterTestsRuntime/Private/Utilities/ShooterTestsAnimationTestHelper.cpp",
+        "Plugins/GameFeatures/ShooterTests/Source/ShooterTestsRuntime/Private/Utilities/ShooterTestsAnimationTestHelper.h"
+      ],
+      "kind": "type",
+      "target": "FShooterTestsAnimationTestHelper",
+      "expected": [
+        "MannyPistolJogForwardAnimationName",
+        "PistolMeleeAnimationName",
+        "FindAnimationAsset",
+        "IsAnimationPlaying"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-07",
+      "split": "random",
+      "scope": "CommonGame/(root)",
+      "unit": "unit-f1d10fef9748",
+      "sources": [
+        "Plugins/CommonGame/Source/Private/CommonPlayerController.cpp",
+        "Plugins/CommonGame/Source/Public/CommonPlayerController.h"
+      ],
+      "kind": "function",
+      "target": "ACommonPlayerController::OnUnPossess",
+      "expected": [
+        "Super::OnUnPossess",
+        "LocalPlayer.OnPlayerPawnSet.Broadcast"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-08",
+      "split": "random",
+      "scope": "CommonGame/(root)",
+      "unit": "unit-f1d10fef9748",
+      "sources": [
+        "Plugins/CommonGame/Source/Private/CommonPlayerController.cpp",
+        "Plugins/CommonGame/Source/Public/CommonPlayerController.h"
+      ],
+      "kind": "function",
+      "target": "ACommonPlayerController::OnPossess",
+      "expected": [
+        "Super::OnPossess",
+        "LocalPlayer.OnPlayerPawnSet.Broadcast"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-09",
+      "split": "random",
+      "scope": "CommonGame/(root)",
+      "unit": "unit-f1d10fef9748",
+      "sources": [
+        "Plugins/CommonGame/Source/Private/CommonPlayerController.cpp",
+        "Plugins/CommonGame/Source/Public/CommonPlayerController.h"
+      ],
+      "kind": "type",
+      "target": "ACommonPlayerController",
+      "expected": [
+        "ReceivedPlayer",
+        "SetPawn",
+        "OnPossess",
+        "OnUnPossess",
+        "OnRep_PlayerState"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-10",
+      "split": "random",
+      "scope": "ModularGameplayActors/(root)",
+      "unit": "unit-3e2800137bb1",
+      "sources": [
+        "Plugins/ModularGameplayActors/Source/ModularGameplayActors/Private/ModularPlayerController.cpp",
+        "Plugins/ModularGameplayActors/Source/ModularGameplayActors/Public/ModularPlayerController.h"
+      ],
+      "kind": "function",
+      "target": "AModularPlayerController::ReceivedPlayer",
+      "expected": [
+        "UGameFrameworkComponentManager::SendGameFrameworkComponentExtensionEvent",
+        "Component.ReceivedPlayer"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-11",
+      "split": "random",
+      "scope": "ModularGameplayActors/(root)",
+      "unit": "unit-3e2800137bb1",
+      "sources": [
+        "Plugins/ModularGameplayActors/Source/ModularGameplayActors/Private/ModularPlayerController.cpp",
+        "Plugins/ModularGameplayActors/Source/ModularGameplayActors/Public/ModularPlayerController.h"
+      ],
+      "kind": "function",
+      "target": "AModularPlayerController::PlayerTick",
+      "expected": [
+        "Super::PlayerTick",
+        "Component.PlayerTick"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-12",
+      "split": "random",
+      "scope": "ModularGameplayActors/(root)",
+      "unit": "unit-3e2800137bb1",
+      "sources": [
+        "Plugins/ModularGameplayActors/Source/ModularGameplayActors/Private/ModularPlayerController.cpp",
+        "Plugins/ModularGameplayActors/Source/ModularGameplayActors/Public/ModularPlayerController.h"
+      ],
+      "kind": "type",
+      "target": "AModularPlayerController",
+      "expected": [
+        "PreInitializeComponents",
+        "EndPlay",
+        "ReceivedPlayer",
+        "PlayerTick"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-13",
+      "split": "random",
+      "scope": "GameSubtitles/Widgets",
+      "unit": "unit-783a3aff6f4e",
+      "sources": [
+        "Plugins/GameSubtitles/Source/Private/Widgets/SSubtitleDisplay.cpp",
+        "Plugins/GameSubtitles/Source/Public/Widgets/SSubtitleDisplay.h"
+      ],
+      "kind": "function",
+      "target": "SSubtitleDisplay::HandleSubtitleChanged",
+      "expected": [
+        "UGameplayStatics::AreSubtitlesEnabled",
+        "InSubtitleText.IsEmpty",
+        "TextDisplay.SetText"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-14",
+      "split": "random",
+      "scope": "GameSubtitles/Widgets",
+      "unit": "unit-783a3aff6f4e",
+      "sources": [
+        "Plugins/GameSubtitles/Source/Private/Widgets/SSubtitleDisplay.cpp",
+        "Plugins/GameSubtitles/Source/Public/Widgets/SSubtitleDisplay.h"
+      ],
+      "kind": "function",
+      "target": "SSubtitleDisplay::Construct",
+      "expected": [
+        "InArgs._ManualSubtitles.Get",
+        "OnSetSubtitleText.AddSP"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-15",
+      "split": "random",
+      "scope": "GameSubtitles/Widgets",
+      "unit": "unit-783a3aff6f4e",
+      "sources": [
+        "Plugins/GameSubtitles/Source/Private/Widgets/SSubtitleDisplay.cpp",
+        "Plugins/GameSubtitles/Source/Public/Widgets/SSubtitleDisplay.h"
+      ],
+      "kind": "type",
+      "target": "SSubtitleDisplay",
+      "expected": [
+        "Construct",
+        "SetTextStyle",
+        "SetWrapTextAt",
+        "Background",
+        "TextDisplay"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-16",
+      "split": "random",
+      "scope": "GameplayMessageRuntime/GameFramework",
+      "unit": "unit-6cbba63526d7",
+      "sources": [
+        "Plugins/GameplayMessageRouter/Source/GameplayMessageRuntime/Public/GameFramework/GameplayMessageTypes2.h"
+      ],
+      "kind": "function",
+      "target": "FGameplayMessageListenerParams::SetMessageReceivedCallback",
+      "expected": [
+        "WeakObject.Get",
+        "(StrongObject->*Function)"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-17",
+      "split": "random",
+      "scope": "GameplayMessageRuntime/GameFramework",
+      "unit": "unit-6cbba63526d7",
+      "sources": [
+        "Plugins/GameplayMessageRouter/Source/GameplayMessageRuntime/Public/GameFramework/GameplayMessageTypes2.h"
+      ],
+      "kind": "type",
+      "target": "FGameplayMessageListenerParams",
+      "expected": [
+        "MatchType",
+        "OnMessageReceivedCallback",
+        "SetMessageReceivedCallback"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-18",
+      "split": "random",
+      "scope": "LyraEditor/Validation",
+      "unit": "unit-5fb9c9e099d9",
+      "sources": [
+        "Source/LyraEditor/Validation/EditorValidator_MaterialFunctions.cpp",
+        "Source/LyraEditor/Validation/EditorValidator_MaterialFunctions.h"
+      ],
+      "kind": "function",
+      "target": "UEditorValidator_MaterialFunctions::ValidateLoadedAsset_Implementation",
+      "expected": [
+        "AllHardReferencers.Contains",
+        "PackagesToProcess.Num",
+        "UEditorValidator_Load::GetLoadWarningsAndErrorsForPackage"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-19",
+      "split": "random",
+      "scope": "LyraEditor/Validation",
+      "unit": "unit-5fb9c9e099d9",
+      "sources": [
+        "Source/LyraEditor/Validation/EditorValidator_MaterialFunctions.cpp",
+        "Source/LyraEditor/Validation/EditorValidator_MaterialFunctions.h"
+      ],
+      "kind": "type",
+      "target": "UEditorValidator_MaterialFunctions",
+      "expected": [
+        "UEditorValidator_MaterialFunctions",
+        "CanValidateAsset_Implementation",
+        "ValidateLoadedAsset_Implementation"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-20",
+      "split": "random",
+      "scope": "CommonUser/(root)",
+      "unit": "unit-b70c9a261413",
+      "sources": [
+        "Plugins/CommonUser/Source/CommonUser/Private/AsyncAction_CommonUserInitialize.cpp",
+        "Plugins/CommonUser/Source/CommonUser/Public/AsyncAction_CommonUserInitialize.h"
+      ],
+      "kind": "function",
+      "target": "UAsyncAction_CommonUserInitialize::HandleFailure",
+      "expected": [
+        "Subsystem.IsValid",
+        "HandleInitializationComplete"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-21",
+      "split": "random",
+      "scope": "CommonUser/(root)",
+      "unit": "unit-b70c9a261413",
+      "sources": [
+        "Plugins/CommonUser/Source/CommonUser/Private/AsyncAction_CommonUserInitialize.cpp",
+        "Plugins/CommonUser/Source/CommonUser/Public/AsyncAction_CommonUserInitialize.h"
+      ],
+      "kind": "function",
+      "target": "UAsyncAction_CommonUserInitialize::LoginForOnlinePlay",
+      "expected": [
+        "NewObject<UAsyncAction_CommonUserInitialize>",
+        "Action.IsRegistered",
+        "Action.SetReadyToDestroy"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-22",
+      "split": "random",
+      "scope": "CommonUser/(root)",
+      "unit": "unit-b70c9a261413",
+      "sources": [
+        "Plugins/CommonUser/Source/CommonUser/Private/AsyncAction_CommonUserInitialize.cpp",
+        "Plugins/CommonUser/Source/CommonUser/Public/AsyncAction_CommonUserInitialize.h"
+      ],
+      "kind": "type",
+      "target": "UAsyncAction_CommonUserInitialize",
+      "expected": [
+        "InitializeForLocalPlay",
+        "LoginForOnlinePlay",
+        "OnInitializationComplete",
+        "Activate",
+        "Subsystem",
+        "Params"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-23",
+      "split": "targeted",
+      "scope": "LyraGame/Inventory",
+      "unit": "unit-d610e732c710",
+      "sources": [
+        "Source/LyraGame/Inventory/LyraInventoryManagerComponent.cpp",
+        "Source/LyraGame/Inventory/LyraInventoryManagerComponent.h"
+      ],
+      "kind": "function",
+      "target": "FLyraInventoryList::AddEntry",
+      "expected": [
+        "Entries.AddDefaulted_GetRef",
+        "Fragment.OnInstanceCreated",
+        "MarkItemDirty",
+        "unimplemented"
+      ],
+      "definition_count": 2,
+      "navigation_status": "candidate"
+    },
+    {
+      "id": "case-24",
+      "split": "targeted",
+      "scope": "LyraGame/Inventory",
+      "unit": "unit-d610e732c710",
+      "sources": [
+        "Source/LyraGame/Inventory/LyraInventoryManagerComponent.cpp",
+        "Source/LyraGame/Inventory/LyraInventoryManagerComponent.h"
+      ],
+      "kind": "function",
+      "target": "ULyraInventoryManagerComponent::ConsumeItemsByDefinition",
+      "expected": [
+        "OwningActor.HasAuthority",
+        "ULyraInventoryManagerComponent::FindFirstItemStackByDefinition",
+        "InventoryList.RemoveEntry"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-25",
+      "split": "targeted",
+      "scope": "LyraGame/AbilitySystem",
+      "unit": "unit-5573f89544a0",
+      "sources": [
+        "Source/LyraGame/AbilitySystem/LyraAbilitySystemComponent.cpp",
+        "Source/LyraGame/AbilitySystem/LyraAbilitySystemComponent.h"
+      ],
+      "kind": "function",
+      "target": "ULyraAbilitySystemComponent::ProcessAbilityInput",
+      "expected": [
+        "ClearAbilityInput",
+        "AbilitiesToActivate.AddUnique",
+        "TryActivateAbility",
+        "AbilitySpecInputReleased"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-26",
+      "split": "targeted",
+      "scope": "LyraGame/AbilitySystem",
+      "unit": "unit-5573f89544a0",
+      "sources": [
+        "Source/LyraGame/AbilitySystem/LyraAbilitySystemComponent.cpp",
+        "Source/LyraGame/AbilitySystem/LyraAbilitySystemComponent.h"
+      ],
+      "kind": "function",
+      "target": "ULyraAbilitySystemComponent::CancelAbilitiesByFunc",
+      "expected": [
+        "ShouldCancelFunc",
+        "LyraAbilityInstance.CanBeCanceled",
+        "LyraAbilityInstance.CancelAbility",
+        "AbilityActorInfo.Get"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-27",
+      "split": "targeted",
+      "scope": "LyraGame/GameFeatures",
+      "unit": "unit-218fe75210cd",
+      "sources": [
+        "Source/LyraGame/GameFeatures/GameFeatureAction_AddInputContextMapping.cpp",
+        "Source/LyraGame/GameFeatures/GameFeatureAction_AddInputContextMapping.h"
+      ],
+      "kind": "function",
+      "target": "UGameFeatureAction_AddInputContextMapping::RegisterInputMappingContextsForLocalPlayer",
+      "expected": [
+        "ULyraAssetManager::Get",
+        "AssetManager.GetAsset",
+        "Settings.RegisterInputMappingContext"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-28",
+      "split": "targeted",
+      "scope": "LyraGame/GameFeatures",
+      "unit": "unit-218fe75210cd",
+      "sources": [
+        "Source/LyraGame/GameFeatures/GameFeatureAction_AddInputContextMapping.cpp",
+        "Source/LyraGame/GameFeatures/GameFeatureAction_AddInputContextMapping.h"
+      ],
+      "kind": "function",
+      "target": "UGameFeatureAction_AddInputContextMapping::UnregisterInputMappingContextsForLocalPlayer",
+      "expected": [
+        "Entry.InputMapping.Get",
+        "Settings.UnregisterInputMappingContext"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-29",
+      "split": "targeted",
+      "scope": "GameSettings/Registry",
+      "unit": "unit-c9896d3aa5d2",
+      "sources": [
+        "Plugins/GameSettings/Source/Private/Registry/GameSettingRegistryChangeTracker.cpp",
+        "Plugins/GameSettings/Source/Public/GameSettingRegistryChangeTracker.h"
+      ],
+      "kind": "function",
+      "target": "FGameSettingRegistryChangeTracker::ApplyChanges",
+      "expected": [
+        "SettingValue.Apply",
+        "SettingValue.StoreInitial",
+        "ClearDirtyState"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    },
+    {
+      "id": "case-30",
+      "split": "targeted",
+      "scope": "GameSettings/Registry",
+      "unit": "unit-c9896d3aa5d2",
+      "sources": [
+        "Plugins/GameSettings/Source/Private/Registry/GameSettingRegistryChangeTracker.cpp",
+        "Plugins/GameSettings/Source/Public/GameSettingRegistryChangeTracker.h"
+      ],
+      "kind": "function",
+      "target": "FGameSettingRegistryChangeTracker::HandleSettingChanged",
+      "expected": [
+        "DirtySettings.Add"
+      ],
+      "definition_count": 1,
+      "navigation_status": "reviewed"
+    }
+  ]
+}

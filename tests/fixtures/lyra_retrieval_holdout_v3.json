@@ -1,0 +1,133 @@
+{
+  "seed": 2026091401,
+  "rules_version": 3,
+  "purpose": "规则和 30 样本配置完成后冻结；这 4 个样本不加入职责配置，用于检查通用视图。",
+  "cases": [
+    {
+      "unit": "unit-1d9a19e042c2",
+      "sources": [
+        "Plugins/GameSettings/Source/Private/Registry/GameSettingRegistry.cpp",
+        "Plugins/GameSettings/Source/Public/GameSettingRegistry.h"
+      ],
+      "target": "UGameSettingRegistry::Regenerate",
+      "module": "GameSettings",
+      "id": "heldout-v3-1",
+      "calls": [
+        "Setting.MarkAsGarbage",
+        "RegisteredSettings.Reset",
+        "TopLevelSettings.Reset",
+        "OnInitialize"
+      ],
+      "expanded": [
+        {
+          "receiver": "RegisteredSettings",
+          "count": 1
+        },
+        {
+          "receiver": "TopLevelSettings",
+          "count": 1
+        }
+      ],
+      "statements": []
+    },
+    {
+      "unit": "unit-497fb545bb93",
+      "sources": [
+        "Plugins/UIExtension/Source/Private/Widgets/UIExtensionPointWidget.cpp",
+        "Plugins/UIExtension/Source/Public/Widgets/UIExtensionPointWidget.h"
+      ],
+      "target": "UUIExtensionPointWidget::OnAddOrRemoveExtension",
+      "module": "UIExtension",
+      "id": "heldout-v3-2",
+      "calls": [
+        "CreateEntryInternal",
+        "ExtensionMapping.Add",
+        "DataClasses.Num",
+        "GetWidgetClassForData.Execute",
+        "ConfigureWidgetForData.ExecuteIfBound",
+        "ExtensionMapping.FindRef",
+        "RemoveEntryInternal",
+        "ExtensionMapping.Remove"
+      ],
+      "expanded": [
+        {
+          "receiver": "ExtensionMapping",
+          "spelling": "TMap<FUIExtensionHandle,TObjectPtr<UUserWidget>>->Add()",
+          "count": 2
+        },
+        {
+          "receiver": "ExtensionMapping",
+          "spelling": "TMap<FUIExtensionHandle,TObjectPtr<UUserWidget>>->Remove()",
+          "count": 1
+        },
+        {
+          "receiver": "DataClasses",
+          "count": 1
+        }
+      ],
+      "statements": [
+        "WidgetClass = GetWidgetClassForData.Execute(Data)"
+      ]
+    },
+    {
+      "unit": "unit-74c7949e1f64",
+      "sources": [
+        "Plugins/PocketWorlds/Source/Private/PocketCapture.cpp",
+        "Plugins/PocketWorlds/Source/Public/PocketCapture.h"
+      ],
+      "target": "UPocketCapture::GetOrCreateAlphaMaskRenderTarget",
+      "module": "PocketWorlds",
+      "id": "heldout-v3-3",
+      "calls": [
+        "NewObject<UTextureRenderTarget2D>",
+        "AlphaMaskRT.InitAutoFormat",
+        "AlphaMaskRT.UpdateResourceImmediate"
+      ],
+      "expanded": [
+        {
+          "spelling": "TObjectPtr<UTextureRenderTarget2D>->InitAutoFormat()",
+          "count": 1
+        },
+        {
+          "spelling": "TObjectPtr<UTextureRenderTarget2D>->UpdateResourceImmediate()",
+          "count": 1
+        }
+      ],
+      "statements": [
+        "(AlphaMaskRT == nullptr)",
+        "AlphaMaskRT->RenderTargetFormat = RTF_R8",
+        "return AlphaMaskRT;"
+      ]
+    },
+    {
+      "unit": "unit-209520b1cdde",
+      "sources": [
+        "Plugins/GameFeatures/TopDownArena/Source/TopDownArenaRuntime/Private/LyraCameraMode_TopDownArenaCamera.cpp",
+        "Plugins/GameFeatures/TopDownArena/Source/TopDownArenaRuntime/Public/LyraCameraMode_TopDownArenaCamera.h"
+      ],
+      "target": "ULyraCameraMode_TopDownArenaCamera::UpdateView",
+      "module": "TopDownArenaRuntime",
+      "id": "heldout-v3-4",
+      "calls": [
+        "ArenaBounds.GetSize().GetMax",
+        "BoundsSizeToDistance.GetRichCurveConst().Eval",
+        "ArenaBounds.GetCenter",
+        "DefaultPivotRotation.Vector"
+      ],
+      "expanded": [
+        {
+          "spelling": "BoundsSizeToDistance.GetRichCurveConst().Eval()",
+          "kind": "unknown",
+          "count": 1
+        }
+      ],
+      "statements": [
+        "View.Location = PivotLocation",
+        "View.Rotation = PivotRotation",
+        "View.ControlRotation = View.Rotation",
+        "View.FieldOfView = FieldOfView"
+      ]
+    }
+  ],
+  "description": "在规则 v3 和抽样职责配置完成后冻结目标；预期由人工阅读 SourceTools 返回的源码制定，未据此调整规则或加入导航提示。"
+}

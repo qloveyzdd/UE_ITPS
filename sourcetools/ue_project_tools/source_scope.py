@@ -11,7 +11,7 @@ from .cpp_frontend import frontend_version
 from .navigation_guidance import navigation_metadata, validate_navigation
 from .source_context import load_source_context
 from .source_function_references import _function_id, _list_functions_from_context
-from .source_priority import FunctionPriorityView, validate_view
+from .source_priority import FunctionPriorityView, validate_view, log_context
 from .source_type_details import _compound
 from .source_type_facts import _list_types_from_context, _unit
 from .ue_cpp_conventions import UE_RETRIEVAL_RULES_VERSION
@@ -290,6 +290,8 @@ class SourceScope:
                 if record["call"]:
                     identity["receiver"] = record["call"]["receiver"]
                     identity["execution_scope"] = record["call"]["execution_scope"]
+                    if log_context(record["call"]):
+                        identity["log_context"] = log_context(record["call"])
                 if view != "full":
                     display, rule = policies[function["unit"]].classify(record["symbol"], record["call"], function["raw"])
             elif kind == "delegate":
@@ -314,6 +316,8 @@ class SourceScope:
                     item["rule"] = rule
                 if record["call"]:
                     call = record["call"]
+                    if log_context(call):
+                        item["context"] = log_context(call)
                     if call["receiver"]:
                         item["receiver"] = call["receiver"]
                     if call["execution_scope"]["kind"] != "function":
@@ -368,6 +372,8 @@ class SourceScope:
         elif level == "function" and select in self.functions:
             selected = self.functions[select]
             details["selection"] = selected["anchor"]
+            refs = self.units[selected["unit"]]["cpp_model"]["references"][selected["raw"]["occurrence_id"]]
+            details["statement_summary"] = dict(sorted(Counter(s["kind"] for s in refs["statements"]).items()))
             records = [r for r in records if r["public"]["source"] == select]
         elif level != "evidence":
             raise ValueError("Selection not found in this snapshot; refresh after source/profile changes")
@@ -381,6 +387,7 @@ class SourceScope:
                 refs = self.units[selected["unit"]]["cpp_model"]["references"][raw["occurrence_id"]]
                 if offset == 0:
                     details["controls"] = refs["controls"]
+                    details["statements"] = refs["statements"]
                     lines = self.paths[raw["file"]][1].splitlines()
                     details["source_excerpt"] = "\n".join(lines[raw["line"] - 1:raw["end_line"]])
             elif select in groups:

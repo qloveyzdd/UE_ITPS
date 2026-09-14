@@ -1,0 +1,876 @@
+{
+  "version": 1,
+  "id": "lyra-sampling-reviewed",
+  "name": "Lyra 追加抽样职责复核",
+  "description": "30 个已阅读的抽样问题；29 个证据匹配提示和 1 个同名重载候选。只说明所选局部源码，不代表全项目职责覆盖。",
+  "units": [
+    {
+      "id": "unit-d90252daff0d",
+      "sources": [
+        "Plugins/GameFeatures/ShooterCore/Source/ShooterCoreRuntime/Private/Input/AimAssistInputModifier.cpp",
+        "Plugins/GameFeatures/ShooterCore/Source/ShooterCoreRuntime/Public/Input/AimAssistInputModifier.h"
+      ],
+      "reviewed_sources": {
+        "Plugins/GameFeatures/ShooterCore/Source/ShooterCoreRuntime/Private/Input/AimAssistInputModifier.cpp": "8e2e063661bb3429a845099ec5abad7da64838802cb149e8e50fe2b592e2bf0c",
+        "Plugins/GameFeatures/ShooterCore/Source/ShooterCoreRuntime/Public/Input/AimAssistInputModifier.h": "b55268007533bd0d4a50170a2c5cfe774bb90e2006342afeb4db2ce1349d1d58"
+      },
+      "navigation": [
+        {
+          "id": "case-01",
+          "kind": "function",
+          "target": "FAimAssistFilter::FAimAssistFilter",
+          "intent": "辅助瞄准过滤器默认开启哪些开关",
+          "reason": "构造函数设置七项布尔初值；零普通调用不表示没有默认配置。",
+          "purpose": "behavior",
+          "role": "internal_function",
+          "checks": [
+            {
+              "kind": "statement",
+              "name": "bIncludeSameFriendlyTargets(false)"
+            },
+            {
+              "kind": "statement",
+              "name": "bExcludeInstigator(true)"
+            },
+            {
+              "kind": "statement",
+              "name": "bExcludeAllAttachedToInstigator(false)"
+            },
+            {
+              "kind": "statement",
+              "name": "bExcludeRequester(true)"
+            },
+            {
+              "kind": "statement",
+              "name": "bExcludeAllAttachedToRequester(false)"
+            },
+            {
+              "kind": "statement",
+              "name": "bTraceComplexCollision(false)"
+            },
+            {
+              "kind": "statement",
+              "name": "bExcludeDeadOrDying(true)"
+            }
+          ]
+        },
+        {
+          "id": "case-02",
+          "kind": "function",
+          "target": "FAimAssistOwnerViewData::ProjectReticleToScreen",
+          "intent": "准星范围怎样投影到屏幕",
+          "reason": "投影成功后计算最小边界并标记范围有效，最后返回边界。",
+          "purpose": "behavior",
+          "role": "internal_function",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "FSceneView::ProjectWorldToScreen"
+            }
+          ]
+        },
+        {
+          "id": "case-03",
+          "kind": "type",
+          "target": "UAimAssistInputModifier",
+          "intent": "辅助瞄准输入有哪些配置和缓存成员",
+          "reason": "直接成员包含设置、过滤器、输入动作、灵敏度表及两组目标缓存访问方法；条件声明和 const 重载分别保留。",
+          "purpose": "structure",
+          "role": "type_structure",
+          "checks": [
+            {
+              "kind": "member",
+              "name": "Settings"
+            },
+            {
+              "kind": "member",
+              "name": "Filter"
+            },
+            {
+              "kind": "member",
+              "name": "MoveInputAction"
+            },
+            {
+              "kind": "member",
+              "name": "SensitivityLevelTable"
+            },
+            {
+              "kind": "member",
+              "name": "GetPreviousTargetCache"
+            },
+            {
+              "kind": "member",
+              "name": "GetCurrentTargetCache"
+            },
+            {
+              "kind": "member",
+              "name": "DebugDrawHandle"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unit-1c34fa113ce6",
+      "sources": [
+        "Plugins/GameFeatures/ShooterTests/Source/ShooterTestsRuntime/Private/Utilities/ShooterTestsAnimationTestHelper.cpp",
+        "Plugins/GameFeatures/ShooterTests/Source/ShooterTestsRuntime/Private/Utilities/ShooterTestsAnimationTestHelper.h"
+      ],
+      "reviewed_sources": {
+        "Plugins/GameFeatures/ShooterTests/Source/ShooterTestsRuntime/Private/Utilities/ShooterTestsAnimationTestHelper.cpp": "6890d52b88a53a5b4b7c3a0069e62ca17575df876fc7a8ffdb878c4c23469335",
+        "Plugins/GameFeatures/ShooterTests/Source/ShooterTestsRuntime/Private/Utilities/ShooterTestsAnimationTestHelper.h": "1616cf94c927bc015b6e15b534bda62dbae14d7a51d471af5a94eb7f0e7726c4"
+      },
+      "navigation": [
+        {
+          "id": "case-04",
+          "kind": "function",
+          "target": "FShooterTestsAnimationTestHelper::IsAnimationPlaying",
+          "intent": "动画测试怎样检查指定动画是否播放",
+          "reason": "遍历动画实例，在 Montage 或同步组、未分组记录中检查指定动画；回调中的调用保留 Lambda 作用域。",
+          "purpose": "behavior",
+          "role": "internal_function",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "SkeletalMeshComponent.ForEachAnimInstance"
+            },
+            {
+              "kind": "call",
+              "name": "AnimMontageInstance.IsPlaying"
+            },
+            {
+              "kind": "call",
+              "name": "IsExpectedAnimationPlaying"
+            }
+          ]
+        },
+        {
+          "id": "case-05",
+          "kind": "function",
+          "target": "IsExpectedAnimationPlaying",
+          "intent": "动画播放记录如何匹配目标资源",
+          "reason": "按记录数量遍历并比较 SourceAsset，找到时返回 true；循环条件中的 Num 决定遍历边界。",
+          "purpose": "behavior",
+          "role": "internal_function",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "Records.Num"
+            }
+          ]
+        },
+        {
+          "id": "case-06",
+          "kind": "type",
+          "target": "FShooterTestsAnimationTestHelper",
+          "intent": "动画测试助手提供哪些资源名和检查方法",
+          "reason": "类型直接声明动画资源名以及查找资源、检查播放状态的方法。",
+          "purpose": "structure",
+          "role": "type_structure",
+          "checks": [
+            {
+              "kind": "member",
+              "name": "MannyPistolJogForwardAnimationName"
+            },
+            {
+              "kind": "member",
+              "name": "PistolMeleeAnimationName"
+            },
+            {
+              "kind": "member",
+              "name": "FindAnimationAsset"
+            },
+            {
+              "kind": "member",
+              "name": "IsAnimationPlaying"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unit-f1d10fef9748",
+      "sources": [
+        "Plugins/CommonGame/Source/Private/CommonPlayerController.cpp",
+        "Plugins/CommonGame/Source/Public/CommonPlayerController.h"
+      ],
+      "reviewed_sources": {
+        "Plugins/CommonGame/Source/Private/CommonPlayerController.cpp": "cdc2be297e52e98a7e30ff6eb8ae619d11fe2c810bb3a15e997b904559793d61",
+        "Plugins/CommonGame/Source/Public/CommonPlayerController.h": "817ccad5afa5171b5e5e50ae407c7b7c2ca46f1c7c4d919c5a6d7d06a89692f7"
+      },
+      "navigation": [
+        {
+          "id": "case-07",
+          "kind": "function",
+          "target": "ACommonPlayerController::OnUnPossess",
+          "intent": "玩家控制器取消控制时通知谁",
+          "reason": "生命周期回调先调用父类，再通过本地玩家的 OnPlayerPawnSet 广播空 Pawn；委托类型在该输入组中未确认。",
+          "purpose": "behavior",
+          "role": "system_entry",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "Super::OnUnPossess"
+            },
+            {
+              "kind": "call",
+              "name": "LocalPlayer.OnPlayerPawnSet.Broadcast"
+            }
+          ]
+        },
+        {
+          "id": "case-08",
+          "kind": "function",
+          "target": "ACommonPlayerController::OnPossess",
+          "intent": "玩家控制器取得控制时通知谁",
+          "reason": "生命周期回调先调用父类，再广播当前 Pawn；不把局部未确认的委托类型升级为已识别。",
+          "purpose": "behavior",
+          "role": "system_entry",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "Super::OnPossess"
+            },
+            {
+              "kind": "call",
+              "name": "LocalPlayer.OnPlayerPawnSet.Broadcast"
+            }
+          ]
+        },
+        {
+          "id": "case-09",
+          "kind": "type",
+          "target": "ACommonPlayerController",
+          "intent": "通用玩家控制器声明哪些生命周期方法",
+          "reason": "直接方法覆盖接收玩家、设置 Pawn、取得和取消控制以及复制状态回调。",
+          "purpose": "structure",
+          "role": "type_structure",
+          "checks": [
+            {
+              "kind": "member",
+              "name": "ReceivedPlayer"
+            },
+            {
+              "kind": "member",
+              "name": "SetPawn"
+            },
+            {
+              "kind": "member",
+              "name": "OnPossess"
+            },
+            {
+              "kind": "member",
+              "name": "OnUnPossess"
+            },
+            {
+              "kind": "member",
+              "name": "OnRep_PlayerState"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unit-3e2800137bb1",
+      "sources": [
+        "Plugins/ModularGameplayActors/Source/ModularGameplayActors/Private/ModularPlayerController.cpp",
+        "Plugins/ModularGameplayActors/Source/ModularGameplayActors/Public/ModularPlayerController.h"
+      ],
+      "reviewed_sources": {
+        "Plugins/ModularGameplayActors/Source/ModularGameplayActors/Private/ModularPlayerController.cpp": "e13a07c41cbfe7cc5459282a15bc5a2829189d5f6627be4e22f108c796507a49",
+        "Plugins/ModularGameplayActors/Source/ModularGameplayActors/Public/ModularPlayerController.h": "0a4e1143b0978cb8b44a22f372784eab98cd549f97165d7b089b9b8a7cfd8302"
+      },
+      "navigation": [
+        {
+          "id": "case-10",
+          "kind": "function",
+          "target": "AModularPlayerController::ReceivedPlayer",
+          "intent": "模块化控制器收到玩家后如何通知组件",
+          "reason": "ReceivedPlayer 回调发送 GameActorReady 扩展事件，调用父类，并逐个通知控制器组件。",
+          "purpose": "behavior",
+          "role": "system_entry",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "UGameFrameworkComponentManager::SendGameFrameworkComponentExtensionEvent"
+            },
+            {
+              "kind": "call",
+              "name": "Component.ReceivedPlayer"
+            }
+          ]
+        },
+        {
+          "id": "case-11",
+          "kind": "function",
+          "target": "AModularPlayerController::PlayerTick",
+          "intent": "模块化控制器怎样转发每帧更新",
+          "reason": "PlayerTick 回调先调用父类，再枚举组件并传入 DeltaTime。",
+          "purpose": "behavior",
+          "role": "system_entry",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "Super::PlayerTick"
+            },
+            {
+              "kind": "call",
+              "name": "Component.PlayerTick"
+            }
+          ]
+        },
+        {
+          "id": "case-12",
+          "kind": "type",
+          "target": "AModularPlayerController",
+          "intent": "模块化控制器声明哪些扩展回调",
+          "reason": "类型直接声明初始化、结束、接收玩家和每帧回调。",
+          "purpose": "structure",
+          "role": "type_structure",
+          "checks": [
+            {
+              "kind": "member",
+              "name": "PreInitializeComponents"
+            },
+            {
+              "kind": "member",
+              "name": "EndPlay"
+            },
+            {
+              "kind": "member",
+              "name": "ReceivedPlayer"
+            },
+            {
+              "kind": "member",
+              "name": "PlayerTick"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unit-783a3aff6f4e",
+      "sources": [
+        "Plugins/GameSubtitles/Source/Private/Widgets/SSubtitleDisplay.cpp",
+        "Plugins/GameSubtitles/Source/Public/Widgets/SSubtitleDisplay.h"
+      ],
+      "reviewed_sources": {
+        "Plugins/GameSubtitles/Source/Private/Widgets/SSubtitleDisplay.cpp": "0f6c4f657da0158f56d2d1d0a30a6c1d4cc11e2b432dcc638a3c82e3cb284e15",
+        "Plugins/GameSubtitles/Source/Public/Widgets/SSubtitleDisplay.h": "493ef701df6fa04c8e41a93aedffe967b3bb116bacf59af9c8f3549b230d14ab"
+      },
+      "navigation": [
+        {
+          "id": "case-13",
+          "kind": "function",
+          "target": "SSubtitleDisplay::HandleSubtitleChanged",
+          "intent": "字幕变化如何更新文字与背景",
+          "reason": "按字幕启用状态和文本是否为空设置可见性，更新文本；未启用时收起背景。",
+          "purpose": "behavior",
+          "role": "internal_function",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "UGameplayStatics::AreSubtitlesEnabled"
+            },
+            {
+              "kind": "call",
+              "name": "InSubtitleText.IsEmpty"
+            },
+            {
+              "kind": "call",
+              "name": "TextDisplay.SetText"
+            }
+          ]
+        },
+        {
+          "id": "case-14",
+          "kind": "function",
+          "target": "SSubtitleDisplay::Construct",
+          "intent": "字幕控件构造时如何接入自动字幕",
+          "reason": "非手动字幕时连接字幕变更回调，再构造背景及文本控件；绑定仍保留候选委托证据。",
+          "purpose": "behavior",
+          "role": "internal_function",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "InArgs._ManualSubtitles.Get"
+            },
+            {
+              "kind": "call",
+              "name": "OnSetSubtitleText.AddSP"
+            }
+          ]
+        },
+        {
+          "id": "case-15",
+          "kind": "type",
+          "target": "SSubtitleDisplay",
+          "intent": "字幕控件有哪些配置方法和显示成员",
+          "reason": "直接声明构造、样式、换行宽度接口及背景和文本控件，不展开 Slate 宏生成的额外成员。",
+          "purpose": "structure",
+          "role": "type_structure",
+          "checks": [
+            {
+              "kind": "member",
+              "name": "Construct"
+            },
+            {
+              "kind": "member",
+              "name": "SetTextStyle"
+            },
+            {
+              "kind": "member",
+              "name": "SetWrapTextAt"
+            },
+            {
+              "kind": "member",
+              "name": "Background"
+            },
+            {
+              "kind": "member",
+              "name": "TextDisplay"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unit-6cbba63526d7",
+      "sources": [
+        "Plugins/GameplayMessageRouter/Source/GameplayMessageRuntime/Public/GameFramework/GameplayMessageTypes2.h"
+      ],
+      "reviewed_sources": {
+        "Plugins/GameplayMessageRouter/Source/GameplayMessageRuntime/Public/GameFramework/GameplayMessageTypes2.h": "30118585d543485514da797cb8293991fadd88b6a224868933967a4934fe42a1"
+      },
+      "navigation": [
+        {
+          "id": "case-16",
+          "kind": "function",
+          "target": "FGameplayMessageListenerParams::SetMessageReceivedCallback",
+          "intent": "消息监听参数怎样安全访问回调对象",
+          "reason": "保存弱对象并在 Lambda 中取值，非空时通过成员函数指针调用；这是局部语法结构，不证明完整生命周期安全。",
+          "purpose": "behavior",
+          "role": "internal_function",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "WeakObject.Get"
+            },
+            {
+              "kind": "call",
+              "name": "(StrongObject->*Function)"
+            }
+          ]
+        },
+        {
+          "id": "case-17",
+          "kind": "type",
+          "target": "FGameplayMessageListenerParams",
+          "intent": "消息监听参数保存哪些数据",
+          "reason": "直接成员包括匹配方式、TFunction 回调及用于设置回调的模板方法，不等同于 UE 委托声明。",
+          "purpose": "structure",
+          "role": "type_structure",
+          "checks": [
+            {
+              "kind": "member",
+              "name": "MatchType"
+            },
+            {
+              "kind": "member",
+              "name": "OnMessageReceivedCallback"
+            },
+            {
+              "kind": "member",
+              "name": "SetMessageReceivedCallback"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unit-5fb9c9e099d9",
+      "sources": [
+        "Source/LyraEditor/Validation/EditorValidator_MaterialFunctions.cpp",
+        "Source/LyraEditor/Validation/EditorValidator_MaterialFunctions.h"
+      ],
+      "reviewed_sources": {
+        "Source/LyraEditor/Validation/EditorValidator_MaterialFunctions.cpp": "fbe43f09a9a9ab87f4bbd7a05be10b09d130c1d5513d5fcad0acf0882bd79e48",
+        "Source/LyraEditor/Validation/EditorValidator_MaterialFunctions.h": "05676e363ef4551d0e89872ceda8bc96bed4f41758280975904ee1fc4450aea7"
+      },
+      "navigation": [
+        {
+          "id": "case-18",
+          "kind": "function",
+          "target": "UEditorValidator_MaterialFunctions::ValidateLoadedAsset_Implementation",
+          "intent": "材质函数验证怎样检查引用方加载问题",
+          "reason": "遍历硬引用包并检查加载告警和错误，使用通过或失败接口记录验证结果；容器查询参与筛选和循环。",
+          "purpose": "behavior",
+          "role": "internal_function",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "AllHardReferencers.Contains"
+            },
+            {
+              "kind": "call",
+              "name": "PackagesToProcess.Num"
+            },
+            {
+              "kind": "call",
+              "name": "UEditorValidator_Load::GetLoadWarningsAndErrorsForPackage"
+            }
+          ]
+        },
+        {
+          "id": "case-19",
+          "kind": "type",
+          "target": "UEditorValidator_MaterialFunctions",
+          "intent": "材质函数验证器提供哪些覆盖方法",
+          "reason": "类型直接声明可验证性判断和资源加载验证方法。",
+          "purpose": "structure",
+          "role": "type_structure",
+          "checks": [
+            {
+              "kind": "member",
+              "name": "UEditorValidator_MaterialFunctions"
+            },
+            {
+              "kind": "member",
+              "name": "CanValidateAsset_Implementation"
+            },
+            {
+              "kind": "member",
+              "name": "ValidateLoadedAsset_Implementation"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unit-b70c9a261413",
+      "sources": [
+        "Plugins/CommonUser/Source/CommonUser/Private/AsyncAction_CommonUserInitialize.cpp",
+        "Plugins/CommonUser/Source/CommonUser/Public/AsyncAction_CommonUserInitialize.h"
+      ],
+      "reviewed_sources": {
+        "Plugins/CommonUser/Source/CommonUser/Private/AsyncAction_CommonUserInitialize.cpp": "6d5705a38fb016c787cefffba159cce1c995229c21856ba71a3cb8eb70fb8e5e",
+        "Plugins/CommonUser/Source/CommonUser/Public/AsyncAction_CommonUserInitialize.h": "2991f0d2b30fcf15ecc35552851514efc96fa84397b36a6dc7fa609ad0132b14"
+      },
+      "navigation": [
+        {
+          "id": "case-20",
+          "kind": "function",
+          "target": "UAsyncAction_CommonUserInitialize::HandleFailure",
+          "intent": "异步用户初始化失败怎样返回结果",
+          "reason": "子系统有效时取得用户信息，再以失败状态调用完成处理。",
+          "purpose": "behavior",
+          "role": "internal_function",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "Subsystem.IsValid"
+            },
+            {
+              "kind": "call",
+              "name": "HandleInitializationComplete"
+            }
+          ]
+        },
+        {
+          "id": "case-21",
+          "kind": "function",
+          "target": "UAsyncAction_CommonUserInitialize::LoginForOnlinePlay",
+          "intent": "在线登录异步动作在哪里创建和配置",
+          "reason": "工厂方法创建并注册异步动作，填写子系统和参数；失败路径准备销毁。这段实现不表示登录已经发起或完成。",
+          "purpose": "behavior",
+          "role": "internal_function",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "NewObject<UAsyncAction_CommonUserInitialize>"
+            },
+            {
+              "kind": "call",
+              "name": "Action.IsRegistered"
+            },
+            {
+              "kind": "call",
+              "name": "Action.SetReadyToDestroy"
+            }
+          ]
+        },
+        {
+          "id": "case-22",
+          "kind": "type",
+          "target": "UAsyncAction_CommonUserInitialize",
+          "intent": "异步用户初始化动作有哪些入口和状态成员",
+          "reason": "类型直接声明两种创建方法、完成事件、激活方法以及子系统和参数成员。",
+          "purpose": "structure",
+          "role": "type_structure",
+          "checks": [
+            {
+              "kind": "member",
+              "name": "InitializeForLocalPlay"
+            },
+            {
+              "kind": "member",
+              "name": "LoginForOnlinePlay"
+            },
+            {
+              "kind": "member",
+              "name": "OnInitializationComplete"
+            },
+            {
+              "kind": "member",
+              "name": "Activate"
+            },
+            {
+              "kind": "member",
+              "name": "Subsystem"
+            },
+            {
+              "kind": "member",
+              "name": "Params"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unit-d610e732c710",
+      "sources": [
+        "Source/LyraGame/Inventory/LyraInventoryManagerComponent.cpp",
+        "Source/LyraGame/Inventory/LyraInventoryManagerComponent.h"
+      ],
+      "reviewed_sources": {
+        "Source/LyraGame/Inventory/LyraInventoryManagerComponent.cpp": "2c1c824dbbc8c7be653ec7cece8fb6d330b935cd771ef5e6cd183ae0800036c6",
+        "Source/LyraGame/Inventory/LyraInventoryManagerComponent.h": "e7dd7e91097247267ead90deddfea14a86c6ad701c8b21e9739d48ae94b5e46a"
+      },
+      "navigation": [
+        {
+          "id": "case-23",
+          "kind": "function",
+          "target": "FLyraInventoryList::AddEntry",
+          "intent": "物品列表如何添加条目以及重载有何差异",
+          "reason": "同名选择返回两个定义：ItemDef 重载创建条目及实例并标脏，Instance 重载只有 unimplemented；保持候选，不能合并解释。",
+          "purpose": "behavior",
+          "role": "internal_function",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "Entries.AddDefaulted_GetRef"
+            },
+            {
+              "kind": "call",
+              "name": "Fragment.OnInstanceCreated"
+            },
+            {
+              "kind": "call",
+              "name": "MarkItemDirty"
+            },
+            {
+              "kind": "call",
+              "name": "unimplemented"
+            }
+          ]
+        },
+        {
+          "id": "case-24",
+          "kind": "function",
+          "target": "ULyraInventoryManagerComponent::ConsumeItemsByDefinition",
+          "intent": "库存怎样按物品定义消耗条目",
+          "reason": "权限满足时反复查找并移除匹配条目，不足时返回 false；当前实现不能表述为按 StackCount 扣减。",
+          "purpose": "behavior",
+          "role": "internal_function",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "OwningActor.HasAuthority"
+            },
+            {
+              "kind": "call",
+              "name": "ULyraInventoryManagerComponent::FindFirstItemStackByDefinition"
+            },
+            {
+              "kind": "call",
+              "name": "InventoryList.RemoveEntry"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unit-5573f89544a0",
+      "sources": [
+        "Source/LyraGame/AbilitySystem/LyraAbilitySystemComponent.cpp",
+        "Source/LyraGame/AbilitySystem/LyraAbilitySystemComponent.h"
+      ],
+      "reviewed_sources": {
+        "Source/LyraGame/AbilitySystem/LyraAbilitySystemComponent.cpp": "3bc6d1a0804d81f0a423d8fc5270301aa63b64fb048e64f75f69ef8d15b1c17c",
+        "Source/LyraGame/AbilitySystem/LyraAbilitySystemComponent.h": "18ab9e15b3b0d1d9f773ac3948a421bd908d601b1b66b0d5767c081307f54db0"
+      },
+      "navigation": [
+        {
+          "id": "case-25",
+          "kind": "function",
+          "target": "ULyraAbilitySystemComponent::ProcessAbilityInput",
+          "intent": "输入如何形成待激活能力集合",
+          "reason": "按按住和按下状态添加待激活句柄，再尝试激活并处理释放事件；AddUnique 和 Reset 都影响集合状态。",
+          "purpose": "behavior",
+          "role": "internal_function",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "ClearAbilityInput"
+            },
+            {
+              "kind": "call",
+              "name": "AbilitiesToActivate.AddUnique"
+            },
+            {
+              "kind": "call",
+              "name": "TryActivateAbility"
+            },
+            {
+              "kind": "call",
+              "name": "AbilitySpecInputReleased"
+            }
+          ]
+        },
+        {
+          "id": "case-26",
+          "kind": "function",
+          "target": "ULyraAbilitySystemComponent::CancelAbilitiesByFunc",
+          "intent": "能力系统如何筛选并取消能力实例",
+          "reason": "按筛选函数及可取消条件调用 CancelAbility；两处 GetName 仅位于日志参数，取消操作及其参数仍保留。",
+          "purpose": "behavior",
+          "role": "internal_function",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "ShouldCancelFunc"
+            },
+            {
+              "kind": "call",
+              "name": "LyraAbilityInstance.CanBeCanceled"
+            },
+            {
+              "kind": "call",
+              "name": "LyraAbilityInstance.CancelAbility"
+            },
+            {
+              "kind": "call",
+              "name": "AbilityActorInfo.Get"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unit-218fe75210cd",
+      "sources": [
+        "Source/LyraGame/GameFeatures/GameFeatureAction_AddInputContextMapping.cpp",
+        "Source/LyraGame/GameFeatures/GameFeatureAction_AddInputContextMapping.h"
+      ],
+      "reviewed_sources": {
+        "Source/LyraGame/GameFeatures/GameFeatureAction_AddInputContextMapping.cpp": "c7ce435dc907eb9643b9a6f33349db2dd74d315cb0730e5f20f38039859434fd",
+        "Source/LyraGame/GameFeatures/GameFeatureAction_AddInputContextMapping.h": "333ae6a9db7e29c174fd651059dd12073ba468fbdfc106da2604988510a03cb3"
+      },
+      "navigation": [
+        {
+          "id": "case-27",
+          "kind": "function",
+          "target": "UGameFeatureAction_AddInputContextMapping::RegisterInputMappingContextsForLocalPlayer",
+          "intent": "本地玩家怎样注册输入映射设置",
+          "reason": "按配置开关取得输入映射资源，并向用户设置注册对应上下文。",
+          "purpose": "behavior",
+          "role": "internal_function",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "ULyraAssetManager::Get"
+            },
+            {
+              "kind": "call",
+              "name": "AssetManager.GetAsset"
+            },
+            {
+              "kind": "call",
+              "name": "Settings.RegisterInputMappingContext"
+            }
+          ]
+        },
+        {
+          "id": "case-28",
+          "kind": "function",
+          "target": "UGameFeatureAction_AddInputContextMapping::UnregisterInputMappingContextsForLocalPlayer",
+          "intent": "本地玩家怎样注销输入映射设置",
+          "reason": "按配置开关取得已有映射，再从用户设置中注销；软引用 Get 的返回值决定后续操作。",
+          "purpose": "behavior",
+          "role": "internal_function",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "Entry.InputMapping.Get"
+            },
+            {
+              "kind": "call",
+              "name": "Settings.UnregisterInputMappingContext"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unit-c9896d3aa5d2",
+      "sources": [
+        "Plugins/GameSettings/Source/Private/Registry/GameSettingRegistryChangeTracker.cpp",
+        "Plugins/GameSettings/Source/Public/GameSettingRegistryChangeTracker.h"
+      ],
+      "reviewed_sources": {
+        "Plugins/GameSettings/Source/Private/Registry/GameSettingRegistryChangeTracker.cpp": "b80cc2d0e4ae75e9a56041526e8e6626c383d184b27a88216fd98b2c73f650cc",
+        "Plugins/GameSettings/Source/Public/GameSettingRegistryChangeTracker.h": "19492f11e0938baa78df3933923449d522582a02ddfb7b2b884cb0b5e9708550"
+      },
+      "navigation": [
+        {
+          "id": "case-29",
+          "kind": "function",
+          "target": "FGameSettingRegistryChangeTracker::ApplyChanges",
+          "intent": "设置变更跟踪器怎样应用脏设置",
+          "reason": "遍历脏设置，对值类型调用 Apply 和 StoreInitial，结束后清理脏状态。",
+          "purpose": "behavior",
+          "role": "internal_function",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "SettingValue.Apply"
+            },
+            {
+              "kind": "call",
+              "name": "SettingValue.StoreInitial"
+            },
+            {
+              "kind": "call",
+              "name": "ClearDirtyState"
+            }
+          ]
+        },
+        {
+          "id": "case-30",
+          "kind": "function",
+          "target": "FGameSettingRegistryChangeTracker::HandleSettingChanged",
+          "intent": "设置变化怎样进入脏设置表",
+          "reason": "恢复状态下提前返回，否则设置变更标志并将设置加入 DirtySettings；所选头文件提供 TMap 声明。",
+          "purpose": "behavior",
+          "role": "internal_function",
+          "checks": [
+            {
+              "kind": "call",
+              "name": "DirtySettings.Add"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

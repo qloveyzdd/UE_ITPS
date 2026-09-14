@@ -13,6 +13,7 @@ from . import cpp_expression_facts as expression_facts
 from .source_delegate_analysis import analyze_delegates
 from .source_name_resolution import LocalNameResolver
 from .cpp_source_text import TOKEN_RE as _TOKEN_RE, source_fragment
+from .cpp_retrieval_facts import call_contexts, statement as retrieval_statement
 from .ue_cpp_conventions import (
     UE_TEST_LIFECYCLE_METHODS,
     is_ignored_external_macro,
@@ -819,6 +820,7 @@ def _function_references(
     addresses: list[dict[str, Any]] = []
     local_variables: list[dict[str, str]] = []
     identifier_references: list[dict[str, Any]] = []
+    statements = []
     binding_nodes = [current for current in _walk_function_body(node)
                      if current.type in {"declaration", "parameter_declaration", "optional_parameter_declaration", "for_range_loop"}]
 
@@ -831,6 +833,9 @@ def _function_references(
     regions = [child for child in node.named_children
                if child.type in {"field_initializer_list", "compound_statement", "try_statement"}]
     for current in (item for region in regions for item in _walk_function_body(region, executable=True)):
+        fact = retrieval_statement(current, source)
+        if fact is not None:
+            statements.append(fact)
         if current.type == "pointer_expression" and _text(current.child_by_field_name("operator"), source) == "&":
             target = current.child_by_field_name("argument")
             while target is not None and target.type == "parenthesized_expression":
@@ -947,6 +952,7 @@ def _function_references(
                 "execution_scope": expression_facts.execution_scope(current, source),
                 "result_target": expression_facts.result_target(current, source),
                 "result_used": expression_facts.result_is_used(current),
+                "contexts": call_contexts(current, source),
                 "bindings": bindings_at(current),
                 "callee": callee,
                 "raw_callee": raw_callee,
@@ -972,6 +978,7 @@ def _function_references(
         "addresses": addresses,
         "local_variables": local_variables,
         "identifier_references": identifier_references,
+        "statements": statements,
     }
 
 

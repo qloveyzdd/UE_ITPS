@@ -30,11 +30,11 @@ def validate_navigation(unit):
         seen.add(item["id"])
         if item["kind"] == "type":
             allowed = item["purpose"] == "structure" and item["role"] == "type_structure"
-            check_kind = "member"
+            check_kinds = {"member"}
         else:
             allowed = (item["kind"] == "function" and item["purpose"] in {"behavior", "structure"}
                        and item["role"] in {"system_entry", "internal_function"})
-            check_kind = "call"
+            check_kinds = {"call", "statement"}
         if not allowed:
             raise ValueError("Navigation kind, purpose and role are inconsistent")
         checks = item["checks"]
@@ -42,8 +42,8 @@ def validate_navigation(unit):
             raise ValueError("Navigation requires explicit evidence checks")
         for check in checks:
             if (not isinstance(check, dict) or set(check) != {"kind", "name"}
-                    or check["kind"] != check_kind or not _text(check["name"])):
-                raise ValueError("Expected an exact call name for functions or member name for types")
+                    or check["kind"] not in check_kinds or not _text(check["name"])):
+                raise ValueError("Expected an exact call name, statement expression or type member name")
 
 
 def navigation_metadata(scope, spec):
@@ -75,6 +75,12 @@ def navigation_metadata(scope, spec):
                             matches.append({"expression": call["expression"], "arguments": list(call["arguments"]),
                                             "evidence": scope._evidence(raw["file"], call["line"], call["syntax"]["column"]),
                                             "execution_scope": dict(call["execution_scope"])})
+                elif required["kind"] == "statement":
+                    refs = loaded["cpp_model"]["references"][raw["occurrence_id"]]
+                    for statement in refs["statements"]:
+                        if statement["expression"] == required["name"]:
+                            matches.append({k: v for k, v in statement.items() if k not in {"kind", "location"}}
+                                           | {"evidence": scope._evidence(raw["file"], statement["location"]["line"], statement["location"]["column"])})
                 else:
                     for member in [*raw.get("fields", []), *raw.get("methods", [])]:
                         if member["name"] == required["name"]:
@@ -93,6 +99,8 @@ def navigation_metadata(scope, spec):
             item["query"] = {"tool": "ue_inspect_cxx_function" if guide["kind"] == "function" else "ue_inspect_cxx_type",
                              "selector": guide["target"]}
             if guide["kind"] == "function":
-                item["query"].update(view=guide["purpose"], focus=list(dict.fromkeys(c["name"] for c in guide["checks"])))
+                item["query"].update(view=guide["purpose"], focus=list(dict.fromkeys(c["name"] for c in guide["checks"] if c["kind"] == "call")))
+                if any(c["kind"] == "statement" for c in guide["checks"]):
+                    item["query"]["include_syntax_flow"] = True
         result["navigation"].append(item)
     return result

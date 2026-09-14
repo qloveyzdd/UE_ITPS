@@ -97,7 +97,7 @@ class SourcePriorityTests(unittest.TestCase):
         updates = [g for g in match["symbol_groups"] if g.get("rule") == "container-update"]
         outer = next(g for g in updates if g["receiver"] == "Items" and "execution_scope" not in g)
         self.assertEqual(outer["count"], 2)
-        self.assertEqual(outer["display"], "fold")
+        self.assertEqual(outer.get("display", "expand"), "expand")
         self.assertEqual(len(outer["lines"]), 2)
         self.assertTrue(any(g["receiver"] == "Other" for g in updates))
         self.assertTrue(any(g.get("execution_scope", {}).get("kind") == "lambda" for g in updates))

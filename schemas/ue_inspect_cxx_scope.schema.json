@@ -47,6 +47,7 @@
         "display": {"enum": ["expand", "fold", "hide"]}, "count": {"type": "integer", "minimum": 1},
         "rule": {"$ref": "#/$defs/text"},
         "receiver": {"$ref": "#/$defs/text"},
+        "context": {"$ref": "urn:ue-itps:schema:common#/$defs/logContext"},
         "execution_scope": {"$ref": "#/$defs/call/properties/execution_scope"}
       },
       "additionalProperties": false
@@ -97,6 +98,8 @@
         "type_details": {"type": "object", "required": ["name", "qualified_name", "kind", "base_types", "member_anchors", "evidence"],
           "properties": {"member_anchors": {"type": "array", "items": {"$ref": "urn:ue-itps:schema:ue_inspect_cxx_type#/$defs/memberAnchor"}}}},
         "controls": {"type": "array"}, "source_excerpt": {"type": "string"},
+        "statement_summary": {"$ref": "urn:ue-itps:schema:common#/$defs/statementSummary"},
+        "statements": {"type": "array", "items": {"$ref": "urn:ue-itps:schema:common#/$defs/retrievalStatement"}},
         "summary": {
           "type": "object", "required": ["facts", "hidden_by_rule"],
           "properties": {"facts": {"$ref": "#/$defs/counts"}, "hidden_by_rule": {"$ref": "#/$defs/counts"},

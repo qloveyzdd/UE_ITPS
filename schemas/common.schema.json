@@ -138,7 +138,7 @@
           ]
         },
           "rules_version": {
-            "enum": [1, 2]
+            "enum": [1, 2, 3]
         },
         "focus": {
           "type": "array",
@@ -210,6 +210,143 @@
             "type": "integer",
             "minimum": 1
           }
+        }
+      },
+      "additionalProperties": false
+    },
+    "retrievalStatement": {
+      "type": "object",
+      "required": [
+        "kind",
+        "expression",
+        "location",
+        "execution_scope"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "initialization",
+            "assignment",
+            "update",
+            "condition",
+            "return"
+          ]
+        },
+        "expression": {
+          "type": "string",
+          "minLength": 1
+        },
+        "location": {
+          "type": "object",
+          "required": [
+            "line",
+            "column"
+          ],
+          "properties": {
+            "line": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "column": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "execution_scope": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "kind"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "function"
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": [
+                "kind",
+                "line",
+                "column"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "lambda"
+                },
+                "line": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "column": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "target": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "statementSummary": {
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "initialization",
+          "assignment",
+          "update",
+          "condition",
+          "return"
+        ]
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1
+      }
+    },
+    "logContext": {
+      "type": "object",
+      "required": [
+        "callee",
+        "location"
+      ],
+      "properties": {
+        "callee": {
+          "enum": [
+            "UE_LOG",
+            "UE_CLOG"
+          ]
+        },
+        "location": {
+          "type": "object",
+          "required": [
+            "line",
+            "column"
+          ],
+          "properties": {
+            "line": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "column": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

@@ -140,6 +140,23 @@ class NavigationGuidanceTests(unittest.TestCase):
         self.assertEqual(current["review_status"], "stale")
         self.assertEqual(current["navigation"][0]["status"], "candidate")
 
+    def test_statement_guidance_requires_exact_current_evidence(self):
+        write_text(self.fixture.source, "void AWorker::BeginPlay() { bool Ready = false; Helper(); }")
+        self.guide["checks"].append({"kind": "statement", "name": "Ready = false"})
+        self.reviewed()
+        guide = self.build()["units"][0]["navigation"][0]
+        self.assertEqual(guide["status"], "reviewed")
+        self.assertEqual(guide["query"]["focus"], ["Helper"])
+        self.assertTrue(guide["query"]["include_syntax_flow"])
+        proof = guide["definitions"][0]["checks"][1]["matches"][0]
+        self.assertEqual((proof["target"], proof["value"]), ("Ready", "false"))
+        self.spec["units"][0]["navigation"][0]["checks"][1]["name"] = "Ready = true"
+        missing = self.build()["units"][0]["navigation"][0]
+        self.assertEqual((missing["status"], missing["evidence_status"]), ("candidate", "partial"))
+        write_text(self.fixture.source, "void AWorker::BeginPlay() { bool Ready = true; Helper(); }")
+        stale = self.build()["units"][0]["navigation"][0]
+        self.assertEqual((stale["status"], stale["evidence_status"]), ("candidate", "matched"))
+
 
 if __name__ == "__main__":
     unittest.main()

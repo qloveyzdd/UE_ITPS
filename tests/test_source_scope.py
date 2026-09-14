@@ -188,6 +188,30 @@ class SourceScopeTests(unittest.TestCase):
         self.assertNotEqual(functions[0]["id"], functions[1]["id"])
         self.assertNotEqual(functions[0]["evidence"]["path"], functions[1]["evidence"]["path"])
 
+    def test_log_relations_keep_exact_evidence_ids_across_views(self):
+        write_text(self.fixture.source, '''void FWorker::Run() {
+            UE_LOG(LogTemp, Log, TEXT("%s"), *Service.GetName()); UE_LOG(LogTemp, Log, TEXT("%s"), *Service.GetName());
+            Service.GetName();
+        }''')
+        self.scope = SourceScope(self.fixture.project, self.profile)
+        function = self.query(level="function", select=self.entry()["id"], limit=100)
+        logs = [i for i in function["items"] if i.get("rule") == "log-argument"]
+        self.assertEqual(len(logs), 2)
+        self.assertEqual(len({i["context"]["location"]["column"] for i in logs}), 2)
+        self.assertTrue(all(i["display"] == "fold" for i in logs))
+        for relation in logs:
+            full = self.query(level="evidence", select=relation["id"], view="full")
+            self.assertEqual(len(full["items"]), 1)
+            self.assertEqual(full["items"][0]["call"]["callee"], "Service.GetName")
+
+    def test_non_call_function_has_summary_and_explicit_statement_evidence(self):
+        write_text(self.fixture.source, "void FWorker::Run() { int Count = 0; if (Count) { Count = 2; } }")
+        self.scope = SourceScope(self.fixture.project, self.profile)
+        function = self.query(level="function", select=self.entry()["id"])
+        self.assertEqual(function["statement_summary"], {"initialization": 1, "condition": 1, "assignment": 1})
+        evidence = self.query(level="evidence", select=self.entry()["id"])
+        self.assertEqual([s["expression"] for s in evidence["statements"]], ["Count = 0", "(Count)", "Count = 2"])
+
 
 if __name__ == "__main__":
     unittest.main()

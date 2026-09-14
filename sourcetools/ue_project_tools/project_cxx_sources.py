@@ -247,6 +247,7 @@ def _pair_module_sources(
     cpp = _module_source_paths(module, "cpp", project_root)
     header_edges: dict[Path, set[Path]] = {path: set() for path in headers}
     cpp_edges: dict[Path, set[Path]] = {path: set() for path in cpp}
+    fallback_headers = set()
     for header in headers:
         candidates = {
             (base.parent / f"{base.name}{suffix}").resolve()
@@ -256,6 +257,17 @@ def _pair_module_sources(
         for source in candidates & cpp:
             header_edges[header].add(source)
             cpp_edges[source].add(header)
+
+    # Resolve the whole Module before partitioning navigation by directory.
+    # Keep conventional mirrors; unmatched headers expose all same-stem
+    # candidates so ambiguous components cannot silently choose one file.
+    for header in headers:
+        if not header_edges[header]:
+            for source in cpp:
+                if source.stem.casefold() == header.stem.casefold():
+                    fallback_headers.add(header)
+                    header_edges[header].add(source)
+                    cpp_edges[source].add(header)
 
     pairs: list[dict[str, str]] = []
     problems: list[dict[str, Any]] = []
@@ -290,7 +302,10 @@ def _pair_module_sources(
             key=str.casefold,
         )
         if len(relative_headers) == len(relative_cpp) == 1:
-            pairs.append({"header": relative_headers[0], "cpp": relative_cpp[0]})
+            pair = {"header": relative_headers[0], "cpp": relative_cpp[0]}
+            if component_headers & fallback_headers:
+                pair["method"] = "unique-module-basename"
+            pairs.append(pair)
             continue
         problems.append(
             {
@@ -356,7 +371,7 @@ def list_module_cxx_sources(rules_path: Path) -> dict[str, Any]:
             "The selected Module boundary is derived from physical *.Build.cs ancestry; UBT rules are not evaluated.",
             "Nested Modules with their own *.Build.cs files are excluded from the selected Module.",
             "Reported paths are relative to the nearest unique .uproject root.",
-            "Pairing uses same-stem files in the same directory and conventional Public or Classes to Private mirrors in either direction.",
+            "Pairing prefers same-directory and Public/Classes to Private mirrors; unmatched headers use unique same-stem candidates inside this Module before directory partitioning.",
             "Only one-header-to-one-source components are paired; ambiguous candidate components are reported in validation.",
             "Generated-source exclusion uses generated directories and conventional generated filename patterns; file authorship is not inferred from file contents.",
             "Header extensions are .h, .hh, .hpp, .hxx, .inl, and .ipp; CPP extensions are .cpp, .cc, .cxx, and .mm.",

@@ -94,7 +94,9 @@ class LyraRetrievalAccuracyTests(unittest.TestCase):
                     self.assertEqual([(c["callee"], c["location"]["line"]) for c in match["syntax_flow"]["calls"]],
                                      [(c["callee"], c["location"]["line"]) for c in full["syntax_flow"]["calls"]])
                     summary = match["view_summary"]
-                    self.assertEqual(sum(g["count"] for g in match["symbol_groups"]) + sum(summary["hidden_by_rule"].values()),
+                    self.assertEqual(sum(g["count"] for g in match["symbol_groups"])
+                                     + sum(g["count"] for log in match.get("log_groups", []) for g in log["symbol_groups"])
+                                     + sum(summary["hidden_by_rule"].values()),
                                      summary["source_count"])
                     # These manually chosen occurrences must be expanded without profile focus.
                     for name in case["expanded_calls"]:

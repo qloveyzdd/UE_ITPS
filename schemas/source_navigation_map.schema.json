@@ -21,15 +21,16 @@
     },
     "check": {
       "type": "object", "required": ["kind", "name"],
-      "properties": {"kind": {"enum": ["call", "member"]}, "name": {"$ref": "#/$defs/text"}},
+      "properties": {"kind": {"enum": ["call", "member", "statement"]}, "name": {"$ref": "#/$defs/text"}},
       "additionalProperties": false
     },
     "observedCheck": {
       "type": "object", "required": ["kind", "name", "matches"],
-      "properties": {"kind": {"enum": ["call", "member"]}, "name": {"$ref": "#/$defs/text"},
+      "properties": {"kind": {"enum": ["call", "member", "statement"]}, "name": {"$ref": "#/$defs/text"},
         "matches": {"type": "array", "items": {
           "type": "object", "required": ["expression", "evidence"],
           "properties": {"expression": {"$ref": "#/$defs/text"}, "evidence": {"$ref": "#/$defs/location"},
+            "target": {"type": "string"}, "value": {"type": "string"},
             "arguments": {"type": "array", "items": {"type": "string"}},
             "execution_scope": {"type": "object", "required": ["kind"],
               "properties": {"kind": {"enum": ["function", "lambda"]}, "line": {"type": "integer", "minimum": 1},
@@ -53,6 +54,7 @@
         "query": {"type": "object", "required": ["tool", "selector"],
           "properties": {"tool": {"enum": ["ue_inspect_cxx_type", "ue_inspect_cxx_function"]},
             "selector": {"$ref": "#/$defs/text"}, "view": {"enum": ["behavior", "structure"]},
+            "include_syntax_flow": {"const": true},
             "focus": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/text"}}}, "additionalProperties": false}
       }, "additionalProperties": false,
       "allOf": [

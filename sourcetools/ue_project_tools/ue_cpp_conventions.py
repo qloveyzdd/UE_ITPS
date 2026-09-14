@@ -47,7 +47,9 @@ UE_IGNORED_EXTERNAL_MEMBER_CALLS = frozenset(
 
 # Presentation policy only. Matching uses frontend type/callee facts, not text
 # patterns. Unlisted methods (including forwarded calls through pointers) remain.
-UE_RETRIEVAL_RULES_VERSION = 2
+UE_RETRIEVAL_RULES_VERSION = 3
+# Format and payload positions only; UE_CLOG's condition stays independent.
+UE_LOG_ARGUMENT_START = {"UE_LOG": 2, "UE_CLOG": 3}
 UE_RETRIEVAL_RULES = (
     {
         "id": "container-query", "match": "member",
@@ -60,7 +62,14 @@ UE_RETRIEVAL_RULES = (
         "id": "container-update", "match": "member",
         "preserve_used_result": True,
         "owners": frozenset({"TMap", "TMultiMap", "TArray", "TSet"}),
-        "names": frozenset({"Add", "AddUnique", "Emplace", "Append", "FindOrAdd", "Remove", "RemoveAll", "RemoveAt", "Reset", "Empty", "Reserve", "SetNum"}),
+        "names": frozenset({"Add", "AddUnique", "Add_GetRef", "AddDefaulted", "AddDefaulted_GetRef", "Emplace", "Append", "FindOrAdd", "Remove", "RemoveAll", "RemoveAt", "RemoveAtSwap", "RemoveSwap", "Reset", "Empty", "SetNum"}),
+        "behavior": "expand", "structure": "expand",
+        "state_change": True,
+    },
+    {
+        "id": "container-capacity", "match": "member",
+        "owners": frozenset({"TMap", "TMultiMap", "TArray", "TSet"}),
+        "names": frozenset({"Reserve"}),
         "behavior": "fold", "structure": "fold",
     },
     {
