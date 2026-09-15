@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 from tree_sitter import Language, Parser
 import tree_sitter_ue_cpp
 
-from tests.support import ROOT
+from tests.support import ROOT, raw_call_owner
 
 sys.path.insert(0, str(ROOT / "sourcetools"))
 
@@ -20,6 +20,19 @@ from ue_project_tools.syntax_tree import parse_csharp_model
 
 
 class StructuredFrontendTests(unittest.TestCase):
+    def test_raw_call_owner_contract_on_synthetic_source(self) -> None:
+        tree = Parser(Language(tree_sitter_ue_cpp.language())).parse(b'''
+            struct A { A(int X = Default()) noexcept(Check())
+                : Value(Factory([] { Inner(); })) { Consume(int(Value)); } int Value; };
+        ''')
+        stack, calls = [tree.root_node], []
+        while stack:
+            node = stack.pop()
+            if node.type == "call_expression" and raw_call_owner(node) is not None:
+                calls.append(node.child_by_field_name("function").text.decode("utf-8"))
+            stack.extend(reversed(node.named_children))
+        self.assertEqual(calls, ["Factory", "Inner", "Consume"])
+
     def test_incompatible_grammar_is_rejected_before_scanning(self) -> None:
         language = Language(tree_sitter_ue_cpp.language())
         for missing in ("ue_macro_argument", "ue_test_class_declaration",

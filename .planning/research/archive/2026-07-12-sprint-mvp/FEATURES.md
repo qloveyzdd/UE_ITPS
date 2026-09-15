@@ -1,5 +1,7 @@
 # Feature Research
 
+> 历史研究，版本与方案按 2026-07-12 理解。当前实现见[项目状态](../../../PROJECT.md)，本目录边界见[归档摘要](README.md)。
+
 **Domain:** UE 棕地项目的增量信任编程与可验证复用系统  
 **Researched:** 2026-07-12  
 **Confidence:** HIGH（首个 MVP 范围）；MEDIUM（验证后的扩展顺序）

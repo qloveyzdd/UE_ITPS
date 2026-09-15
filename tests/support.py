@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -10,6 +11,9 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
+LYRA_PROJECT = Path(os.environ.get(
+    "UE_ITPS_LYRA_PROJECT", str(ROOT / "LyraStarterGame/LyraStarterGame.uproject")
+)).expanduser().resolve()
 
 
 def write_text(path: Path, content: str) -> Path:
@@ -142,3 +146,29 @@ def run_cli(relative: str, *arguments: object) -> tuple[subprocess.CompletedProc
         registry = Registry().with_resource(common["$id"], Resource.from_contents(common))
         Draft202012Validator(schema, registry=registry).validate(document)
     return completed, document
+
+
+def raw_call_owner(node):
+    """Independent ancestor check for calls in executable definition regions."""
+    from ue_project_tools.cpp_expression_facts import BUILTIN_TYPE_NAMES
+
+    callee = node.child_by_field_name("function")
+    if callee is not None:
+        if callee.type in {"primitive_type", "sized_type_specifier"}:
+            return None
+        if callee.type == "identifier" and callee.text.decode("utf-8") in BUILTIN_TYPE_NAMES:
+            return None
+        name = callee.child_by_field_name("name")
+        if callee.type == "template_function" and name is not None and name.text.decode("utf-8") in {
+            "const_cast", "static_cast", "reinterpret_cast", "dynamic_cast",
+        }:
+            return None
+    branch, parent = node, node.parent
+    while parent is not None:
+        if parent.type in {"class_specifier", "struct_specifier", "union_specifier", "enum_specifier",
+                           "function_declarator", "abstract_function_declarator"}:
+            return None
+        if parent.type == "function_definition":
+            return parent if branch.type in {"compound_statement", "field_initializer_list", "try_statement"} else None
+        branch, parent = parent, parent.parent
+    return None

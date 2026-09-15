@@ -14,15 +14,13 @@ import unittest
 from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 
+from tests.support import LYRA_PROJECT as PROJECT
 from tests.support import ROOT, run_cli
 
 sys.path.insert(0, str(ROOT / "sourcetools"))
 from ue_project_tools.source_function_references import _inspect_function_from_context
 from ue_project_tools.source_scope import SourceScope
 from ue_project_tools.source_type_details import _compound
-
-
-PROJECT = ROOT / "LyraStarterGame/LyraStarterGame.uproject"
 
 
 @unittest.skipUnless(PROJECT.is_file(), "Lyra reference project is not available")

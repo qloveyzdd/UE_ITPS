@@ -7,7 +7,7 @@ status: historical-ue-5.6.1-static-source-and-config-evidence; mode-specific-run
 
 # Lyra 网络模式、旅行存续与失败边界
 
-> **历史报告：** 本文映射 UE 5.6.1 基线。当前活动基座已切换到 UE 5.8.2；网络模式、对象存续和失败恢复结论需要在新基座重新验证。
+> **历史调查**：正文的“当前”和“下一步”均指原调查日期，不代表现有版本的验证结果或待执行任务。版本与状态见[基线索引](BASELINE.md)，工具实现见[当前项目状态](../PROJECT.md)。
 
 ## 结论先行
 

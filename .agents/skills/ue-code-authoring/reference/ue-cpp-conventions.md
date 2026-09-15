@@ -1,182 +1,29 @@
-# UE5 C++ Conventions
+# UE C++ 检查要点
 
-Rules enforced by `get_file_problems` / `lint_files`. Match these before running diagnostics to minimize fix cycles.
+以目标工程现有实现和实际 Engine 源码为准。此处是修改检查清单，不是由 Rider 自动保证的规则集。
 
----
+## 文件与模块
 
-## Naming
+- 沿用项目的 Public/Private 或平铺目录；跨模块暴露按现有导出宏和 MinimalAPI 用法处理。
+- Build.cs 的 public/private 依赖依据接口暴露与实现使用确定；Include 的物理来源只能提供线索。
+- Target.cs 沿用项目选定的 BuildSettingsVersion 与 IncludeOrderVersion，不从 EngineAssociation 字符串推导固定映射。
+- 头文件中的生成头遵循项目/UHT 要求；出现 generated.h 错误时检查文件主名、反射声明、UHT 诊断与生成步骤，不直接按类名前缀重命名。
 
-| Prefix | Applies To |
-|--------|-----------|
-| `A` | `AActor` subclasses |
-| `U` | `UObject` / `UActorComponent` subclasses |
-| `F` | Structs (`USTRUCT`) |
-| `E` | Enums (`UENUM`) |
-| `I` | Interfaces (`UINTERFACE`) + their implementation class |
-| `T` | Template classes |
+## 反射与生命周期
 
-Files: drop the prefix → `AMyActor` → `MyActor.h` / `MyActor.cpp`.
+- 沿用 A/U/F/E/I/T 等命名惯例，依据真实继承关系命名。
+- UCLASS/USTRUCT 的反射声明按已有模式使用 GENERATED_BODY；不要向 UENUM 枚举体插入该宏。
+- 仅在需要反射、编辑器、Blueprint 或 GC 跟踪时添加相应标记，不把所有类默认开放给 Blueprint。
+- UObject 的创建与所有权遵循项目模式；成员强引用、弱引用、软引用按生命周期选择。
+- Blueprint 私有属性访问权限依据实际元数据与 UHT 结果处理，不把访问错误归结为只能公开成员。
 
----
+## 复制、异步与资产
 
-## Class Skeleton
+- 复制属性、注册方式、RepNotify 与 RPC 声明保持一致；只有声明要求 WithValidation 的 RPC 才补对应验证实现。
+- 服务器权限、拥有者、网络执行端与对象重建按关键路径验证，不能只靠添加 HasAuthority 判断完成。
+- 异步回调检查对象存活与执行线程；捕获裸 this 后转回游戏线程本身不保证对象仍有效。
+- 资产引用与默认值沿用项目的 C++/Blueprint/DataAsset 分工，按加载和复用需求选择硬引用或软引用。
 
-### Header (`.h`)
+## 验证
 
-```cpp
-#pragma once
-
-#include "CoreMinimal.h"
-#include "<ParentClass>.h"
-#include "MyActor.generated.h"   // ALWAYS last include before class declaration
-
-UCLASS(BlueprintType, Blueprintable)
-class MYMODULE_API AMyActor : public AActor
-{
-    GENERATED_BODY()
-
-public:
-    AMyActor();
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MyActor")
-    float MyValue = 0.f;
-
-    UFUNCTION(BlueprintCallable, Category = "MyActor")
-    void DoThing();
-
-protected:
-    virtual void BeginPlay() override;
-
-private:
-    UPROPERTY()
-    TObjectPtr<USceneComponent> RootSceneComp;
-};
-```
-
-### Source (`.cpp`)
-
-```cpp
-#include "MyActor.h"                                    // ALWAYS first
-#include UE_INLINE_GENERATED_CPP_BY_NAME(MyActor)      // UE5: faster compile
-
-AMyActor::AMyActor()
-{
-    PrimaryActorTick.bCanEverTick = false;
-
-    RootSceneComp = CreateDefaultSubobject<USceneComponent>(TEXT("RootSceneComp"));
-    SetRootComponent(RootSceneComp);
-}
-
-void AMyActor::BeginPlay()
-{
-    Super::BeginPlay();
-}
-
-void AMyActor::DoThing()
-{
-}
-```
-
----
-
-## Key Rules
-
-### Reflection macros
-- `UPROPERTY` on every member exposed to Blueprint, GC, or editor
-- `UFUNCTION` on every callable exposed to Blueprint
-- `UCLASS(BlueprintType, Blueprintable)` unless intentionally not exposable
-- `GENERATED_BODY()` required inside every `UCLASS`/`USTRUCT`/`UENUM`
-
-### Object pointers
-- `TObjectPtr<UFoo>` for `UPROPERTY` references (UE5 convention; Rider warns on raw `UFoo*`)
-- `TSoftObjectPtr<UFoo>` for optional/lazy asset references
-- `TSoftClassPtr<UFoo>` for class references that should not hard-load on include
-- Never `new` / `delete` UObjects
-
-### Include order
-1. Own generated header (`.h` files): `"<ClassName>.generated.h"` — **last**
-2. Own header (`.cpp` files): `"<ClassName>.h"` — **first**
-3. Then Engine/plugin headers, then project headers
-4. Forward-declare in headers; include in `.cpp`
-
-### API macro
-Every class that crosses module boundaries needs `<MODULE>_API`:
-```cpp
-class MYMODULE_API AMyActor : public AActor
-```
-Missing this = linker error ("unresolved external symbol") when another module uses the class.
-
-### Visuals belong in Blueprints
-- DO declare component pointers: `TObjectPtr<UStaticMeshComponent> MeshComp`
-- DO `CreateDefaultSubobject` in the constructor
-- DO NOT assign meshes/materials/particles in C++ (`ConstructorHelpers::FObjectFinder` for assets)
-- DO NOT use `FObjectFinder` unless the user explicitly requested it
-
-### Replication (multiplayer)
-- Add `DOREPLIFETIME(AMyActor, MyValue)` in `GetLifetimeReplicatedProps` for every `UPROPERTY(Replicated)`
-- Authority guards: `if (!HasAuthority()) return;` before server-only logic
-- Server RPCs: declare `UFUNCTION(Server, Reliable)` + implement `_Implementation` + add `_Validate`
-
-### Thread safety
-- Never access UObjects outside the game thread
-- Wrap cross-thread access: `AsyncTask(ENamedThreads::GameThread, [this](){ ... })`
-
----
-
-## Module Dependencies (`Build.cs`)
-
-Add only what the file actually includes. Rider's `get_file_problems` will flag missing module deps.
-
-```csharp
-PublicDependencyModuleNames.AddRange(new string[]
-{
-    "Core", "CoreUObject", "Engine",
-    // add as needed:
-    "InputCore", "EnhancedInput",
-    "UMG", "Slate", "SlateCore",
-    "GameplayAbilities", "GameplayTags", "GameplayTasks",
-    "AIModule", "NavigationSystem",
-    "Niagara", "PhysicsCore",
-    "NetCore",
-});
-```
-
----
-
-## BuildSettingsVersion by Engine Version
-
-When creating new `Target.cs` files, match these versions to the project's `EngineAssociation`:
-
-| UE Version | `BuildSettingsVersion` | `IncludeOrderVersion` |
-|------------|----------------------|----------------------|
-| 5.5 | `V5` | `Unreal5_5` |
-| 5.6 | `V5` | `Unreal5_6` |
-| 5.7+ | `V6` | `Unreal5_7` |
-
-Wrong versions → build failure. Read `.uproject` `EngineAssociation` first.
-
----
-
-## Generated Header Errors — Common Causes
-
-| Error | Cause | Fix |
-|-------|-------|-----|
-| `Cannot find generated.h` | File name doesn't match class name | Rename file to match class (e.g. `AMyActor` → `MyActor.h`) |
-| `GENERATED_BODY() not in class` | Missing macro | Add inside class body |
-| `BlueprintReadWrite on private` | UHT restriction | Move to `public` or change to `BlueprintReadOnly` |
-| `Unresolved external symbol` | Missing `_API` or `Build.cs` dep | Add `<MODULE>_API` / add dep to `Build.cs` |
-
----
-
-## File Placement
-
-| Type | Header | Source |
-|------|--------|--------|
-| Actor | `Source/<Module>/Public/<Name>.h` | `Source/<Module>/Private/<Name>.cpp` |
-| Component | `Source/<Module>/Public/Components/<Name>.h` | `Source/<Module>/Private/Components/<Name>.cpp` |
-| Subsystem | `Source/<Module>/Public/Subsystems/<Name>.h` | `Source/<Module>/Private/Subsystems/<Name>.cpp` |
-| Interface | `Source/<Module>/Public/<Name>.h` | `Source/<Module>/Private/<Name>.cpp` |
-| Function Library | `Source/<Module>/Public/<Name>.h` | `Source/<Module>/Private/<Name>.cpp` |
-| Plugin Module | `Plugins/<Plugin>/Source/<Module>/Public/` | `Plugins/<Plugin>/Source/<Module>/Private/` |
-
-If the project uses a flat structure (`Source/Module/*.h` and `*.cpp` together), follow that instead. Check with `list_directory_tree` first.
+先检查实际修改文件的诊断，再执行与风险匹配的构建和行为验证。缺少 Engine、Rider 或运行环境时明确说明；不把静态扫描的 ok 作为编译或运行结果。

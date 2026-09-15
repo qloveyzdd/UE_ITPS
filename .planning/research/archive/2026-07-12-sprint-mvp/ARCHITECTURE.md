@@ -1,5 +1,7 @@
 # Architecture Research
 
+> 历史研究，版本与方案按 2026-07-12 理解。当前实现见[项目状态](../../../PROJECT.md)，本目录边界见[归档摘要](README.md)。
+
 **Domain:** Unreal Engine 棕地项目的可验证复用、权威边界与增量审查系统  
 **Researched:** 2026-07-12  
 **Confidence:** HIGH（MVP 边界与 UE 工具链机制）；MEDIUM（体力冲刺的具体 Lyra 资产定位需在固定样本中实测）

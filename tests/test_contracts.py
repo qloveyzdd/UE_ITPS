@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import unittest
 
 from jsonschema import Draft202012Validator
@@ -13,6 +15,34 @@ from tests.support import ROOT, run_cli
 
 
 class PublicContractTests(unittest.TestCase):
+    def test_suite_selection_covers_each_module_once(self) -> None:
+        from tests.__main__ import selected_modules
+
+        core, lyra = set(selected_modules("core")), set(selected_modules("lyra"))
+        all_modules = {"tests." + p.stem for p in (ROOT / "tests").glob("test_*.py")}
+        self.assertTrue(core)
+        self.assertTrue(lyra)
+        self.assertFalse(core & lyra)
+        self.assertEqual(core | lyra, all_modules)
+        self.assertEqual(set(selected_modules("all")), all_modules)
+
+    def test_missing_lyra_is_explicit_and_direct_discovery_skips(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            environment = {**os.environ, "UE_ITPS_LYRA_PROJECT": str(Path(directory) / "Missing.uproject")}
+            explicit = subprocess.run(
+                [sys.executable, "-m", "tests", "--suite", "lyra"],
+                cwd=ROOT, env=environment, capture_output=True, text=True, encoding="utf-8", timeout=30,
+            )
+            self.assertEqual(explicit.returncode, 2, explicit.stderr)
+            self.assertIn("UE_ITPS_LYRA_PROJECT", explicit.stderr)
+            discovered = subprocess.run(
+                [sys.executable, "-m", "unittest", "discover", "-s", "tests",
+                 "-p", "test_lyra*.py", "-v"],
+                cwd=ROOT, env=environment, capture_output=True, text=True, encoding="utf-8", timeout=30,
+            )
+            self.assertEqual(discovered.returncode, 0, discovered.stderr)
+            self.assertIn("skipped=", discovered.stderr)
+
     def test_tool_manifest_matches_entrypoints_and_schemas(self) -> None:
         completed, manifest = run_cli("sourcetools/ue_list_tools.py")
         self.assertEqual(completed.returncode, 0)

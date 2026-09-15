@@ -1,5 +1,7 @@
 # Pitfalls Research
 
+> 历史研究，版本与方案按 2026-07-12 理解。当前实现见[项目状态](../../../PROJECT.md)，本目录边界见[归档摘要](README.md)。
+
 **Domain:** 固定 UE 5.7 / 匹配 Lyra 5.7 的人工策展体力冲刺最小权威图谱与增量审查闭环  
 **Researched:** 2026-07-12  
 **Confidence:** HIGH（UE 工具链、资产、GAS 与网络机制）；MEDIUM（产品风险与实验阈值，需 MVP 实测）

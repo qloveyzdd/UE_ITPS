@@ -1,139 +1,51 @@
 ---
 name: ue-project-inspector
-description: Inspect Unreal Engine projects and explicitly selected source entry files through the repository's deterministic, read-only tools. Use when Codex needs to find or read .uproject files; resolve Engine identity; inspect one .uplugin; navigate one plugin's declared modules; read one Build.cs; inspect one selected C++ function name; locate one module's registration source and matching header; list includes, types or function definitions from one selected .h/.hpp/.cpp/.cc; or summarize focused results. Do not use for runtime behavior, asset reachability, general class/call graphs, code generation, builds, tests, or project modification.
+description: 使用仓库 SourceTools 检查 UE 工程描述符、构建入口、显式 C++ 文件及配置范围，提取类型、函数、委托和可定位证据。用于静态源码导航与汇总；不用于修改项目、构建或验证运行时行为。
 ---
 
 # UE Project Inspector
 
-Use the smallest tool that answers the user's question. Treat every result as static project evidence, not runtime authority.
+从仓库根目录调用现有 `sourcetools/`，不复制或改写工具。需要完整入口清单时运行 `python sourcetools/ue_list_tools.py`；若目录缺失，说明实现不可用，不在技能内重建。
 
-## Locate the tools
+## 按问题选择工具
 
-Work from the repository root. Use the scripts under `sourcetools/` without copying or editing them.
-
-If the scripts are missing, report that this repository does not contain the expected inspector implementation. Do not recreate them inside the skill.
-
-## Route the request
-
-| User intent | Tool |
+| 需要的信息 | 工具 |
 |---|---|
-| Find UE projects | `ue_find_projects.py` |
-| Read compact `.uproject` v3 declarations | `ue_read_project_descriptor.py` |
-| Resolve actual Engine identity/version | `ue_resolve_engine.py` |
-| Discover project Targets | `ue_inspect_targets.py` |
-| Read one explicitly selected `.uplugin` | `ue_read_plugin_descriptor.py` |
-| Read direct public, private, and dynamic dependencies from one Build.cs | `ue_inspect_module_rules.py` |
-| Locate one module's registration source and matching header | `ue_inspect_module_entry.py` |
-| List direct include provenance from one selected `.cpp` | `ue_list_cxx_includes.py` |
-| List basic type, variable, free-function, and macro definitions in selected files | `ue_list_cxx_types.py` |
-| Inspect one explicitly selected class or struct by exact qualified name | `ue_inspect_cxx_type.py` |
-| List every function definition in selected files, including implementations with no visible owner type | `ue_list_cxx_functions.py` |
-| Inspect external symbols referenced by all definitions matching one function name | `ue_inspect_cxx_function.py` |
+| 查找工程 | `ue_find_projects.py --search-root` |
+| 实际 Engine 身份 | `ue_resolve_engine.py --project` |
+| 项目模块与直接插件声明 | `ue_read_project_descriptor.py --project --engine-build-version` |
+| 按模块名或插件名定位描述文件 | `ue_find_build_descriptor.py --project --modulename/--pluginname` |
+| Target 及可解析继承声明 | `ue_inspect_targets.py --project` |
+| 单插件声明 | `ue_read_plugin_descriptor.py --plugin` |
+| 单模块直接依赖或注册入口 | `ue_inspect_module_rules.py` / `ue_inspect_module_entry.py --rules` |
+| 模块内显式文件候选及头源配对 | `ue_list_module_cxx_sources.py --rules` |
+| Include 来源 | `ue_list_cxx_includes.py --source` |
+| 定义基础清单 | `ue_list_cxx_types.py --source` |
+| 一个类型的直接成员与基类 | `ue_inspect_cxx_type.py --source --type` |
+| 所有函数定义及选择名 | `ue_list_cxx_functions.py --source` |
+| 一个函数名对应的符号与委托 | `ue_inspect_cxx_function.py --source --function` |
+| 配置范围的分层导航 | `ue_inspect_cxx_scope.py --project --profile` |
 
-When the user explicitly requests all categories, run the relevant focused tools independently, validate each result, and summarize them without inventing a merged schema. For every other request, use only the smallest tool that answers the question.
+只运行回答问题所需的工具。批量汇总仍须保存每个工具自己的输入、Schema、校验与边界，不拼造统一工程返回结构。参数细节先读对应 `--help`；详细输出约定见[工具契约](../../../docs/TOOLS.md)。
 
-## Workflow
+## 选择与证据
 
-1. If no `.uproject` path is known, run:
+1. 不知道项目路径时先发现工程。存在多个候选时，用用户已点名的项目消除歧义；仍无法唯一确定才询问。
+2. EngineAssociation 只是关联键；版本来自解析得到的 Build.version。不要从关联键猜版本或 Build Settings。
+3. 从前一步证据选定 Build.cs、插件或源文件。源码工具只接受一个文件，或同主名的一份 `.cpp/.cc` 与一份 `.h/.hpp`；不自动找伴随文件。
+4. 从类型清单选精确限定名，从函数清单选 `qualified_name`。函数简单名会匹配全部同名定义；重载、条件定义继续分别返回。
+5. 需要业务/结构展示时，类型清单和函数详情可选 `--view behavior/structure` 与重复 `--focus NAME`。默认 full 保留独立契约；需要调用表达式、参数或非调用语句时请求相应语法详情。
+6. Scope 使用已存在或任务明确要求的配置，不为普通单文件查询创建全项目配置。使用返回 ID 进入 type/function/evidence 层，按 `page.next_offset` 翻页；源码或配置变化后重新取 ID。
 
-   ```powershell
-   python sourcetools/ue_find_projects.py --search-root <repo-root>
-   ```
+## 解释结果
 
-2. If exactly one candidate exists, use it. If multiple candidates exist, report the ambiguity and ask the user which project to inspect.
-3. Run only the selected focused tool.
-4. Parse its JSON output. Summarize the requested facts and include evidence paths for engine, Module, Target, or Plugin claims.
-5. Read `validation` for detected problems and `limits` for responsibility and boundaries. Report warnings and boundaries separately. Never reinterpret `validation: ok` as proof that the project compiles, launches, or runs correctly.
-
-When the user explicitly selects one `.uplugin`, read its direct `Modules` and `Plugins` declarations with `ue_read_plugin_descriptor.py`. If a Build.cs path is explicitly selected, use `ue_inspect_module_rules.py` for direct module dependencies or `ue_inspect_module_entry.py` for registration source and header evidence.
-
-When the user or model explicitly selects C++ files, run only the smallest source fact tool that answers the request. Pass one file to scan it alone, or pass two files after `--source` to scan an explicitly selected pair. Two files must contain one `.cpp/.cc` and one `.h/.hpp` with the same basename; the caller is responsible for ensuring that they belong to the same UE project. Source tools never search for a companion. Every source tool discovers the nearest unique `.uproject` from the selected `.cpp/.cc`, or from the selected header when no source file is supplied. C++ Source tools parse local files with Tree-sitter C++ and do not require a compilation database. Report missing or ambiguous project discovery instead of choosing for the model.
-
-Use `ue_list_cxx_functions.py` for complete function-definition navigation with the same explicit files, even when owner type definitions are absent. Use its `qualified_name` as the selector; `source_qualified_name` retains the original spelling. Only selected-file class and member declarations justify injected-class-name normalization, and the original qualified spelling remains an accepted selector. Overloads and conditional definitions remain separate entries, with the same `function_id` used by inspection. Use `ue_list_cxx_types.py` to discover type qualified names, then explicitly select one type and call `ue_inspect_cxx_type.py --type <qualified_name>` with the same files to discover its direct member-function names. The model must explicitly choose one function selector, then call `ue_inspect_cxx_function.py` with that selector and the same explicit file selection. Prefer the complete `qualified_name`, such as `Class::Function` or `Namespace::Class::Function`, for member functions; use a simple name only when every same-name definition is intentionally requested. A selector containing `::` matches `qualified_name` or its evidenced original spelling exactly, while a simple selector matches every definition with that unqualified name. Overloads remain multiple matches because parameter signatures are not selectors. Each match reports a compact `function_id` and one source-ordered `external_symbols` array using only local syntax and declarations; the selector, callable metadata, and declaration-definition relation are not repeated in the result. Symbol kinds are `type`, `global_variable`, `free_function`, `macro`, `member_call`, `function_address`, `callback_target`, and `unknown`; `macro` is limited to the maintained UE function-like macro allowlist, and all kinds are candidate symbol categories rather than relation semantics. Wrapped template types remain one expression, and member-call receivers retain `owner_type` when locally derivable or inferred from the UE same-type static-accessor convention `Type::Get()`. Exact low-signal member-call exclusions and static same-type accessor calls are omitted from `external_symbols`. `syntax_flow` is omitted by default and appears only with `--include-syntax-flow`; when requested, it retains those raw calls. Delegate analysis has one active contract, indicated by top-level `delegate_contract_revision: 2`. Interpret `delegate_operations` using its `operation`, `subject`, `delegate_type`, `callback`, `arguments`, `result`, `resolution`, and `execution_scope`; the old `event` field is removed. Only `resolution.status: identified` has selected-file delegate type evidence and a supported API shape; `candidate` is not proof of a delegate operation. Parameters and locals have no fabricated qualified member name. `Create*` creates a delegate value; `Bind*` binds one; `Add*` adds to multicast. Lambda-body operations are labeled separately from the outer function. `callback_target` comes from the same identified operation and designated callback argument, not arbitrary addresses in payloads. Receiver types declared only in transitive headers stay unresolved; no called bodies, runtime lifetimes, or cross-function binding graph are inferred. Do not inspect other function names or dependency source.
-
-Maintain UE macro, same-type accessor, external-symbol exclusion, and delegate API conventions only in `sourcetools/ue_project_tools/ue_cpp_conventions.py`; do not duplicate these rule sets in parsers or result builders.
-
-Do not embed or reinterpret later source-tool results as fields of the earlier `.uproject` result. Each tool keeps its own schema, validation, and limits.
-
-All normal scan results follow this top-level order: `schema_version`, module facts, `validation`, then `limits`. Treat `validation: warning` as a completed scan with non-blocking problems, not as `ok` and not as a process failure.
-
-## Focused commands
-
-Replace `<project>` with the absolute `.uproject` path.
-
-```powershell
-python sourcetools/ue_read_project_descriptor.py --project <project> --engine-build-version <Engine/Build/Build.version>
-python sourcetools/ue_resolve_engine.py --project <project>
-python sourcetools/ue_inspect_targets.py --project <project>
-```
-
-Replace `<plugin>`, `<rules>`, and `<target>` with one explicit file selected from prior evidence or supplied by the user:
-
-```powershell
-python sourcetools/ue_read_plugin_descriptor.py --plugin <plugin>
-python sourcetools/ue_inspect_module_rules.py --rules <rules>
-python sourcetools/ue_inspect_module_entry.py --rules <rules>
-python sourcetools/ue_list_cxx_includes.py --source <source> [<header>]
-python sourcetools/ue_list_cxx_types.py --source <source> [<header>]
-python sourcetools/ue_list_cxx_functions.py --source <source> [<header>]
-python sourcetools/ue_inspect_cxx_type.py --source <source> [<header>] --type <qualified-name>
-python sourcetools/ue_inspect_cxx_function.py --source <source> [<header>] --function <name-or-qualified-name> [--include-syntax-flow]
-```
-
-## Interpret project descriptor
-
-Treat `ue_read_project_descriptor` as a narrow projection of the original `.uproject`:
-
-- `declared_modules` reports declared Module names in descriptor order. Use the focused source, Build.cs, or module-entry tools when their separate evidence is needed.
-- `plugin_declarations.enabled` and `.disabled` report every valid direct Plugin reference according to its boolean `Enabled` value.
-- `plugin_declarations.target_allow_list` reports only explicit, non-empty `TargetAllowList` declarations. Each item keeps one Plugin `name` together with its source-ordered `targets` array.
-- Missing `TargetAllowList` fields and explicit empty arrays do not produce items. Other Plugin reference fields and all other `.uproject` fields are outside this tool's result.
-- `validation` requires exactly one same-named `Build.cs` for each declared project Module and at least one same-named `.uplugin` for each direct Plugin reference. Module roots follow the project Module inspector; Plugin roots include supported project locations and the Engine derived from the required `--engine-build-version` path.
-- A missing enabled Plugin is an error. A missing disabled Plugin is retained as an `info` problem whose message states that it is not enabled; info-only problems leave `validation.status` as `ok`.
-- `ue_read_project_descriptor.py` does not read `EngineAssociation`. Its required `Build.version` path is a trusted anchor: derive the Engine root from the conventional parent depth without validating the path layout, JSON, or version fields.
-
-Stop after `ue_read_project_descriptor.py` for declared Module names, Plugin enabled states, or explicit non-empty Target allow lists.
-
-## Interpret Module dependencies
-
-Treat `ue_inspect_module_rules` as a direct literal dependency projection, not an effective UBT result:
-
-- Each `rules_classes[]` item reports the class `name` and `dependencies.public_dependency_modules`, `.private_dependency_modules`, and `.dynamically_loaded_modules` arrays.
-- The arrays correspond only to `PublicDependencyModuleNames`, `PrivateDependencyModuleNames`, and `DynamicallyLoadedModuleNames`.
-- Only string literals passed to `Add` or `AddRange` are returned. An empty literal `AddRange` is accepted as an empty dependency list even when its initializer contains comments; non-literal or partially literal expressions produce a validation warning and may make the result incomplete.
-- Constructors and statically reachable same-file helpers contribute dependencies, including declarations inside recognized conditional branches.
-- Conditions are not returned or evaluated. Duplicate names are removed within each dependency kind while preserving source order.
-- The input Build.cs path is not repeated in a successful result. Validation problems may retain a path as source evidence.
-
-## Interpret module entry v1
-
-- `entrypoints` reports only registrations whose Module name matches the selected Build.cs basename and whose macro is exactly `IMPLEMENT_PRIMARY_GAME_MODULE` or `IMPLEMENT_MODULE`.
-- Each item retains the absolute `source`, one uniquely matched absolute `header` or null, and the registration macro, Module class, Module name, and integer `source_line`. No top-level Module metadata object is emitted.
-- Only `.cpp` files are read. Header contents are never scanned; `.h` companions are matched by basename in the same directory or through conventional `Private` to `Public` or `Classes` mirrors.
-- Zero header candidates is a normal null result. Multiple candidates leave `header` null and produce a validation warning.
-- No matching registration is an error. Registrations for other Module names and other `IMPLEMENT_*_MODULE` macros are outside the result.
-- The result does not inspect classes, functions, callbacks, lifecycle state, includes, or runtime behavior.
-
-## Interpret source fact v1 schemas
-
-- Every source tool requires one explicitly selected `.h/.hpp/.cpp/.cc`, or one explicit same-basename source/header pair. Tree-sitter parses only those files and never reads transitive headers. No companion file is searched or inferred. Successful results do not emit a `source_unit` field.
-- `source-includes.v1` reports direct spellings and unique filesystem provenance from every explicitly selected file, including a source file's include of an explicitly selected header. Each include uses `evidence.unit` (`cpp` or `header`) plus `line`; include syntax is retained internally for resolution but omitted from the public result. Tree-sitter path nodes `ue_generated_header_path` and `ue_inline_generated_cpp_path` classify generated references as `generated_header` and `generated_source`; no parallel text filter is used. Uniquely resolved entries omit `resolution.status`, and their `owner` retains only `kind`. `generated_header`, `generated_source`, and `system_or_sdk_unresolved` remain in `includes` with their status. `ambiguous`, `not_found`, and `macro_unresolved` entries move to validation with the original include fact. Unique filesystem provenance is not effective UBT or compiler include-path proof, and physical Build.cs or `.uplugin` ancestry does not prove that a dependency is required, correctly declared, public/private, or suitable for the user's goal.
-- `ue_list_cxx_types` reports basic `classes`, `structs` (including unions), `enums`, `global_variables`, `free_functions`, and `macros` arrays. Only definitions in the explicitly selected files are listed; forward declarations, extern declarations, function prototypes, and referenced symbols are excluded. Type entries retain identity, owner, location, and attached UE annotations, without bases, members, enumerators, or interface inference. Macro entries represent local `#define` directives, with name, parameters (null for object macros, an array for function macros), and location, without replacement bodies. Conditional branches are not evaluated. Out-of-class static variable definitions retain qualified identities in `global_variables`.
-- `ue_inspect_cxx_type --type <qualified-name>` matches the exact qualified name of a class, struct, or union definition. Its `matches` contain bases, direct `member_anchors`, selected-file `member_functions` definitions, and `interface_candidate_reasons`. Nested and inherited types are not expanded. No match returns validation error and exit 1. Facts remain syntax projections, not compiler or UHT conclusions. No transitive headers are read or project-level symbol IDs created.
-- Native GameplayTag macros supported by the selected Engine contract are projected as `FNativeGameplayTag` variables: `UE_DECLARE_GAMEPLAY_TAG_EXTERN` remains an excluded declaration, `UE_DEFINE_GAMEPLAY_TAG` and `UE_DEFINE_GAMEPLAY_TAG_COMMENT` produce external definitions, and `UE_DEFINE_GAMEPLAY_TAG_STATIC` produces an internal definition. These standalone macros never attach to the following declaration through reflection-macro adjacency.
-- `ue_list_cxx_functions` lists every selected-file definition, with shared `function_id`, name, owner, namespace, original and normalized qualified names, signature and source evidence. Prototypes are excluded; no definitions produces an empty array and exit code 0. IDs are scoped to the file selection and parser output; regenerate caches after text-formatting or identity corrections.
-- Display formatting preserves literal and comment contents. Calls cover bodies, constructor initializer lists and function try/catch, including labeled Lambda bodies, while declaration expressions are excluded. Calls, addresses and delegate subjects share local lookup, including `this`, globals, namespaces and lexical shadowing. Conflicting declarations and placeholder types stay unresolved.
-- `ue_inspect_cxx_function` returns every syntax definition matching one selected simple or fully qualified function name. Qualified selectors match normalized or evidenced original names; simple selectors intentionally return every same-name definition. Results retain a compact source-pair `function_id` and source-ordered `external_symbols` without repeating selection, callable metadata, or declaration-definition relations. `syntax_flow` is opt-in through `--include-syntax-flow`. Call targets, receiver owners, type references, globals, function addresses, and callback targets are conservative local syntax candidates; UE delegate operations use the single revision-2 contract described above and remain a focused domain projection over the selected function source. Kinds are navigation categories rather than read/write or ownership semantics, and called function bodies are not followed.
-- Command-line syntax, input, and read failures return the shared schema-shaped JSON request envelope on stdout with exit 2; stderr remains empty. A function name with no matching definition returns `validation: error` JSON and exit 1; multiple matches are a normal successful result.
-- Tree-sitter does not read transitive headers or perform preprocessing, overload resolution, or cross-file semantic binding. The model must explicitly select another file for deeper inspection.
-- The tools do not generate feature labels, variable purposes, implementation advice, Build.cs changes, or acceptance conclusions. The model remains responsible for connecting facts and making decisions.
-
-## Interpretation boundaries
-
-- `EngineAssociation` remains an association key for tools that resolve Engine identity. The project descriptor reader ignores it and requires an explicit trusted `Build.version` path.
-- `.uproject` declares Modules and direct Plugin references, but the project descriptor result intentionally reports only Module names, Plugin enabled states, and explicit non-empty Target allow lists. Filesystem checks use same-named Build.cs and .uplugin evidence without returning their paths, and the result does not declare `Target.cs` or a dependency graph.
-- The single-plugin descriptor tool reports only direct Module and Plugin declarations. It ignores every other top-level `.uplugin` field and does not read Build.cs files or dependency descriptors.
-- Build.cs dependency arrays report direct literal declarations only and are not effective UBT results.
-- Module entry scans only the two supported registration macros in `.cpp` files and derives an optional same-named `.h` companion from filesystem conventions.
-- Resolve relative Additional* declarations separately through descriptor-aware tools; do not substitute the repository root or current working directory.
-- Do not modify UE source, assets, configuration, registry entries, or Engine installations.
+- 源码工具解析显式文件，不读取传递头文件或被调用函数体，不进行预处理或编译器语义绑定。
+- 类型清单只列定义；成员、基类和接口候选依据属于类型详情。引用过某类型不等于定义了该类型。
+- Include 唯一物理来源不证明有效编译搜索路径，也不证明依赖声明正确。
+- Build.cs 返回可提取字面量依赖，包含识别到的条件分支但不求值；不能称为实际构建依赖闭包。
+- 默认 `external_symbols` 与优先级/Scope 逐位置事实口径不同，不能直接比较条目数。Scope 的 `summary.facts.call` 仅为补充调用。
+- 委托只有 `delegate_contract_revision: 2`。读取 `operation/subject/delegate_type/callback/arguments/result/resolution/execution_scope`；identified 有局部类型与 API 证据，candidate 不证明委托操作。Lambda 操作与外层函数分开。
+- 人工 roles、entry_points 和 navigation 不是自动推断的业务事实。reviewed 只对符合指纹、唯一定义、必要证据和解析检查的具体提示有效。
+- `function_id` 及 Scope ID 依赖文件选择和快照；底层 `evidence.unit` 需结合显式输入路径解释。
+- 先读 `validation`，再读 `limits`。warning 是有非阻断问题的完成结果；info-only 可以仍为 ok。退出码 0/1/2 分别表示无阻断完成、阻断扫描结果、参数/输入/读取失败。
+- 汇总明确区分文件清单范围、实际语法解析范围和人工职责覆盖；保留未解析与未分类项。校验通过不等于 UBT、UHT、Editor 或运行测试通过。

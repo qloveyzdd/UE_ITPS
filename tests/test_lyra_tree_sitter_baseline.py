@@ -7,57 +7,20 @@ import unittest
 from tree_sitter import Language, Parser
 import tree_sitter_ue_cpp
 
-from tests.support import ROOT
+from tests.support import ROOT, LYRA_PROJECT, raw_call_owner
 
 sys.path.insert(0, str(ROOT / "sourcetools"))
 
 from ue_project_tools.cpp_frontend import load_cpp_unit
-from ue_project_tools.cpp_expression_facts import BUILTIN_TYPE_NAMES
 from ue_project_tools.source_function_references import inspect_source_function
 from ue_project_tools.source_type_facts import list_source_types
 from ue_project_tools.source_type_details import inspect_source_type
 
 
-def _raw_call_owner(node):
-    """Independent ancestor check for calls in executable definition regions."""
-    callee = node.child_by_field_name("function")
-    if callee is not None:
-        if callee.type in {"primitive_type", "sized_type_specifier"}:
-            return None
-        if callee.type == "identifier" and callee.text.decode("utf-8") in BUILTIN_TYPE_NAMES:
-            return None
-        name = callee.child_by_field_name("name")
-        if callee.type == "template_function" and name is not None and name.text.decode("utf-8") in {
-            "const_cast", "static_cast", "reinterpret_cast", "dynamic_cast",
-        }:
-            return None
-    branch, parent = node, node.parent
-    while parent is not None:
-        if parent.type in {"class_specifier", "struct_specifier", "union_specifier", "enum_specifier",
-                           "function_declarator", "abstract_function_declarator"}:
-            return None
-        if parent.type == "function_definition":
-            return parent if branch.type in {"compound_statement", "field_initializer_list", "try_statement"} else None
-        branch, parent = parent, parent.parent
-    return None
-
-
+@unittest.skipUnless(LYRA_PROJECT.is_file(), "Lyra reference project is not available")
 class LyraTreeSitterBaselineTests(unittest.TestCase):
-    def test_raw_call_owner_contract_on_synthetic_source(self) -> None:
-        tree = Parser(Language(tree_sitter_ue_cpp.language())).parse(b'''
-            struct A { A(int X = Default()) noexcept(Check())
-                : Value(Factory([] { Inner(); })) { Consume(int(Value)); } int Value; };
-        ''')
-        stack, calls = [tree.root_node], []
-        while stack:
-            node = stack.pop()
-            if node.type == "call_expression" and _raw_call_owner(node) is not None:
-                calls.append(node.child_by_field_name("function").text.decode("utf-8"))
-            stack.extend(reversed(node.named_children))
-        self.assertEqual(calls, ["Factory", "Inner", "Consume"])
-
     def test_lyra_delegate_creation_execution_and_removal(self) -> None:
-        root = ROOT / "LyraStarterGame" / "Source" / "LyraGame"
+        root = LYRA_PROJECT.parent / "Source" / "LyraGame"
 
         def scan(relative, function):
             paths = [root / f"{relative}.cpp", root / f"{relative}.h"]
@@ -87,7 +50,7 @@ class LyraTreeSitterBaselineTests(unittest.TestCase):
         self.assertEqual(removal["resolution"]["status"], "candidate")
 
     def test_lyra_tool_symbol_and_member_projections(self) -> None:
-        root = ROOT / "LyraStarterGame" / "Source" / "LyraGame"
+        root = LYRA_PROJECT.parent / "Source" / "LyraGame"
 
         def pair(relative: str) -> list[Path]:
             return [root / f"{relative}.cpp", root / f"{relative}.h"]
@@ -146,7 +109,7 @@ class LyraTreeSitterBaselineTests(unittest.TestCase):
                          "ULyraHeroComponent::NAME_ActorFeatureName")
 
     def test_full_lyra_source_tree_matches_baseline(self) -> None:
-        project_root = ROOT / "LyraStarterGame"
+        project_root = LYRA_PROJECT.parent
         files = sorted(
             path
             for path in (*project_root.rglob("*.h"), *project_root.rglob("*.cpp"))
@@ -189,7 +152,7 @@ class LyraTreeSitterBaselineTests(unittest.TestCase):
                 ):
                     raw_type_definitions.add((file_key, node.start_byte))
                 if node.type == "call_expression":
-                    owner = _raw_call_owner(node)
+                    owner = raw_call_owner(node)
                     if owner is not None:
                         raw_body_calls.setdefault((file_key, owner.start_byte), set()).add(node.start_byte)
                 if node.type in {"preproc_def", "preproc_function_def"}:

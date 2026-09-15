@@ -413,16 +413,17 @@ Codex 原生 Agent 线程和追踪可能保留比产品目标更多的执行信�
 - 任何实际完成程度都能通过“需要做什么、做到哪里、出了什么问题”表达。
 - Codex 被替换或升级时，Git、UE 和数据池的一致性约束仍由独立控制核心保证。
 
-## 15. 当前工程面包屑
+## 15. 当前实现对照（2026-09-15）
 
-- `.planning/PROJECT.md`：当前里程碑仍以 UE 5.6.1/Lyra 工程事实和可复现证据为主。
-- `docs/PROGRAM-DESIGN.md`：项目工具池当前正式工具边界与只读契约。
-- `information_pool/README.md`：工程信息池的提交绑定、不可变快照和查询接口。
-- `information_pool/ue_itps_information_pool/graph_model.py`：工程事实到图模型的构建边界。
-- `information_pool/ue_itps_information_pool/storage.py`：快照持久化与完整性验证边界。
-- `information_pool/ue_itps_information_pool/query.py`：全文检索和任务型图查询边界。
-- `.planning/codebase/ARCHITECTURE.md`：已验证的 Lyra 工程架构事实。
-- `.planning/codebase/PIPELINES.md`：Experience、Pawn 初始化和运行管线证据。
+本 Seed 仍为长期设想，不能由早期原型或文件名认定已经完成。
+
+- [项目状态](../PROJECT.md)：当前已完成范围与限制。
+- [工具契约](../../docs/TOOLS.md)：现有静态检查、视图和导航接口。
+- [实现架构](../../docs/ARCHITECTURE.md)：组件边界与实际数据流。
+- [文件图谱](../../information_pool/README.md)：当前仅提供文件级 SQLite 生成与本地浏览。
+- [旧 Lyra 基线](../codebase/BASELINE.md)：历史调查与证据，不代表当前运行验收。
+
+当前 `information_pool/ue_file_graph/` 没有本 Seed 所描述的提交绑定、不可变快照和任务查询服务。独立控制核心、隔离写入及多任务编排仍未实现。
 
 ## 16. 外部产品依据
 
@@ -434,4 +435,4 @@ Codex 原生 Agent 线程和追踪可能保留比产品目标更多的执行信�
 
 ---
 
-本 Seed 的信息池部分已经落地；独立控制核心、隔离写入与多任务编排部分继续休眠。
+当前已实现文件图谱生成与浏览；本 Seed 描述的完整信息池、独立控制核心、隔离写入与多任务编排继续休眠。

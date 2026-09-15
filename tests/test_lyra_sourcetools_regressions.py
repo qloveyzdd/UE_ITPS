@@ -1,13 +1,13 @@
 """Lyra regressions exercised only through the SourceTools public commands."""
-from pathlib import Path
 import unittest
 
-from tests.support import ROOT, run_cli
+from tests.support import LYRA_PROJECT, run_cli
 
 
+@unittest.skipUnless(LYRA_PROJECT.is_file(), "Lyra reference project is not available")
 class LyraSourceToolsRegressionTests(unittest.TestCase):
     def source(self, relative):
-        return ROOT / "LyraStarterGame" / relative
+        return LYRA_PROJECT.parent / relative
 
     def inspect(self, paths, selector):
         completed, result = run_cli("sourcetools/ue_inspect_cxx_function.py", "--source",

@@ -1,4 +1,4 @@
 interface:
-  display_name: "UE Project Inspector"
-  short_description: "Inspect UE descriptors, modules, plugins, and Engine identity"
-  default_prompt: "Use $ue-project-inspector to inspect compact descriptor facts and only the requested structural evidence for the current Unreal project."
+  display_name: "UE 工程与源码检查"
+  short_description: "使用 SourceTools 检查工程构建声明、类型函数与分层源码证据"
+  default_prompt: "使用 $ue-project-inspector 检查指定 UE 工程或源码范围，汇总结构化事实、证据位置与分析边界。"

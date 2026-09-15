@@ -7,15 +7,13 @@ import sys
 import tempfile
 import unittest
 
+from tests.support import LYRA_PROJECT as PROJECT
 from tests.support import ROOT, run_cli, write_json
 
 sys.path.insert(0, str(ROOT / "sourcetools"))
 from ue_project_tools.source_scope import SourceScope
 from ue_project_tools.source_function_references import _inspect_function_from_context, _list_functions_from_context
 from ue_project_tools.source_type_facts import _list_types_from_context
-
-
-PROJECT = ROOT / "LyraStarterGame/LyraStarterGame.uproject"
 
 
 @unittest.skipUnless(PROJECT.is_file(), "Lyra reference project is not available")

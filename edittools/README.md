@@ -26,3 +26,5 @@ python edittools/ue_validate_knowledge_graph.py --input graph.json
 ```bash
 python -m unittest discover -s edittools/tests -t edittools -v
 ```
+
+这些测试使用离线输入与模拟数据，不连接真实 Editor；通过不代表 Blueprint 或消息链路运行正确。完整分层见[测试与验证](../docs/TESTING.md)。

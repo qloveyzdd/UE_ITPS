@@ -6,7 +6,7 @@
 
 ```bash
 cd show
-npm install
+npm ci
 npm run dev
 ```
 
@@ -17,3 +17,5 @@ npm run dev
 ```bash
 npm test
 ```
+
+测试覆盖 TypeScript 检查、生产构建与内存 SQLite 查询，未包含浏览器交互端到端测试。完整验证口径见[测试与验证](../docs/TESTING.md)。
