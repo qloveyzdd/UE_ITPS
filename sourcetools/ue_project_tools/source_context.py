@@ -130,6 +130,7 @@ def load_source_context(
     *,
     load_includes: bool = False,
     load_cpp_analysis: bool = True,
+    module_records_cache: dict | None = None,
 ) -> dict[str, Any]:
     selected_source, selected_header = _validated_source_files(source_files)
     unit_files = [path for path in (selected_source, selected_header) if path]
@@ -162,12 +163,14 @@ def load_source_context(
     additional_plugin_roots, _ = resolve_internal_directories(
         project, descriptor, "AdditionalPluginDirectories"
     )
-    records = module_records(
-        project_root,
-        engine_root,
-        additional_module_roots,
-        additional_plugin_roots,
-    )
+    # Owned by one SourceScope construction, never shared across scans. Includes
+    # still check the filesystem; this only avoids rediscovering module roots.
+    roots_key = (project_root, engine_root, tuple(additional_module_roots), tuple(additional_plugin_roots))
+    records = module_records_cache.get(roots_key) if module_records_cache is not None else None
+    if records is None:
+        records = module_records(project_root, engine_root, additional_module_roots, additional_plugin_roots)
+        if module_records_cache is not None:
+            module_records_cache[roots_key] = records
     source_owner = owner_for_path(anchor, records)
     cpp_model = load_cpp_unit(anchor, unit_files, project_root)
     parsed_files = [

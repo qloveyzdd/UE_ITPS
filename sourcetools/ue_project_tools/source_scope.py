@@ -1,4 +1,4 @@
-"""Layered navigation over explicit source units, without cross-unit binding."""
+"""Layered navigation over explicit units with conservative declaration candidates."""
 from __future__ import annotations
 
 from collections import Counter
@@ -12,6 +12,8 @@ from .navigation_guidance import navigation_metadata, validate_navigation
 from .source_context import load_source_context
 from .source_function_references import _function_id, _list_functions_from_context
 from .source_priority import FunctionPriorityView, validate_view, log_context
+from .source_scope_audit import audit, provenance
+from .source_scope_candidates import ScopeCandidateIndex
 from .source_type_details import _compound
 from .source_type_facts import _list_types_from_context, _unit
 from .ue_cpp_conventions import UE_RETRIEVAL_RULES_VERSION
@@ -22,7 +24,7 @@ MAP_RESPONSIBILITY = "Export reusable file and name hints for ordinary SourceToo
 BOUNDARIES = [
     "Only explicit profile source units are parsed; referenced bodies and transitive headers are not read.",
     "Profile roles and entry points are authored navigation labels, not inferred program behavior.",
-    "Relation groups summarize syntax candidates; spelling matches do not bind cross-file targets.",
+    "Declaration candidates use selected-scope names and receiver types; they do not prove visibility, overload selection or runtime dispatch.",
     "Out-of-class method navigation uses owner names; conditional ownership remains unbound.",
     "Counts denote source occurrences, not executions. Delegate status is preserved.",
     "Selection IDs belong to the reported source/profile snapshot; regenerate them after changes.",
@@ -48,8 +50,13 @@ def _profile(path):
     data = read_json(path)
     if not isinstance(data, dict) or type(data.get("version")) is not int or data["version"] != 1:
         raise ValueError("Expected scope profile version 1")
-    if set(data) - {"version", "id", "name", "description", "units"}:
+    if set(data) - {"version", "id", "name", "description", "units", "inventory_rules"}:
         raise ValueError("Unknown scope profile fields")
+    rules = data.get("inventory_rules", [])
+    if not isinstance(rules, list) or any(not isinstance(p, str) or not p.strip() for p in rules):
+        raise ValueError("inventory_rules must be an array of explicit Build.cs paths")
+    if len(set(rules)) != len(rules):
+        raise ValueError("Duplicate inventory rules")
     for key in ("id", "name", "description"):
         _string(data.get(key), key)
     if not isinstance(data.get("units"), list) or not data["units"]:
@@ -107,10 +114,15 @@ class SourceScope:
         self.project = project
         self.root = project.parent
         self.profile = _profile(profile)
+        for relative in self.profile.get("inventory_rules", []):
+            path = (self.root / relative).resolve()
+            if Path(relative).is_absolute() or not path.is_relative_to(self.root) or not path.name.endswith(".Build.cs"):
+                raise ValueError("Inventory rules must be project-local Build.cs paths")
         self.units = {}
         self.paths = {}
         self.problems = []
         seen_files = set()
+        module_records_cache = {}
         fingerprint = hashlib.sha256(_json([
             str(project), descriptor, self.profile, frontend_version(), UE_RETRIEVAL_RULES_VERSION,
         ]).encode("utf-8"))
@@ -125,7 +137,8 @@ class SourceScope:
                     raise ValueError(f"Duplicate source file in scope: {relative}")
                 seen_files.add(canonical)
                 paths.append(path)
-            loaded = load_source_context(paths, engine_override, load_includes=True)
+            loaded = load_source_context(paths, engine_override, load_includes=True,
+                                         module_records_cache=module_records_cache)
             if loaded["project_root"] != self.root:
                 raise ValueError("All profile units must belong to the selected project")
             unit_id = spec["id"]
@@ -136,11 +149,21 @@ class SourceScope:
                 normalized = path.as_posix().casefold()
                 self.paths[normalized] = (path.relative_to(self.root).as_posix(), parsed["text"])
                 fingerprint.update(_json([normalized, parsed["text"]]).encode("utf-8"))
+        self.provenance = provenance(self, descriptor)
+        fingerprint.update(_json(self.provenance).encode("utf-8"))
+        # Include lookup and diagnostics depend on the selected environment too.
+        fingerprint.update(_json([[u["includes"], u["include_problems"], u["problems"]]
+                                  for u in self.units.values()]).encode("utf-8"))
         self.snapshot = fingerprint.hexdigest()[:24]
         self.types = {}
         self.functions = {}
         self.records = []
         self._build()
+        index = ScopeCandidateIndex(self)
+        for record in self.records:
+            public = record["public"]
+            if record["call"] or (public["kind"] == "symbol" and public["fact"]["kind"] == "unknown"):
+                public["resolution"] = index.analyze(record)
 
     def navigation_map(self):
         """Persist navigation hints and review evidence for focused tool queries."""
@@ -173,6 +196,7 @@ class SourceScope:
         return result_document(
             "source_navigation_map", {
                 "project": self.project.as_posix(), "snapshot": self.snapshot,
+                "provenance": self.provenance,
                 "scope": {key: self.profile[key] for key in ("id", "name", "description")},
                 "classification_source": "profile", "units": units,
                 "summary": {"units": len(units), "files": len(self.paths),
@@ -235,22 +259,29 @@ class SourceScope:
                     anchor["entry_point"] = True
                 self.functions[key] = {"anchor": anchor, "raw": raw, "unit": unit_id}
                 refs = model["references"][raw["occurrence_id"]]
-                calls = {call["start_offset"]: call for call in refs["call_details"]}
+                calls = {}
+                for call in refs["call_details"]:
+                    calls.setdefault(call["start_offset"], []).append(call)
                 covered_calls = set()
                 for index, symbol in enumerate(refs["symbol_occurrences"]):
-                    call = calls.get(symbol.get("start_offset"))
+                    matches = calls.get(symbol.get("start_offset"), [])
+                    if len(matches) > 1:
+                        matches = [c for c in matches if symbol["spelling"] in {
+                            c["callee"] + "()", (symbol.get("owner_type", "") + "->" + c["target_name"] + "()"),
+                            c["target_name"] + "()", "::".join(c["callee_path"])}]
+                    call = matches[0] if len(matches) == 1 else None
                     public = {k: v for k, v in symbol.items() if k not in {"line", "start_offset"}}
                     record = self._record("symbol", key, index, public, raw["file"], symbol["line"], call)
                     record["public"]["evidence"]["byte_offset"] = symbol["start_offset"]
                     record["symbol"] = symbol
                     self.records.append(record)
                     if call:
-                        covered_calls.add(call["start_offset"])
+                        covered_calls.add((call["start_offset"], call["syntax"]["end_offset"]))
                 for index, operation in enumerate(refs["delegate_operations"]):
                     self.records.append(self._record("delegate", key, index, operation, raw["file"],
                                                      operation["evidence"]["line"]))
                 for index, call in enumerate(refs["call_details"]):
-                    if call["start_offset"] not in covered_calls:
+                    if (call["start_offset"], call["syntax"]["end_offset"]) not in covered_calls:
                         self.records.append(self._record("call", key, index, self._call(call),
                                                          raw["file"], call["line"], call))
             names = {t["qualified_name"] for t in raw_types}
@@ -287,6 +318,8 @@ class SourceScope:
                 relation_kind, target = fact["kind"], fact["spelling"]
                 status = "unresolved" if relation_kind == "unknown" else "syntax_candidate"
                 identity = dict(fact)
+                if "resolution" in public:
+                    identity["candidate_resolution"] = public["resolution"]
                 if record["call"]:
                     identity["receiver"] = record["call"]["receiver"]
                     identity["execution_scope"] = record["call"]["execution_scope"]
@@ -314,6 +347,9 @@ class SourceScope:
                         "display": display, "count": 0}
                 if rule:
                     item["rule"] = rule
+                if "resolution" in public:
+                    item["resolution"] = {k: public["resolution"][k] for k in ("status", "reason")}
+                    item["resolution"]["candidate_count"] = len(public["resolution"]["candidates"])
                 if record["call"]:
                     call = record["call"]
                     if log_context(call):
@@ -348,7 +384,7 @@ class SourceScope:
                 result.add(key)
         return result
 
-    def query(self, *, level="system", select=None, view="behavior", focus=(), offset=0, limit=20):
+    def query(self, *, level="system", select=None, view="behavior", focus=(), offset=0, limit=20, include_audit=False):
         validate_scope_query(level, select, view, focus, offset, limit)
         focus = list(dict.fromkeys(name.strip() for name in focus))
         records = self.records
@@ -428,13 +464,23 @@ class SourceScope:
         summary = {"facts": dict(sorted(counts.items())), "hidden_by_rule": dict(sorted(hidden.items()))}
         summary["unresolved_symbols"] = sum(r["public"]["kind"] == "symbol"
                                             and r["public"]["fact"]["kind"] == "unknown" for r in records)
+        summary["unresolved_by_reason"] = dict(sorted(Counter(
+            r["public"]["resolution"]["reason"] for r in records
+            if r["public"]["kind"] == "symbol" and r["public"]["fact"]["kind"] == "unknown").items()))
+        calls = {(r["public"]["source"], r["call"]["start_offset"], r["call"]["syntax"]["end_offset"]): r
+                 for r in records if r["call"]}
+        summary["call_occurrences"] = len(calls)
+        summary["candidate_status"] = dict(sorted(Counter(
+            r["public"]["resolution"]["status"] for r in calls.values()).items()))
         if level == "system":
             summary.update(units=len(self.units), files=len(self.paths), types=len(self.types), functions=len(self.functions),
                            unclassified_types=sum(not t["anchor"]["roles"] for t in self.types.values()))
         return result_document(
             "ue_inspect_cxx_scope",
             {"scope": {"id": self.profile["id"], "name": self.profile["name"]},
-             "snapshot": self.snapshot, "level": level, "view": view, "focus": focus,
+             "snapshot": self.snapshot, "provenance": self.provenance,
+             **({"audit": audit(self)} if include_audit else {}),
+             "level": level, "view": view, "focus": focus,
              **details, "summary": summary, "items": items[offset:end],
              "page": {"offset": offset, "limit": limit, "total": len(items),
                       "next_offset": end if end < len(items) else None}},

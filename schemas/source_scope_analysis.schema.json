@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:schema:source_scope_analysis",
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "text": {"type": "string", "minLength": 1},
+    "count": {"type": "integer", "minimum": 0},
+    "status": {"enum": ["candidate", "ambiguous", "unresolved"]},
+    "reason": {"enum": ["scope_candidate", "ambiguous_candidates", "declaration_not_in_scope", "receiver_type_unresolved", "unsupported_expression", "requires_semantics", "unclassified_reference", "macro"]},
+    "location": {"$ref": "urn:ue-itps:schema:ue_inspect_cxx_scope#/$defs/location"},
+    "provenance": {
+      "type": "object",
+      "required": ["analysis_revision", "frontend", "retrieval_rules_version", "project", "descriptor_sha256", "profile_sha256", "sources_sha256", "engines", "text_hash_policy"],
+      "properties": {
+        "analysis_revision": {"const": 1}, "frontend": {"$ref": "#/$defs/text"},
+        "retrieval_rules_version": {"type": ["string", "integer"]}, "project": {"$ref": "#/$defs/text"},
+        "descriptor_sha256": {"$ref": "#/$defs/hash"}, "profile_sha256": {"$ref": "#/$defs/hash"},
+        "sources_sha256": {"$ref": "#/$defs/hash"}, "text_hash_policy": {"$ref": "#/$defs/text"},
+        "engines": {"type": "array", "items": {
+          "type": "object", "required": ["root", "build_version"],
+          "properties": {"root": {"$ref": "#/$defs/text"}, "build_version": {"type": ["object", "null"]}},
+          "additionalProperties": false
+        }}
+      }, "additionalProperties": false
+    },
+    "resolutionSummary": {
+      "type": "object", "required": ["status", "reason", "candidate_count"],
+      "properties": {"status": {"$ref": "#/$defs/status"}, "reason": {"$ref": "#/$defs/reason"}, "candidate_count": {"$ref": "#/$defs/count"}},
+      "additionalProperties": false
+    },
+    "resolution": {
+      "type": "object", "required": ["status", "reason", "basis", "next_step", "candidates"],
+      "properties": {
+        "status": {"$ref": "#/$defs/status"}, "reason": {"$ref": "#/$defs/reason"},
+        "basis": {"type": "array", "items": {"$ref": "#/$defs/text"}}, "next_step": {"$ref": "#/$defs/text"},
+        "receiver_types": {"type": "array", "items": {"$ref": "urn:ue-itps:schema:ue_inspect_cxx_scope#/$defs/anchor"}},
+        "candidates": {"type": "array", "items": {
+          "type": "object", "required": ["name", "signature", "role", "unit", "evidence"],
+          "properties": {
+            "name": {"$ref": "#/$defs/text"}, "signature": {"$ref": "#/$defs/text"},
+            "role": {"enum": ["declaration", "definition"]}, "unit": {"$ref": "#/$defs/text"},
+            "evidence": {"$ref": "#/$defs/location"},
+            "function_id": {"type": "string", "pattern": "^function:[0-9a-f]{24}$"}
+          }, "additionalProperties": false
+        }}
+      }, "additionalProperties": false
+    },
+    "audit": {
+      "type": "object", "required": ["inventory_basis", "inventories", "coverage", "files", "counting", "limits"],
+      "properties": {
+        "inventory_basis": {"enum": ["explicit_modules", "profile_only"]},
+        "inventories": {"type": "array", "items": {
+          "type": "object", "required": ["rules", "file_count", "validation", "limits"],
+          "properties": {"rules": {"$ref": "#/$defs/text"}, "file_count": {"$ref": "#/$defs/count"},
+            "validation": {"$ref": "urn:ue-itps:schema:common#/$defs/validation"},
+            "limits": {"$ref": "urn:ue-itps:schema:common#/$defs/limits"}}, "additionalProperties": false
+        }},
+        "coverage": {
+          "type": "object", "required": ["selected", "inventoried", "selected_outside_inventory", "by_status"],
+          "properties": {"selected": {"$ref": "#/$defs/count"}, "inventoried": {"type": ["integer", "null"], "minimum": 0},
+            "selected_outside_inventory": {"type": "array", "items": {"$ref": "#/$defs/text"}},
+            "by_status": {"type": "object", "additionalProperties": {"$ref": "#/$defs/count"}}}, "additionalProperties": false
+        },
+        "files": {"type": "array", "items": {
+          "type": "object", "required": ["path", "status"],
+          "properties": {"path": {"$ref": "#/$defs/text"}, "unit": {"$ref": "#/$defs/text"},
+            "status": {"enum": ["parsed", "parsed_with_diagnostics", "not_selected"]},
+            "reason": {"const": "not_in_profile"}, "text_sha256": {"$ref": "#/$defs/hash"},
+            "diagnostics": {"type": "array", "items": {"type": "object"}}}, "additionalProperties": false,
+          "allOf": [{"if": {"properties": {"status": {"const": "not_selected"}}},
+                     "then": {"required": ["reason"]}, "else": {"required": ["unit", "text_sha256", "diagnostics"]}}]
+        }},
+        "counting": {"type": "object", "additionalProperties": {"$ref": "#/$defs/text"}},
+        "limits": {"type": "array", "items": {"$ref": "#/$defs/text"}}
+      }, "additionalProperties": false
+    }
+  }
+}

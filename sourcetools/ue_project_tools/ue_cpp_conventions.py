@@ -36,6 +36,10 @@ UE_FUNCTION_LIKE_MACROS = frozenset(
 
 UE_SAME_TYPE_STATIC_ACCESSORS = frozenset({"Get"})
 
+# Scope navigation may suggest the pointee's declarations for TObjectPtr<T>->.
+# This is a syntax convention, not an operator-overload or lifetime guarantee.
+UE_SCOPE_POINTER_WRAPPERS = frozenset({"TObjectPtr"})
+
 UE_IGNORED_EXTERNAL_MACROS = frozenset({"LOCTEXT"})
 
 UE_IGNORED_EXTERNAL_MEMBER_CALLS = frozenset(

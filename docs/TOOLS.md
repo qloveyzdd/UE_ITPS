@@ -87,7 +87,20 @@ python sourcetools/ue_inspect_cxx_scope.py --project LyraStarterGame/LyraStarter
 
 配置包含 `version/id/name/description/units`，单元内是显式 `sources`，可附人工 `roles/entry_points/navigation/reviewed_sources`。工具验证定义、路径与重复项，保留未分类类型；关系名称相同不建立跨文件语义绑定。
 
-标识属于 `snapshot`。源码或配置改变后重新取得 ID。单次查询复用各文件组上下文，独立 CLI 调用重新加载范围。
+配置可附 `inventory_rules`（项目内显式 Build.cs 路径数组）。`--include-audit` 才枚举这些模块的文件路径，并返回 `audit.files/coverage/counting`：已解析、带解析诊断、未选择文件，以及逐文件文本指纹。未选择文件不读取源码；没有配置模块时 `inventory_basis=profile_only`、`inventoried=null`，不宣称项目覆盖率。无效或不可读的已选文件仍使扫描失败，不被静默跳过；模块枚举的排除规则和校验保存在 `audit.inventories`。
+
+Scope 和地图的 `provenance` 记录分析修订号、语法包/检索规则版本、工程/配置/源码摘要及 Engine 身份。源码指纹基于去 BOM、统一换行后的 UTF-8 文本；不是原始文件字节哈希。`snapshot` 还包含 Include 定位和扫描问题。源码、配置或相关环境变化后重新取得 ID；这不是构建快照或跨版本实体 ID。
+
+单次 Scope 构造复用模块目录发现结果，每个文件组解析一次。独立 CLI/Scope 重新加载范围及目录；没有磁盘解析缓存或跨扫描增量更新。
+
+### 候选声明与未解析原因
+
+- 关系层的 `resolution` 只含状态、原因和候选数量；进入 evidence 层取得完整 `basis/next_step/candidates/receiver_types`。
+- `candidates` 分别保留声明与定义的签名、文件位置和文件组；有函数体的候选提供 `function_id`，可继续进入 function/evidence 层。`receiver_types` 提供已选择接收者类型的 type ID。
+- 匹配依据为词法限定名、接收者类型与成员名、显式基类名；支持 `TObjectPtr<T>->` 的类型候选。保留重载及条件定义，不根据实参数量猜测最终重载；过滤其他文件组的静态自由函数、静态变量和匿名命名空间声明。
+- `candidate` 只是范围内声明线索；`ambiguous` 保留多种签名或多个定义；`unresolved` 附检查方向。Include 可见性、参数转换、模板实例化和虚调用派发均未验证。
+- 原因包含 `declaration_not_in_scope`、`receiver_type_unresolved`、`ambiguous_candidates`、`unsupported_expression`、`requires_semantics`；非调用未知项暂为 `unclassified_reference`。已识别宏标为 `macro`，有声明线索为 `scope_candidate`。原因描述当前索引的证据边界，不是编译错误诊断。
+- `summary.unresolved_symbols` 仍为原始 unknown 符号出现次数；`unresolved_by_reason` 的和与其相等。跨文件找到候选也不改写原始事实。`call_occurrences` 按调用起止位置去重，包含隐藏调用和 Lambda；`candidate_status` 对这些调用统计声明索引状态，因此与 unknown 符号数不同。
 
 导航地图导出器位于 `sourcetools/lyra/`，不属于 16 个核心入口：
 
@@ -97,7 +110,7 @@ python sourcetools/lyra/export_navigation_map.py --project LyraStarterGame/LyraS
 
 地图保留文件组、类型、人工职责和检查查询。导航提示只有源码文本 SHA-256 一致、定义唯一、要求证据齐全且无解析告警时才为 `reviewed`；过期或歧义降为 `candidate`，无可检查目标为 `unresolved`。重建地图不会自动更新人工复核指纹，也不实现持续变更监控。
 
-已有配置：装备导航 `lyra_equipment.json`、21 个问题的 `lyra_reviewed_navigation.json`、30 个抽样问题的 `lyra_sampling_reviewed.json`。保留问题与验证方法见 [TESTING.md](TESTING.md)。
+已有配置：装备导航 `lyra_equipment.json`、装备与技能授予链 `lyra_equipment_chain.json`（5 组/10 文件、4 条证据提示）、21 个问题的 `lyra_reviewed_navigation.json`、30 个抽样问题的 `lyra_sampling_reviewed.json`。保留问题与验证方法见 [TESTING.md](TESTING.md)。
 
 ## Editor 与辅助工具
 

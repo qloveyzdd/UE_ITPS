@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "id": "lyra-equipment-chain",
+  "name": "Lyra 装备与技能授予链",
+  "description": "检查装备入口、实例、AbilitySet 和 AbilitySystem 的范围内候选声明；引擎基类与运行时行为保留为边界。",
+  "inventory_rules": ["Source/LyraGame/LyraGame.Build.cs"],
+  "units": [
+    {
+      "id": "definition",
+      "sources": ["Source/LyraGame/Equipment/LyraEquipmentDefinition.cpp", "Source/LyraGame/Equipment/LyraEquipmentDefinition.h"],
+      "roles": {"ULyraEquipmentDefinition": ["装备配置"], "FLyraEquipmentActorToSpawn": ["生成配置"]}
+    },
+    {
+      "id": "manager",
+      "sources": ["Source/LyraGame/Equipment/LyraEquipmentManagerComponent.cpp", "Source/LyraGame/Equipment/LyraEquipmentManagerComponent.h"],
+      "roles": {"ULyraEquipmentManagerComponent": ["装备入口"], "FLyraEquipmentList": ["装备列表", "复制"], "FLyraAppliedEquipmentEntry": ["装备记录"]},
+      "entry_points": ["ULyraEquipmentManagerComponent::EquipItem", "ULyraEquipmentManagerComponent::UnequipItem"],
+      "reviewed_sources": {
+        "Source/LyraGame/Equipment/LyraEquipmentManagerComponent.cpp": "236f68b45671b5573d860c009e59c3101e1f01e3bc2bbc442deb3247edfb7209",
+        "Source/LyraGame/Equipment/LyraEquipmentManagerComponent.h": "dafdc9547945e35c99aa354f35df84bbbb0fbf0fc068fd520bed7ce8637f9d20"
+      },
+      "navigation": [
+        {"id": "equip", "intent": "装备如何进入列表", "purpose": "behavior", "kind": "function", "target": "ULyraEquipmentManagerComponent::EquipItem", "role": "system_entry", "reason": "通过装备列表 AddEntry 调用定位授予入口。", "checks": [{"kind": "call", "name": "EquipmentList.AddEntry"}]},
+        {"id": "grant", "intent": "装备如何授予技能并生成实例附属物", "purpose": "behavior", "kind": "function", "target": "FLyraEquipmentList::AddEntry", "role": "internal_function", "reason": "检查 AbilitySet 授予调用及装备实例生成调用。", "checks": [{"kind": "call", "name": "AbilitySet.GiveToAbilitySystem"}, {"kind": "call", "name": "Result.SpawnEquipmentActors"}]}
+      ]
+    },
+    {
+      "id": "instance",
+      "sources": ["Source/LyraGame/Equipment/LyraEquipmentInstance.cpp", "Source/LyraGame/Equipment/LyraEquipmentInstance.h"],
+      "roles": {"ULyraEquipmentInstance": ["装备实例", "生命周期"]},
+      "reviewed_sources": {
+        "Source/LyraGame/Equipment/LyraEquipmentInstance.cpp": "097741119d9c09824a8caaf69c3bb85fc44d961e0e74e3b124d58a9ac86fa2cd",
+        "Source/LyraGame/Equipment/LyraEquipmentInstance.h": "6a21af1aa017344650a784e9a9127156d551f82d7c6b6b9fbe012967cca13096"
+      },
+      "navigation": [
+        {"id": "spawn", "intent": "实例如何记录生成的 Actor", "purpose": "behavior", "kind": "function", "target": "ULyraEquipmentInstance::SpawnEquipmentActors", "role": "internal_function", "reason": "检查生成结果加入实例记录的源码调用。", "checks": [{"kind": "call", "name": "SpawnedActors.Add"}]}
+      ]
+    },
+    {
+      "id": "ability_set",
+      "sources": ["Source/LyraGame/AbilitySystem/LyraAbilitySet.cpp", "Source/LyraGame/AbilitySystem/LyraAbilitySet.h"],
+      "roles": {"ULyraAbilitySet": ["技能集合授予"], "FLyraAbilitySet_GrantedHandles": ["授予句柄记录"]},
+      "entry_points": ["ULyraAbilitySet::GiveToAbilitySystem"],
+      "reviewed_sources": {
+        "Source/LyraGame/AbilitySystem/LyraAbilitySet.cpp": "3eacbfce0e34ae759020dcf9bed7b6f162f36cc7c9c9679a96c6bf7398d423ae",
+        "Source/LyraGame/AbilitySystem/LyraAbilitySet.h": "cf648547ec79c238bc6e9348c4a39ee7ae86efc77064d9d30f0dc07b3974c041"
+      },
+      "navigation": [
+        {"id": "grant_to_asc", "intent": "AbilitySet 如何调用 AbilitySystem", "purpose": "behavior", "kind": "function", "target": "ULyraAbilitySet::GiveToAbilitySystem", "role": "internal_function", "reason": "保留 GiveAbility 调用证据，实际声明可能位于未选择的引擎基类。", "checks": [{"kind": "call", "name": "LyraASC.GiveAbility"}, {"kind": "call", "name": "OutGrantedHandles.AddAbilitySpecHandle"}]}
+      ]
+    },
+    {
+      "id": "ability_system",
+      "sources": ["Source/LyraGame/AbilitySystem/LyraAbilitySystemComponent.cpp", "Source/LyraGame/AbilitySystem/LyraAbilitySystemComponent.h"],
+      "roles": {"ULyraAbilitySystemComponent": ["技能系统组件"]}
+    }
+  ]
+}

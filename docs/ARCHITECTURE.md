@@ -34,9 +34,12 @@ Editor 证据经 `edittools/ue_editor_tools/remote_client.py` 与 `runtime/` 从
 | 语法前端 | `cpp_frontend.py`、`syntax_tree.py` | Tree-sitter UE C++ / C# AST 事实 |
 | 局部分析 | `source_type_*.py`、`source_function_references.py`、`source_delegate_analysis.py` | 类型成员、函数引用、名称解析及委托操作 |
 | 检索展示 | `source_priority.py`、`source_scope.py`、`navigation_guidance.py` | 优先级视图、分页、快照标识和证据导航 |
+| 范围审计与候选 | `source_scope_audit.py`、`source_scope_candidates.py` | 输入指纹、物理覆盖清单、未知原因、范围内声明候选与位置 |
 | UE 规则 | `ue_cpp_conventions.py` | UE 宏、委托 API 与检索规则的共同来源 |
 
 各工具保持独立 Schema，不把后续查询结果塞回较早的工程描述符结果。核心 Schema 位于 `schemas/`，采用 Draft 2020-12。
+
+Scope 在局部事实之上建立候选索引，保留原始符号种类和计数。候选索引使用各文件组可用的声明，隔离其他文件组的静态自由函数/变量和匿名命名空间声明；它不计算实际编译可见性。模块目录仅在同一次 Scope 构造中复用，新的扫描重新发现，Include 定位仍查询文件系统。
 
 ## 文件图谱与页面
 
@@ -57,10 +60,11 @@ Editor 证据经 `edittools/ue_editor_tools/remote_client.py` 与 `runtime/` 从
 - 不执行预处理、编译器重载解析、传递依赖求值或跨文件语义绑定。
 - `identified` 委托表示选中文件中有类型证据且 API 形状匹配；`candidate`、`unknown` 保留不确定性。
 - `function_id` 与 Scope 选择 ID 依赖文件选择和解析快照，不能当作跨版本稳定实体 ID。
+- Scope/地图携带输入与环境摘要；覆盖审计按需展开。没有模块清单输入时不报告全项目覆盖率；文本哈希不等同于原始字节或 Git 提交身份。
 - 人工职责、入口和导航提示属于配置；文件指纹一致不等于已经理解整个类型或系统。
 - 核心 CLI 退出码为 0（完成且无阻断问题）、1（扫描发现阻断问题）、2（参数/输入/读取失败）。`warning` 可以与退出码 0 并存。
 - 静态校验、模拟 Editor 测试、真实 Editor 观察、构建和运行测试分别报告。
 
 ## 尚未完成
 
-完整职责覆盖、业务管线自动识别、跨文件调用图、自动自然语言路由、变更监控、提交绑定信息池、权威晋升/失效、隔离写入和多任务编排均未形成当前产品能力。长期设想保存在[项目状态](../.planning/PROJECT.md)中，不作为现有接口契约。
+完整职责覆盖、业务管线自动识别、经语义验证的跨文件调用图、自动自然语言路由、磁盘解析缓存、变更监控、提交绑定信息池、权威晋升/失效、隔离写入和多任务编排均未形成当前产品能力。长期设想保存在[项目状态](../.planning/PROJECT.md)中，不作为现有接口契约。

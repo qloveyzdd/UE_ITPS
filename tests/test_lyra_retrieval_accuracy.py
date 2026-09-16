@@ -34,6 +34,8 @@ class LyraRetrievalAccuracyTests(unittest.TestCase):
         cls.guides = {g["id"]: g for u in cls.document["units"] for g in u.get("navigation", [])}
         common = json.loads((ROOT / "schemas/common.schema.json").read_text(encoding="utf-8"))
         cls.registry = Registry().with_resource(common["$id"], Resource.from_contents(common))
+        analysis = json.loads((ROOT / "schemas/source_scope_analysis.schema.json").read_text(encoding="utf-8"))
+        cls.registry = cls.registry.with_resource(analysis["$id"], Resource.from_contents(analysis))
 
     def assert_schema(self, document):
         schema = json.loads((ROOT / "schemas" / (document["schema_version"] + ".schema.json")).read_text(encoding="utf-8"))

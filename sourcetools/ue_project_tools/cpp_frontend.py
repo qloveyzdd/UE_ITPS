@@ -673,6 +673,15 @@ def _function_declarator(node: Node) -> Node | None:
     return function
 
 
+def _anonymous_namespace(node: Node) -> bool:
+    parent = node.parent
+    while parent is not None:
+        if parent.type == "namespace_definition" and parent.child_by_field_name("name") is None:
+            return True
+        parent = parent.parent
+    return False
+
+
 def _function_qualifiers(
     node: Node, function_declarator: Node, source: bytes
 ) -> list[str]:
@@ -775,6 +784,7 @@ def _function_fact(
         "qualifiers": qualifiers,
         "role": role,
         "linkage": "internal" if "static" in qualifiers else "external",
+        "anonymous_namespace": _anonymous_namespace(node),
         "file": file_key,
         "line": _line(node),
         "column": int(node.start_point.column) + 1,
@@ -1067,6 +1077,7 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                 aliases.append({
                     "qualified_name": "::".join((*namespaces, *owners, _text(name_node, source))),
                     "type": _type_fact(target, source), "file": file_key, "line": _line(node),
+                    "anonymous_namespace": _anonymous_namespace(node),
                 })
             return
         if node.type == "namespace_definition":
@@ -1173,6 +1184,7 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
             types.append(
                 {
                     "usr": f"{kind}|{qualified}",
+                    "anonymous_namespace": _anonymous_namespace(node),
                     "kind": kind,
                     "name": name,
                     "namespace": "::".join(namespaces) or None,
@@ -1275,6 +1287,7 @@ def _parse_file(path: Path, parser: Parser) -> dict[str, Any]:
                     variables.append(
                         {
                             "usr": f"variable|{qualified}",
+                            "anonymous_namespace": _anonymous_namespace(node),
                             "name": name,
                             "qualified_name": qualified,
                             "namespace": namespace or None,

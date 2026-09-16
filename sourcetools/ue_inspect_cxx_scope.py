@@ -20,12 +20,13 @@ def main():
     parser.add_argument("--offset", type=int, default=0, help="分页起点 / Page offset")
     parser.add_argument("--limit", type=int, default=20, help="每页 1 至 100 项 / Page size from 1 to 100")
     parser.add_argument("--engine-root", metavar="PATH", help="显式 Engine 根目录 / Engine root override")
+    parser.add_argument("--include-audit", action="store_true", help="展开覆盖清单、输入指纹和统计口径 / Include input and coverage audit")
     args = parser.parse_args()
     try:
         validate_scope_query(args.level, args.select, args.view, args.focus, args.offset, args.limit)
         scope = SourceScope(Path(args.project), Path(args.profile), Path(args.engine_root) if args.engine_root else None)
         result = scope.query(level=args.level, select=args.select, view=args.view, focus=args.focus,
-                             offset=args.offset, limit=args.limit)
+                             offset=args.offset, limit=args.limit, include_audit=args.include_audit)
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
     print(json_text(result), end="")

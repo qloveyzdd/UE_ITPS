@@ -55,6 +55,7 @@ def expression(node, source):
     if node.type == "field_expression":
         result["receiver"] = expression(node.child_by_field_name("argument"), source)
         result["name"] = text(node.child_by_field_name("field"), source)
+        result["operator"] = text(node.child_by_field_name("operator"), source)
     elif node.type == "call_expression":
         result["function"] = expression(node.child_by_field_name("function"), source)
     elif node.type == "qualified_identifier":

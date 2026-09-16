@@ -47,6 +47,7 @@
         "display": {"enum": ["expand", "fold", "hide"]}, "count": {"type": "integer", "minimum": 1},
         "rule": {"$ref": "#/$defs/text"},
         "receiver": {"$ref": "#/$defs/text"},
+        "resolution": {"$ref": "urn:ue-itps:schema:source_scope_analysis#/$defs/resolutionSummary"},
         "context": {"$ref": "urn:ue-itps:schema:common#/$defs/logContext"},
         "execution_scope": {"$ref": "#/$defs/call/properties/execution_scope"}
       },
@@ -66,7 +67,8 @@
       "properties": {
         "kind": {"enum": ["symbol", "delegate", "include", "call"]}, "id": {"$ref": "#/$defs/id"},
         "source": {"$ref": "#/$defs/text"}, "evidence": {"$ref": "#/$defs/location"},
-        "fact": {"type": "object"}, "call": {"$ref": "#/$defs/call"}
+        "fact": {"type": "object"}, "call": {"$ref": "#/$defs/call"},
+        "resolution": {"$ref": "urn:ue-itps:schema:source_scope_analysis#/$defs/resolution"}
       },
       "additionalProperties": false,
       "allOf": [
@@ -90,6 +92,8 @@
         "schema_version": {"const": "ue_inspect_cxx_scope"},
         "scope": {"type": "object", "required": ["id", "name"], "properties": {"id": {"$ref": "#/$defs/text"}, "name": {"$ref": "#/$defs/text"}}, "additionalProperties": false},
         "snapshot": {"type": "string", "pattern": "^[0-9a-f]{24}$"},
+        "provenance": {"$ref": "urn:ue-itps:schema:source_scope_analysis#/$defs/provenance"},
+        "audit": {"$ref": "urn:ue-itps:schema:source_scope_analysis#/$defs/audit"},
         "level": {"enum": ["system", "type", "function", "evidence"]},
         "view": {"enum": ["full", "behavior", "structure"]},
         "focus": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/text"}},
@@ -103,6 +107,8 @@
         "summary": {
           "type": "object", "required": ["facts", "hidden_by_rule"],
           "properties": {"facts": {"$ref": "#/$defs/counts"}, "hidden_by_rule": {"$ref": "#/$defs/counts"},
+                         "unresolved_by_reason": {"$ref": "#/$defs/counts"}, "call_occurrences": {"$ref": "#/$defs/count"},
+                         "candidate_status": {"$ref": "#/$defs/counts"},
                          "units": {"$ref": "#/$defs/count"}, "files": {"$ref": "#/$defs/count"},
                          "types": {"$ref": "#/$defs/count"}, "functions": {"$ref": "#/$defs/count"},
                          "unclassified_types": {"$ref": "#/$defs/count"}, "unresolved_symbols": {"$ref": "#/$defs/count"}},

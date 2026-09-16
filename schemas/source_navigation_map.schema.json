@@ -99,6 +99,7 @@
         "schema_version": {"const": "source_navigation_map"},
         "project": {"$ref": "#/$defs/text"},
         "snapshot": {"type": "string", "pattern": "^[0-9a-f]{24}$"},
+        "provenance": {"$ref": "urn:ue-itps:schema:source_scope_analysis#/$defs/provenance"},
         "scope": {
           "type": "object", "required": ["id", "name", "description"],
           "properties": {"id": {"$ref": "#/$defs/text"}, "name": {"$ref": "#/$defs/text"}, "description": {"$ref": "#/$defs/text"}},

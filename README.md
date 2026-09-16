@@ -14,6 +14,8 @@ UE ITPS 将 Unreal Engine 工程中的源码、构建声明和 Editor 现场信�
 
 C++/UE 宏与 C# 均由 Tree-sitter 前端解析。源码工具只分析明确选择的文件或配置范围；不执行编译、预处理、跨文件语义绑定或运行时验证。职责标签与导航提示来自人工配置。
 
+Scope 已支持输入指纹、按需覆盖审计、未解析原因和范围内跨文件候选声明。候选保留签名、声明/定义位置与导航 ID；重载和条件定义不自动择一。单次扫描复用模块目录，独立扫描仍重新发现环境。
+
 当前文件数据库尚未实现提交绑定、不可变快照、增量更新或权威审查；完整业务关系图、自然语言自动路由和 Agent 写入编排也未实现。详见[架构与边界](docs/ARCHITECTURE.md)。
 
 ## 安装
@@ -45,6 +47,14 @@ python sourcetools/ue_inspect_cxx_function.py --source D:/Projects/MyGame/Source
 ```
 
 函数选择名应来自函数清单。输出中的 `validation` 是本次扫描校验，`limits` 说明分析边界；`ok` 不代表编译或运行通过。
+
+检查装备→AbilitySet→AbilitySystem 的候选链及扫描覆盖：
+
+```bash
+python sourcetools/ue_inspect_cxx_scope.py --project LyraStarterGame/LyraStarterGame.uproject --profile sourcetools/profiles/lyra_equipment_chain.json --include-audit
+```
+
+`audit` 区分模块文件清单与实际解析文件；详细候选在 evidence 层的 `resolution` 中。范围内缺少方法声明时，可通过 `receiver_types` 查看已知接收者类型。
 
 ## 测试
 

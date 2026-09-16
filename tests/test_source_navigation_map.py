@@ -45,6 +45,8 @@ class NavigationMapTests(unittest.TestCase):
         schema = json.loads((ROOT / "schemas/source_navigation_map.schema.json").read_text(encoding="utf-8"))
         common = json.loads((ROOT / "schemas/common.schema.json").read_text(encoding="utf-8"))
         registry = Registry().with_resource(common["$id"], Resource.from_contents(common))
+        analysis = json.loads((ROOT / "schemas/source_scope_analysis.schema.json").read_text(encoding="utf-8"))
+        registry = registry.with_resource(analysis["$id"], Resource.from_contents(analysis))
         Draft202012Validator(schema, registry=registry).validate(document)
 
     def test_saved_map_uses_old_queries_without_rebuilding_scope(self):
