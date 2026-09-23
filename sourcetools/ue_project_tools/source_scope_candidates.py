@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 
 from .source_name_resolution import LocalNameResolver, lookup
+from .semantic_contracts import contracts_for_call
 from .ue_cpp_conventions import UE_SCOPE_POINTER_WRAPPERS
 
 
@@ -16,6 +17,8 @@ NEXT_STEPS = {
     "unclassified_reference": "Inspect the located non-call reference; this index currently follows calls only.",
     "scope_candidate": "Follow the candidate locations; this is not a compiler-resolved or runtime call edge.",
     "macro": "Inspect the macro definition and preprocessing context; do not treat it as a function edge.",
+    "semantic_contract": "A bounded UE API contract matched; compiler headers are still needed for exact overload and visibility.",
+    "member_address": "Inspect the member declaration; this is an address/member reference, not an external call.",
 }
 
 
@@ -84,11 +87,19 @@ class ScopeCandidateIndex:
         if public["kind"] == "symbol" and fact["kind"] == "macro":
             return self._result("macro")
         if call is None:
+            expression = str(fact.get("spelling") or "")
+            if re.fullmatch(r"&\s*[A-Za-z_]\w*(?:\s*(?:\.|->)\s*[A-Za-z_]\w*)+", expression):
+                member = expression.lstrip("&").strip()
+                return self._result("member_address", status="candidate", member={
+                    "expression": expression,
+                    "path": [part.strip() for part in re.split(r"\.|->", member)],
+                })
             return self._result("unclassified_reference")
         syntax = call["syntax"]["function"]
         lexical_scope = function["qualified_name"]
         candidates, basis = [], []
         receiver_types = []
+        owner = ""
         reason = "declaration_not_in_scope"
         if call["receiver_kind"] == "indirect":
             return self._result("unsupported_expression")
@@ -116,6 +127,10 @@ class ScopeCandidateIndex:
                 candidates, basis = self._members(function["qualified_name"].rpartition("::")[0], name, resolver)
         candidates = list({item["occurrence_id"]: item for item in candidates}.values())
         if not candidates:
+            contracts = contracts_for_call(call, function, resolver)
+            if contracts:
+                return self._result("semantic_contract", status="candidate", contracts=contracts,
+                                    receiver_types=receiver_types)
             if call.get("template_arguments") and reason == "declaration_not_in_scope":
                 reason = "requires_semantics"
             return {**self._result(reason), "receiver_types": receiver_types}
@@ -141,6 +156,12 @@ class ScopeCandidateIndex:
         return result
 
     @staticmethod
-    def _result(reason):
-        return {"status": "unresolved", "reason": reason, "next_step": NEXT_STEPS[reason],
-                "basis": [], "candidates": []}
+    def _result(reason, *, status="unresolved", contracts=None, receiver_types=None, member=None):
+        result = {"status": status, "reason": reason, "next_step": NEXT_STEPS[reason],
+                  "basis": ["ue_api_contract"] if contracts else (["member_address_syntax"] if member else []), "candidates": [],
+                  "contracts": list(contracts or [])}
+        if receiver_types is not None:
+            result["receiver_types"] = receiver_types
+        if member is not None:
+            result["member"] = member
+        return result

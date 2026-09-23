@@ -350,6 +350,7 @@ class SourceScope:
                 if "resolution" in public:
                     item["resolution"] = {k: public["resolution"][k] for k in ("status", "reason")}
                     item["resolution"]["candidate_count"] = len(public["resolution"]["candidates"])
+                    item["resolution"]["contract_count"] = len(public["resolution"].get("contracts", []))
                 if record["call"]:
                     call = record["call"]
                     if log_context(call):
@@ -472,6 +473,10 @@ class SourceScope:
         summary["call_occurrences"] = len(calls)
         summary["candidate_status"] = dict(sorted(Counter(
             r["public"]["resolution"]["status"] for r in calls.values()).items()))
+        summary["semantic_contracts"] = sum(
+            len(r["public"].get("resolution", {}).get("contracts", []))
+            for r in calls.values()
+        )
         if level == "system":
             summary.update(units=len(self.units), files=len(self.paths), types=len(self.types), functions=len(self.functions),
                            unclassified_types=sum(not t["anchor"]["roles"] for t in self.types.values()))

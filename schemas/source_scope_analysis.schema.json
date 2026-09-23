@@ -6,13 +6,13 @@
     "text": {"type": "string", "minLength": 1},
     "count": {"type": "integer", "minimum": 0},
     "status": {"enum": ["candidate", "ambiguous", "unresolved"]},
-    "reason": {"enum": ["scope_candidate", "ambiguous_candidates", "declaration_not_in_scope", "receiver_type_unresolved", "unsupported_expression", "requires_semantics", "unclassified_reference", "macro"]},
+    "reason": {"enum": ["scope_candidate", "ambiguous_candidates", "declaration_not_in_scope", "receiver_type_unresolved", "unsupported_expression", "requires_semantics", "semantic_contract", "member_address", "unclassified_reference", "macro"]},
     "location": {"$ref": "urn:ue-itps:schema:ue_inspect_cxx_scope#/$defs/location"},
     "provenance": {
       "type": "object",
       "required": ["analysis_revision", "frontend", "retrieval_rules_version", "project", "descriptor_sha256", "profile_sha256", "sources_sha256", "engines", "text_hash_policy"],
       "properties": {
-        "analysis_revision": {"const": 1}, "frontend": {"$ref": "#/$defs/text"},
+        "analysis_revision": {"const": 2}, "frontend": {"$ref": "#/$defs/text"},
         "retrieval_rules_version": {"type": ["string", "integer"]}, "project": {"$ref": "#/$defs/text"},
         "descriptor_sha256": {"$ref": "#/$defs/hash"}, "profile_sha256": {"$ref": "#/$defs/hash"},
         "sources_sha256": {"$ref": "#/$defs/hash"}, "text_hash_policy": {"$ref": "#/$defs/text"},
@@ -25,15 +25,29 @@
     },
     "resolutionSummary": {
       "type": "object", "required": ["status", "reason", "candidate_count"],
-      "properties": {"status": {"$ref": "#/$defs/status"}, "reason": {"$ref": "#/$defs/reason"}, "candidate_count": {"$ref": "#/$defs/count"}},
+      "properties": {"status": {"$ref": "#/$defs/status"}, "reason": {"$ref": "#/$defs/reason"}, "candidate_count": {"$ref": "#/$defs/count"}, "contract_count": {"$ref": "#/$defs/count"}},
+      "additionalProperties": false
+    },
+    "contract": {
+      "type": "object", "required": ["kind", "name", "source"],
+      "properties": {
+        "kind": {"$ref": "#/$defs/text"}, "name": {"$ref": "#/$defs/text"},
+        "source": {"const": "ue_api_contract"}, "owner": {"$ref": "#/$defs/text"},
+        "template_type": {"$ref": "#/$defs/text"}, "effect": {"$ref": "#/$defs/text"}
+      }, "additionalProperties": false
+    },
+    "member": {
+      "type": "object", "required": ["expression", "path"],
+      "properties": {"expression": {"$ref": "#/$defs/text"}, "path": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/text"}}},
       "additionalProperties": false
     },
     "resolution": {
-      "type": "object", "required": ["status", "reason", "basis", "next_step", "candidates"],
+      "type": "object", "required": ["status", "reason", "basis", "next_step", "candidates", "contracts"],
       "properties": {
         "status": {"$ref": "#/$defs/status"}, "reason": {"$ref": "#/$defs/reason"},
         "basis": {"type": "array", "items": {"$ref": "#/$defs/text"}}, "next_step": {"$ref": "#/$defs/text"},
         "receiver_types": {"type": "array", "items": {"$ref": "urn:ue-itps:schema:ue_inspect_cxx_scope#/$defs/anchor"}},
+        "contracts": {"type": "array", "items": {"$ref": "#/$defs/contract"}}, "member": {"$ref": "#/$defs/member"},
         "candidates": {"type": "array", "items": {
           "type": "object", "required": ["name", "signature", "role", "unit", "evidence"],
           "properties": {

@@ -109,6 +109,7 @@
           "properties": {"facts": {"$ref": "#/$defs/counts"}, "hidden_by_rule": {"$ref": "#/$defs/counts"},
                          "unresolved_by_reason": {"$ref": "#/$defs/counts"}, "call_occurrences": {"$ref": "#/$defs/count"},
                          "candidate_status": {"$ref": "#/$defs/counts"},
+                         "semantic_contracts": {"$ref": "#/$defs/count"},
                          "units": {"$ref": "#/$defs/count"}, "files": {"$ref": "#/$defs/count"},
                          "types": {"$ref": "#/$defs/count"}, "functions": {"$ref": "#/$defs/count"},
                          "unclassified_types": {"$ref": "#/$defs/count"}, "unresolved_symbols": {"$ref": "#/$defs/count"}},

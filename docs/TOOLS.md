@@ -95,12 +95,13 @@ Scope 和地图的 `provenance` 记录分析修订号、语法包/检索规则�
 
 ### 候选声明与未解析原因
 
-- 关系层的 `resolution` 只含状态、原因和候选数量；进入 evidence 层取得完整 `basis/next_step/candidates/receiver_types`。
+- 关系层的 `resolution` 含状态、原因、候选数量和契约数量；进入 evidence 层取得完整 `basis/next_step/candidates/receiver_types/contracts/member`。
 - `candidates` 分别保留声明与定义的签名、文件位置和文件组；有函数体的候选提供 `function_id`，可继续进入 function/evidence 层。`receiver_types` 提供已选择接收者类型的 type ID。
 - 匹配依据为词法限定名、接收者类型与成员名、显式基类名；支持 `TObjectPtr<T>->` 的类型候选。保留重载及条件定义，不根据实参数量猜测最终重载；过滤其他文件组的静态自由函数、静态变量和匿名命名空间声明。
-- `candidate` 只是范围内声明线索；`ambiguous` 保留多种签名或多个定义；`unresolved` 附检查方向。Include 可见性、参数转换、模板实例化和虚调用派发均未验证。
-- 原因包含 `declaration_not_in_scope`、`receiver_type_unresolved`、`ambiguous_candidates`、`unsupported_expression`、`requires_semantics`；非调用未知项暂为 `unclassified_reference`。已识别宏标为 `macro`，有声明线索为 `scope_candidate`。原因描述当前索引的证据边界，不是编译错误诊断。
-- `summary.unresolved_symbols` 仍为原始 unknown 符号出现次数；`unresolved_by_reason` 的和与其相等。跨文件找到候选也不改写原始事实。`call_occurrences` 按调用起止位置去重，包含隐藏调用和 Lambda；`candidate_status` 对这些调用统计声明索引状态，因此与 unknown 符号数不同。
+- `candidate` 表示声明线索、有限 API 角色提示或成员地址语法分类，以 `reason` 区分；契约和地址分类的 `candidates` 为空，不生成可跳转的引擎声明。`ambiguous` 保留多种签名或多个定义；`unresolved` 附检查方向。Include 可见性、参数转换、模板实例化和虚调用派发均未验证。
+- 原因包含 `declaration_not_in_scope`、`receiver_type_unresolved`、`ambiguous_candidates`、`unsupported_expression`、`requires_semantics`、`semantic_contract`、`member_address`；非调用未知项暂为 `unclassified_reference`。已识别宏标为 `macro`，有声明线索为 `scope_candidate`。`semantic_contract` 只说明有限的 UE API 角色（复制生命周期、FastArray、AbilitySystem、工厂/类型收窄等），不证明重载、可见性或运行派发；`member_address` 只标记成员地址语法，仍需检查成员声明。原因描述当前索引的证据边界，不是编译错误诊断。
+- 契约要求匹配未被选中声明遮蔽的自由函数名，或接收者/基类类型与调用形状；布尔回调检查实际类型签名及别名。普通同名方法、局部遮蔽和无法确定类型的迭代器保持未解析。当前 `analysis_revision=2`，旧快照的选择 ID 需重新获取。
+- `summary.unresolved_symbols` 仍为原始 unknown 符号出现次数；`unresolved_by_reason` 的和与其相等。`summary.semantic_contracts` 按唯一调用位置统计有限契约，跨文件找到候选或契约也不改写原始事实。断言、日志、保护函数不新增契约。`call_occurrences` 按调用起止位置去重，包含隐藏调用和 Lambda；`candidate_status` 对这些调用统计解析状态，因此与 unknown 符号数不同。
 
 导航地图导出器位于 `sourcetools/lyra/`，不属于 16 个核心入口：
 

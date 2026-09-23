@@ -94,11 +94,101 @@ class ScopeAnalysisTests(unittest.TestCase):
         self.assertEqual(sum(summary["unresolved_by_reason"].values()), summary["unresolved_symbols"])
         calls = self.calls(scope)
         self.assertEqual(calls["Missing"]["resolution"]["reason"], "declaration_not_in_scope")
-        self.assertEqual(calls["NewObject<AWorker>"]["resolution"]["reason"], "requires_semantics")
+        factory = calls["NewObject<AWorker>"]["resolution"]
+        self.assertEqual(factory["reason"], "semantic_contract")
+        self.assertEqual(factory["contracts"][0]["kind"], "ue_factory")
+        self.assertEqual(factory["contracts"][0]["template_type"], "AWorker")
         for record in scope.records:
             if record["public"]["kind"] == "symbol" and record["public"]["fact"]["kind"] == "unknown":
                 self.assertTrue(record["public"]["resolution"]["next_step"])
                 self.assertGreater(record["public"]["evidence"]["line"], 0)
+
+    def test_member_address_and_factory_contracts_are_bounded(self):
+        write_text(self.fixture.header, "struct FEntry { int Value; }; class AWorker { public: void BeginPlay(); };")
+        write_text(self.fixture.source, "void AWorker::BeginPlay() { FEntry Entry; Consume(&Entry.Value); Cast<AWorker>(this); GetDefault<AWorker>(); }")
+        scope = self.build()
+        calls = self.calls(scope)
+        self.assertEqual(calls["Cast<AWorker>"]["resolution"]["contracts"][0]["kind"], "type_narrowing")
+        self.assertEqual(calls["GetDefault<AWorker>"]["resolution"]["contracts"][0]["kind"], "ue_factory")
+        addresses = [r["public"]["resolution"] for r in scope.records
+                     if r["public"].get("resolution", {}).get("reason") == "member_address"]
+        self.assertTrue(addresses)
+        self.assertEqual(addresses[0]["member"]["path"], ["Entry", "Value"])
+
+    def test_contracts_reject_unrelated_receivers_qualified_names_and_shadowing(self):
+        write_text(self.fixture.header, "class ULyraAbilitySystemComponent : public UAbilitySystemComponent { public: void Run(); };")
+        write_text(self.fixture.source, """
+            void ULyraAbilitySystemComponent::Run() {
+                FOther Other; Other.NewObject<int>(); Other::Cast<int>(0);
+                Other.TryActivateAbility(); Other.HasAuthority();
+                Other.GetDynamicSpecSourceTags().AddTag(1);
+                FOther AbilityTargetDataMap; AbilityTargetDataMap.Find(1);
+                FOther SpecHandle; SpecHandle.Data.Get();
+                auto NewObject = []{}; NewObject<int>();
+                auto ShouldCancelFunc = []{}; ShouldCancelFunc();
+                FOther EntryIt; EntryIt.RemoveCurrent();
+            }
+        """)
+        for name, item in self.calls(self.build(), "ULyraAbilitySystemComponent::Run").items():
+            with self.subTest(callee=name):
+                self.assertFalse(item["resolution"]["contracts"])
+
+    def test_contracts_follow_declared_types_and_keep_local_candidates(self):
+        write_text(self.fixture.header, """
+            class UMyComponent : public UActorComponent { public: void Run(); };
+            struct FMyArray : FFastArraySerializer { void Run(); };
+            class UMyASC : public UAbilitySystemComponent { public: void Run(); };
+            struct FOther { void HasAuthority(); };
+        """)
+        write_text(self.fixture.source, """
+            void UMyComponent::Run() { IsReadyForReplication(); FOther Other; Other.HasAuthority(); }
+            void FMyArray::Run() { MarkArrayDirty(); }
+            void UMyASC::Run() {
+                TryActivateAbility(1); UAbilitySystemComponent* Remote; Remote->GiveAbility(1);
+                FGameplayAbilitySpec Renamed; Renamed.GetDynamicSpecSourceTags().HasTagExact(1);
+                FGameplayEffectSpec Effect; Effect.DynamicGrantedTags.AddTag(1);
+                FGameplayEffectSpecHandle Handle; Handle.Data.Get();
+                TFunctionRef<bool(int)> Predicate; Predicate(1);
+                check(1); ensure(1); GetNameSafe(this); IsValid(this);
+            }
+        """)
+        scope = self.build()
+        component = self.calls(scope, "UMyComponent::Run")
+        self.assertEqual(component["IsReadyForReplication"]["resolution"]["contracts"][0]["kind"], "replication_lifecycle")
+        self.assertEqual(component["Other.HasAuthority"]["resolution"]["reason"], "scope_candidate")
+        self.assertFalse(component["Other.HasAuthority"]["resolution"]["contracts"])
+        self.assertEqual(self.calls(scope, "FMyArray::Run")["MarkArrayDirty"]["resolution"]["contracts"][0]["kind"], "fast_array_replication")
+        calls = self.calls(scope, "UMyASC::Run")
+        for name, kind in {
+            "TryActivateAbility": "ability_system_api", "Remote.GiveAbility": "ability_system_api",
+            "Renamed.GetDynamicSpecSourceTags().HasTagExact": "gameplay_tag_query",
+            "Effect.DynamicGrantedTags.AddTag": "gameplay_tag_write",
+            "Handle.Data.Get": "handle_storage_access", "Predicate": "callback_predicate",
+        }.items():
+            with self.subTest(callee=name):
+                self.assertEqual(calls[name]["resolution"]["contracts"][0]["kind"], kind)
+        for name in ("check", "ensure", "GetNameSafe", "IsValid"):
+            self.assertFalse(calls[name]["resolution"]["contracts"])
+
+    def test_member_address_requires_address_syntax(self):
+        write_text(self.fixture.source, "void AWorker::BeginPlay() { Consume(&Entry.Value); Consume(&Get().Value); }")
+        scope = self.build()
+        addresses = [r["public"] for r in scope.records if r["public"].get("resolution", {}).get("reason") == "member_address"]
+        self.assertEqual([r["fact"]["spelling"] for r in addresses], ["&Entry.Value"])
+
+    def test_free_functions_and_boolean_callback_types(self):
+        write_text(self.fixture.header, "using FPredicate = TFunctionRef<bool(int)>;")
+        write_text(self.fixture.source, """
+            void Run(FPredicate Predicate, TFunctionRef<void(int)> Action,
+                     TFunctionRefLike Lookalike, TShouldCancelAbilityFuncUnknown Unknown) {
+                Predicate(1); Action(1); Lookalike(1); Unknown(1); Missing();
+            }
+        """)
+        calls = self.calls(self.build(), "Run")
+        self.assertEqual(calls["Predicate"]["resolution"]["contracts"][0]["kind"], "callback_predicate")
+        for name in ("Action", "Lookalike", "Unknown", "Missing"):
+            with self.subTest(callee=name):
+                self.assertFalse(calls[name]["resolution"]["contracts"])
 
     def test_cross_unit_candidate_and_definition_navigation(self):
         self.add_unit("Service", "struct FService { void Work(); };", "void FService::Work() {}")

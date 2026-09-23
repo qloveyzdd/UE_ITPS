@@ -12,7 +12,7 @@ from .project_cxx_sources import list_module_cxx_sources
 from .ue_cpp_conventions import UE_RETRIEVAL_RULES_VERSION
 
 
-SCOPE_ANALYSIS_REVISION = 1
+SCOPE_ANALYSIS_REVISION = 2
 
 
 def digest(value):

@@ -34,12 +34,12 @@ Editor 证据经 `edittools/ue_editor_tools/remote_client.py` 与 `runtime/` 从
 | 语法前端 | `cpp_frontend.py`、`syntax_tree.py` | Tree-sitter UE C++ / C# AST 事实 |
 | 局部分析 | `source_type_*.py`、`source_function_references.py`、`source_delegate_analysis.py` | 类型成员、函数引用、名称解析及委托操作 |
 | 检索展示 | `source_priority.py`、`source_scope.py`、`navigation_guidance.py` | 优先级视图、分页、快照标识和证据导航 |
-| 范围审计与候选 | `source_scope_audit.py`、`source_scope_candidates.py` | 输入指纹、物理覆盖清单、未知原因、范围内声明候选与位置 |
+| 范围审计与候选 | `source_scope_audit.py`、`source_scope_candidates.py`、`semantic_contracts.py` | 输入指纹、物理覆盖清单、未知原因、范围内声明候选与有限 UE API 语义契约 |
 | UE 规则 | `ue_cpp_conventions.py` | UE 宏、委托 API 与检索规则的共同来源 |
 
 各工具保持独立 Schema，不把后续查询结果塞回较早的工程描述符结果。核心 Schema 位于 `schemas/`，采用 Draft 2020-12。
 
-Scope 在局部事实之上建立候选索引，保留原始符号种类和计数。候选索引使用各文件组可用的声明，隔离其他文件组的静态自由函数/变量和匿名命名空间声明；它不计算实际编译可见性。模块目录仅在同一次 Scope 构造中复用，新的扫描重新发现，Include 定位仍查询文件系统。
+Scope 在局部事实之上建立候选索引，保留原始符号种类和计数。候选索引使用各文件组可用的声明，隔离其他文件组的静态自由函数/变量和匿名命名空间声明；它不计算实际编译可见性。对少数高价值 UE API 只附加有边界的角色契约，并与声明候选分开。模块目录仅在同一次 Scope 构造中复用，新的扫描重新发现，Include 定位仍查询文件系统。
 
 ## 文件图谱与页面
 

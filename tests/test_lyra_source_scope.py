@@ -172,6 +172,7 @@ class LyraEquipmentChainTests(unittest.TestCase):
         self.assertEqual(result["audit"]["coverage"]["selected"], 10)
         self.assertEqual(result["audit"]["coverage"]["inventoried"], 457)
         self.assertEqual(result["summary"]["unresolved_symbols"], sum(result["summary"]["unresolved_by_reason"].values()))
+        self.assertGreater(result["summary"]["semantic_contracts"], 0)
         expected_calls = sum(len(refs["call_details"]) for unit in self.scope.units.values()
                              for refs in unit["cpp_model"]["references"].values())
         self.assertEqual(result["summary"]["call_occurrences"], expected_calls)
@@ -194,9 +195,10 @@ class LyraEquipmentChainTests(unittest.TestCase):
 
     def test_engine_method_stops_at_selected_receiver_type(self):
         evidence = self.call("ULyraAbilitySet::GiveToAbilitySystem", "LyraASC.GiveAbility")
-        self.assertEqual(evidence["resolution"]["reason"], "declaration_not_in_scope")
+        self.assertEqual(evidence["resolution"]["reason"], "semantic_contract")
         self.assertFalse(evidence["resolution"]["candidates"])
         self.assertEqual([t["name"] for t in evidence["resolution"]["receiver_types"]], ["ULyraAbilitySystemComponent"])
+        self.assertEqual(evidence["resolution"]["contracts"][0]["kind"], "ability_system_api")
         type_id = evidence["resolution"]["receiver_types"][0]["id"]
         self.assertEqual(self.scope.query(level="type", select=type_id)["selection"]["name"], "ULyraAbilitySystemComponent")
 
