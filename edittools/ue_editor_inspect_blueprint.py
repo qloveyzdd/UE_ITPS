@@ -53,7 +53,7 @@ def main() -> int:
             responsibility=RESPONSIBILITY,
             boundaries=READ_ONLY_BOUNDARIES
             + [
-                "Node and graph GUIDs are not exposed by the UE 5.8 Python wrapper; object paths are reported instead."
+                "UE internal Node and Graph GUIDs are not exposed by the Python wrapper; stable tool IDs are derived from asset, graph, node, and pin object paths."
             ],
         )
     )

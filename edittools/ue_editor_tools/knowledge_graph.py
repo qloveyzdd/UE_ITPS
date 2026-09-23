@@ -230,10 +230,30 @@ def _asset_graph(
 
 
 def _blueprints(graph: KnowledgeGraph, document: dict[str, Any], producer: str) -> None:
+    def symbol_relation(node: dict[str, Any], symbol: dict[str, Any]) -> str:
+        kind = str(symbol.get("symbol_kind", "")).casefold()
+        node_class = " ".join(
+            str(node.get(field, ""))
+            for field in ("class", "class_path", "type_id", "title")
+        ).casefold()
+        if kind in {"variable", "property"}:
+            return "WRITES" if any(
+                marker in node_class
+                for marker in ("setvariable", "assign", "setmember", "setfield")
+            ) else "READS"
+        if kind in {"event", "delegate"}:
+            return "BINDS" if "bind" in node_class else "CALLS"
+        if kind == "interface":
+            return "CALLS_INTERFACE"
+        return "CALLS"
+
     for item in document.get("blueprints", []):
         package = str(item["asset"])
         asset_id = graph.add_node(
-            "asset", package, package.rsplit("/", 1)[-1], {"package": package}
+            "asset",
+            package,
+            package.rsplit("/", 1)[-1],
+            {"package": package, "asset_id": item.get("asset_id")},
         )
         generated = item.get("generated_class")
         class_id = asset_id
@@ -355,7 +375,14 @@ def _blueprints(graph: KnowledgeGraph, document: dict[str, Any], producer: str) 
         for graph_row in item.get("graphs", []):
             path = str(graph_row["object_path"])
             graph_id = graph.add_node(
-                "blueprint_graph", path, str(graph_row["name"]), {"object_path": path}
+                "blueprint_graph",
+                path,
+                str(graph_row["name"]),
+                {
+                    "object_path": path,
+                    "graph_id": graph_row.get("graph_id"),
+                    "asset": package,
+                },
             )
             graph.add_relation(
                 asset_id,
@@ -364,7 +391,7 @@ def _blueprints(graph: KnowledgeGraph, document: dict[str, Any], producer: str) 
                 producer=producer,
                 evidence={"asset": item.get("asset_object_path"), "graph": path},
             )
-            nodes = graph_row.get("semantic_nodes", graph_row.get("nodes", []))
+            nodes = graph_row.get("nodes") or graph_row.get("semantic_nodes", [])
             for node in nodes:
                 node_path = str(node["object_path"])
                 node_id = graph.add_node(
@@ -384,18 +411,106 @@ def _blueprints(graph: KnowledgeGraph, document: dict[str, Any], producer: str) 
                         "node": node_path,
                     },
                 )
+                symbol = node.get("symbol")
+                if isinstance(symbol, dict) and symbol.get("symbol_path"):
+                    symbol_path = normalize_object_path(str(symbol["symbol_path"]))
+                    symbol_kind = str(symbol.get("symbol_kind") or "symbol")
+                    symbol_node_id = graph.add_node(
+                        "cxx_symbol" if symbol_path.startswith("/Script/") else "symbol",
+                        symbol_path,
+                        symbol_path.rsplit(".", 1)[-1].rsplit("::", 1)[-1],
+                        {
+                            "path": symbol_path,
+                            "symbol_kind": symbol_kind,
+                            "symbol_id": symbol.get("symbol_id"),
+                        },
+                    )
+                    graph.add_relation(
+                        node_id,
+                        symbol_relation(node, symbol),
+                        symbol_node_id,
+                        producer=producer,
+                        evidence={
+                            "asset": item.get("asset_object_path"),
+                            "graph": path,
+                            "node": node_path,
+                            "field": "symbol.symbol_path",
+                        },
+                    )
+                    if symbol_path.startswith("/Script/") and ":" in symbol_path:
+                        native_name = symbol_path.rsplit("/", 1)[-1]
+                        module_and_name, member_name = native_name.split(":", 1)
+                        class_name = module_and_name.rsplit(".", 1)[-1]
+                        if class_name and member_name:
+                            native_id = _cxx_symbol(
+                                graph,
+                                "method" if symbol_kind in {"function", "member"} else symbol_kind,
+                                f"{class_name}::{member_name}",
+                                {"blueprint_symbol_path": symbol_path},
+                            )
+                            graph.add_relation(
+                                symbol_node_id,
+                                "MAPS_TO",
+                                native_id,
+                                producer=producer,
+                                evidence={
+                                    "asset": item.get("asset_object_path"),
+                                    "graph": path,
+                                    "node": node_path,
+                                },
+                            )
+                for pin in node.get("pins", []):
+                    if str(pin.get("direction", "")).casefold() != "output":
+                        continue
+                    for connection in pin.get("connections", []):
+                        target_path = str(connection.get("node", ""))
+                        if not target_path:
+                            continue
+                        target_node_id = graph.add_node(
+                            "blueprint_node",
+                            target_path,
+                            target_path.rsplit(".", 1)[-1],
+                            {"object_path": target_path},
+                        )
+                        graph.add_relation(
+                            node_id,
+                            "DATA_OR_EXEC_LINK",
+                            target_node_id,
+                            producer=producer,
+                            properties={
+                                "pin": pin.get("name"),
+                                "direction": pin.get("direction"),
+                                "connected_pin": connection.get("pin"),
+                            },
+                            evidence={
+                                "asset": item.get("asset_object_path"),
+                                "graph": path,
+                                "node": node_path,
+                            },
+                        )
         for reference in item.get("references", []):
             target_id = _target_node(
                 graph, str(reference["kind"]), str(reference["target"])
             )
+            source_id = asset_id
+            reference_node = reference.get("node")
+            if reference_node:
+                source_id = graph.add_node(
+                    "blueprint_node",
+                    str(reference_node),
+                    str(reference_node).rsplit(".", 1)[-1],
+                    {"object_path": reference_node},
+                )
             graph.add_relation(
-                asset_id,
+                source_id,
                 "REFERENCES",
                 target_id,
                 producer=producer,
                 evidence={
                     "asset": item.get("asset_object_path"),
                     "field": reference.get("field"),
+                    "graph": reference.get("graph_path") or reference.get("graph"),
+                    "node": reference_node,
                 },
             )
 
@@ -894,6 +1009,335 @@ def _message_scan(
     _import_graph(graph, exported, producer)
 
 
+def _cxx_symbol(
+    graph: KnowledgeGraph,
+    kind: str,
+    name: str,
+    properties: dict[str, Any] | None = None,
+) -> str:
+    normalized = str(name).strip()
+    node_kind = {
+        "class": "cxx_class",
+        "struct": "cxx_struct",
+        "union": "cxx_struct",
+        "enum": "cxx_enum",
+        "variable": "cxx_variable",
+        "global_variable": "cxx_variable",
+        "function": "cxx_function",
+        "free_function": "cxx_function",
+        "method": "cxx_function",
+        "type": "cxx_type",
+        "member_call": "cxx_function",
+    }.get(kind, "cxx_symbol")
+    return graph.add_node(
+        node_kind,
+        normalized,
+        normalized.rsplit("::", 1)[-1],
+        {"qualified_name": normalized, **(properties or {})},
+    )
+
+
+def _cxx_document(graph: KnowledgeGraph, document: dict[str, Any], producer: str) -> None:
+    """Adapt the existing sourcetools facts into the shared graph.
+
+    Sourcetools intentionally reports syntax facts from explicitly selected
+    files.  The adapter keeps that provenance and does not pretend that a
+    compiler linker resolved an unknown symbol.
+    """
+
+    def evidence(item: dict[str, Any]) -> dict[str, Any]:
+        detail = dict(item.get("evidence", {}))
+        if item.get("file") and "path" not in detail:
+            detail["path"] = item["file"]
+        return detail
+
+    for group_name, values in document.items():
+        if group_name not in {
+            "classes",
+            "structs",
+            "enums",
+            "global_variables",
+            "free_functions",
+        } or not isinstance(values, list):
+            continue
+        kind = {
+            "classes": "class",
+            "structs": "struct",
+            "enums": "enum",
+            "global_variables": "global_variable",
+            "free_functions": "free_function",
+        }[group_name]
+        for item in values:
+            name = str(item.get("qualified_name") or item.get("name") or "")
+            if not name:
+                continue
+            node_id = _cxx_symbol(graph, kind, name, item)
+            item_evidence = evidence(item)
+            for base in item.get("base_types", []) or []:
+                base_id = _cxx_symbol(graph, "type", str(base))
+                graph.add_relation(
+                    node_id,
+                    "INHERITS",
+                    base_id,
+                    producer=producer,
+                    evidence=item_evidence,
+                )
+
+    for item in document.get("functions", []) or []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("qualified_name") or item.get("name") or "")
+        if not name:
+            continue
+        function_id = _cxx_symbol(graph, str(item.get("kind", "function")), name, item)
+        for base in item.get("base_types", []) or []:
+            base_id = _cxx_symbol(graph, "type", str(base))
+            graph.add_relation(
+                function_id,
+                "INHERITS",
+                base_id,
+                producer=producer,
+                evidence=evidence(item),
+            )
+
+    matches = document.get("matches", [])
+    if not isinstance(matches, list):
+        matches = []
+    for match in matches:
+        if not isinstance(match, dict):
+            continue
+        owner_name = str(
+            match.get("qualified_name")
+            or match.get("name")
+            or match.get("function_id")
+            or ""
+        )
+        owner_kind = "class" if match.get("member_anchors") is not None else "function"
+        if not owner_name:
+            continue
+        owner_id = _cxx_symbol(graph, owner_kind, owner_name, match)
+        owner_evidence = evidence(match)
+        for member in match.get("member_anchors", []) or []:
+            member_name = str(member.get("qualified_name") or "")
+            if not member_name:
+                owner = owner_name
+                member_name = f"{owner}::{member.get('name', '')}"
+            member_id = _cxx_symbol(graph, str(member.get("kind", "symbol")), member_name, member)
+            graph.add_relation(
+                owner_id,
+                "DECLARES",
+                member_id,
+                producer=producer,
+                evidence={**owner_evidence, **evidence(member)},
+            )
+        for member in match.get("member_functions", []) or []:
+            member_name = str(member.get("qualified_name") or member.get("name") or "")
+            if member_name:
+                member_id = _cxx_symbol(graph, "method", member_name, member)
+                graph.add_relation(
+                    owner_id,
+                    "DECLARES",
+                    member_id,
+                    producer=producer,
+                    evidence={**owner_evidence, **evidence(member)},
+                )
+        for symbol in match.get("external_symbols", []) or []:
+            spelling = str(symbol.get("spelling") or "")
+            if not spelling:
+                continue
+            symbol_id = _cxx_symbol(graph, str(symbol.get("kind", "symbol")), spelling, symbol)
+            graph.add_relation(
+                owner_id,
+                "REFERENCES_SYMBOL",
+                symbol_id,
+                certainty="unresolved" if symbol.get("kind") == "unknown" else "confirmed",
+                producer=producer,
+                evidence={**owner_evidence, **evidence(symbol)},
+            )
+
+
+def _cxx_adapter(graph: KnowledgeGraph, document: dict[str, Any], producer: str) -> None:
+    _cxx_document(graph, document, producer)
+
+
+def _level_actors(graph: KnowledgeGraph, document: dict[str, Any], producer: str) -> None:
+    world = document.get("world", {})
+    world_path = str(world.get("object_path") or "")
+    if not world_path:
+        return
+    world_id = graph.add_node(
+        "level_world",
+        world_path,
+        world_path.rsplit("/", 1)[-1],
+        world,
+    )
+    for graph_row in world.get("level_script_graphs", []) or []:
+        graph_path = str(graph_row.get("object_path") or "")
+        if not graph_path:
+            continue
+        graph_node_id = graph.add_node(
+            "blueprint_graph",
+            graph_path,
+            str(graph_row.get("name") or graph_path),
+            {"object_path": graph_path, "level_script": world_path},
+        )
+        graph.add_relation(
+            world_id,
+            "CONTAINS",
+            graph_node_id,
+            producer=producer,
+            evidence={"world": world_path, "graph": graph_path},
+        )
+        for node in graph_row.get("nodes", []) or []:
+            node_path = str(node.get("object_path") or "")
+            if not node_path:
+                continue
+            node_id = graph.add_node(
+                "blueprint_node",
+                node_path,
+                str(node.get("title") or node.get("type_id") or node_path),
+                node,
+            )
+            graph.add_relation(
+                graph_node_id,
+                "CONTAINS",
+                node_id,
+                producer=producer,
+                evidence={"world": world_path, "graph": graph_path, "node": node_path},
+            )
+            symbol = node.get("symbol")
+            if isinstance(symbol, dict) and symbol.get("symbol_path"):
+                symbol_path = normalize_object_path(str(symbol["symbol_path"]))
+                symbol_node_id = graph.add_node(
+                    "cxx_symbol" if symbol_path.startswith("/Script/") else "symbol",
+                    symbol_path,
+                    symbol_path.rsplit(".", 1)[-1].rsplit("::", 1)[-1],
+                    {
+                        "path": symbol_path,
+                        "symbol_kind": symbol.get("symbol_kind"),
+                        "symbol_id": symbol.get("symbol_id"),
+                    },
+                )
+                graph.add_relation(
+                    node_id,
+                    "CALLS",
+                    symbol_node_id,
+                    producer=producer,
+                    evidence={"world": world_path, "graph": graph_path, "node": node_path},
+                )
+    for level in world.get("streaming_levels", []) or []:
+        level_path = str(level)
+        level_id = graph.add_node(
+            "level",
+            level_path,
+            level_path.rsplit("/", 1)[-1],
+            {"object_path": level_path},
+        )
+        graph.add_relation(
+            world_id,
+            "STREAMS_LEVEL",
+            level_id,
+            producer=producer,
+            evidence={"world": world_path},
+        )
+    for actor in document.get("actors", []) or []:
+        actor_path = str(actor.get("object_path") or actor.get("actor_id") or "")
+        if not actor_path:
+            continue
+        actor_id = graph.add_node("level_actor", actor_path, str(actor.get("label") or actor_path), actor)
+        graph.add_relation(
+            world_id,
+            "CONTAINS",
+            actor_id,
+            producer=producer,
+            evidence={"world": world_path, "actor": actor_path},
+        )
+        class_path = actor.get("class")
+        if class_path:
+            class_value = normalize_object_path(str(class_path))
+            class_id = graph.add_node(
+                "class",
+                class_value,
+                class_value.rsplit(".", 1)[-1],
+                {"path": class_value},
+            )
+            graph.add_relation(
+                actor_id,
+                "INSTANCE_OF",
+                class_id,
+                producer=producer,
+                evidence={"actor": actor_path},
+            )
+        for relation_name, relation_kind in (
+            ("owner", "OWNED_BY"),
+            ("attach_parent", "ATTACHED_TO"),
+        ):
+            target = actor.get(relation_name)
+            if target:
+                target_path = str(target)
+                target_id = graph.add_node(
+                    "level_actor",
+                    target_path,
+                    target_path.rsplit(".", 1)[-1],
+                    {"object_path": target_path},
+                )
+                graph.add_relation(
+                    actor_id,
+                    relation_kind,
+                    target_id,
+                    producer=producer,
+                    evidence={"actor": actor_path},
+                )
+        for layer in actor.get("data_layers", []) or []:
+            layer_path = str(layer)
+            layer_id = graph.add_node(
+                "data_layer",
+                layer_path,
+                layer_path.rsplit("/", 1)[-1],
+                {"path": layer_path},
+            )
+            graph.add_relation(
+                actor_id,
+                "IN_DATA_LAYER",
+                layer_id,
+                producer=producer,
+                evidence={"actor": actor_path},
+            )
+        for component in actor.get("components", []) or []:
+            component_path = str(component.get("object_path") or component.get("component_id") or "")
+            if not component_path:
+                continue
+            component_id = graph.add_node(
+                "level_component",
+                component_path,
+                str(component.get("name") or component_path),
+                component,
+            )
+            graph.add_relation(
+                actor_id,
+                "OWNS_COMPONENT",
+                component_id,
+                producer=producer,
+                evidence={"actor": actor_path, "component": component_path},
+            )
+            component_class = component.get("class")
+            if component_class:
+                component_class_path = normalize_object_path(str(component_class))
+                component_class_id = graph.add_node(
+                    "class",
+                    component_class_path,
+                    component_class_path.rsplit(".", 1)[-1],
+                    {"path": component_class_path},
+                )
+                graph.add_relation(
+                    component_id,
+                    "INSTANCE_OF",
+                    component_class_id,
+                    producer=producer,
+                    evidence={"actor": actor_path, "component": component_path},
+                )
+
+
 def _import_graph(graph: KnowledgeGraph, source: dict[str, Any], producer: str) -> None:
     mapping: dict[str, str] = {}
     for node in source.get("nodes", []):
@@ -942,6 +1386,11 @@ ADAPTERS: dict[str, Callable[[KnowledgeGraph, dict[str, Any], str], None]] = {
     "ue_scan_config_graph": _config,
     "ue_scan_cxx_gameplay_messages": _cxx_messages,
     "ue_editor_scan_gameplay_messages": _message_scan,
+    "ue_list_cxx_types": _cxx_adapter,
+    "ue_list_cxx_functions": _cxx_adapter,
+    "ue_inspect_cxx_type": _cxx_adapter,
+    "ue_inspect_cxx_function": _cxx_adapter,
+    "ue_editor_scan_level_actors": _level_actors,
 }
 
 

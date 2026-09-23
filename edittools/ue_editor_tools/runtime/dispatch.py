@@ -15,6 +15,7 @@ from .gameplay_tags import (
 )
 from .state import editor_state
 from .primary_assets import inspect_primary_assets
+from .levels import scan_level_actors
 
 
 OPERATIONS: dict[str, Callable[..., Any]] = {
@@ -31,6 +32,7 @@ OPERATIONS: dict[str, Callable[..., Any]] = {
     "scan_data_tables_batch": scan_data_tables_batch,
     "scan_data_assets_batch": scan_data_assets_batch,
     "inspect_primary_assets": inspect_primary_assets,
+    "scan_level_actors": scan_level_actors,
 }
 
 

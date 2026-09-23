@@ -74,7 +74,7 @@ def main() -> int:
             responsibility=RESPONSIBILITY,
             boundaries=[
                 "The graph merges explicit supported evidence and does not infer runtime reachability.",
-                "Map assets remain asset-level logical entities; Actor and Component instances are excluded.",
+                "Level Actor and Component instances are included only when a ue_editor_scan_level_actors document is provided.",
             ],
         )
     )

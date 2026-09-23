@@ -111,6 +111,55 @@ def scan_blueprint_structures(
     }
 
 
+def find_blueprint_references(
+    session: EditorSession,
+    *,
+    targets: list[str],
+    roots: list[str] | None = None,
+    assets: list[str] | None = None,
+    batch_size: int = 20,
+) -> dict[str, Any]:
+    if not targets:
+        raise ValueError("At least one Blueprint reference target is required")
+    scan = scan_blueprint_structures(
+        session, roots=roots, assets=assets, batch_size=batch_size
+    )
+    wanted = [str(target).casefold() for target in targets if str(target).strip()]
+    matches: list[dict[str, Any]] = []
+    for blueprint in scan.get("blueprints", []):
+        for reference in blueprint.get("references", []):
+            target = str(reference.get("target", ""))
+            field = str(reference.get("field", ""))
+            searchable = f"{target} {field}".casefold()
+            if not any(value in searchable for value in wanted):
+                continue
+            matches.append(
+                {
+                    "asset": blueprint.get("asset"),
+                    "asset_object_path": blueprint.get("asset_object_path"),
+                    "generated_class": blueprint.get("generated_class"),
+                    **reference,
+                }
+            )
+    matches.sort(
+        key=lambda item: (
+            str(item.get("asset", "")).casefold(),
+            str(item.get("graph_path", "")).casefold(),
+            str(item.get("node", "")).casefold(),
+            str(item.get("target", "")).casefold(),
+        )
+    )
+    return {
+        "editor_state": scan.get("editor_state", {}),
+        "roots": scan.get("roots", []),
+        "targets": sorted(set(targets), key=str.casefold),
+        "scanned_asset_count": scan.get("scanned_asset_count", 0),
+        "match_count": len(matches),
+        "matches": matches,
+        "problems": scan.get("problems", []),
+    }
+
+
 def scan_data_tables(
     session: EditorSession,
     *,

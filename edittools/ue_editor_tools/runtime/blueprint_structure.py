@@ -7,6 +7,7 @@ from editor_toolset.toolsets.blueprint import BlueprintTools
 import unreal
 
 from .blueprints import _load_blueprint, serialize_node
+from ue_editor_tools.identifiers import stable_fact_id
 from ue_editor_tools.blueprint_reachability import (
     project_blueprint_nodes,
     semantic_node_references,
@@ -61,7 +62,40 @@ def _variables(blueprint: Any) -> list[dict[str, Any]]:
                     )
                 except Exception:
                     pass
-                rows.append({"name": name, "type_schema": type_schema})
+                row: dict[str, Any] = {
+                        "variable_id": stable_fact_id(
+                            "blueprint_variable", blueprint.get_path_name(), name
+                        ),
+                        "name": name,
+                        "type_schema": type_schema,
+                    }
+                for field, methods in (
+                    (
+                        "default_value",
+                        ("get_blueprint_variable_default_value", "get_member_variable_default_value"),
+                    ),
+                    ("category", ("get_blueprint_variable_category", "get_member_variable_category")),
+                    (
+                        "instance_editable",
+                        ("is_blueprint_variable_instance_editable", "is_member_variable_instance_editable"),
+                    ),
+                    (
+                        "exposed_on_spawn",
+                        ("is_blueprint_variable_exposed_on_spawn", "is_member_variable_exposed_on_spawn"),
+                    ),
+                ):
+                    for method_name in methods:
+                        method = getattr(library, method_name, None)
+                        if method is None:
+                            continue
+                        try:
+                            value = method(blueprint, name)
+                        except Exception:
+                            continue
+                        if value not in (None, ""):
+                            row[field] = str(value) if field in {"default_value", "category"} else bool(value)
+                            break
+                rows.append(row)
             return sorted(rows, key=lambda item: str(item["name"]).casefold())
         except Exception:
             pass
@@ -71,9 +105,22 @@ def _variables(blueprint: Any) -> list[dict[str, Any]]:
         type_value = _property(item, "var_type")
         rows.append(
             {
+                "variable_id": stable_fact_id(
+                    "blueprint_variable", blueprint.get_path_name(), name
+                ),
                 "name": name,
                 "type": str(type_value) if type_value is not None else None,
                 "default_value": str(_property(item, "default_value") or ""),
+                "category": str(_property(item, "category") or ""),
+                "instance_editable": bool(
+                    _property(item, "b_instance_editable")
+                    or _property(item, "instance_editable")
+                ),
+                "exposed": bool(
+                    _property(item, "b_public")
+                    or _property(item, "b_exposed_on_spawn")
+                    or _property(item, "exposed_on_spawn")
+                ),
             }
         )
     return sorted(rows, key=lambda item: str(item["name"]).casefold())
@@ -95,9 +142,13 @@ def _callable_info(blueprint: Any, operation: str) -> list[dict[str, Any]]:
         implemented = _property(item, "is_implemented")
         rows.append(
             {
+                "callable_id": stable_fact_id(
+                    "blueprint_callable", blueprint.get_path_name(), operation, str(name or "")
+                ),
                 "name": str(name or ""),
                 "description": str(description or ""),
                 "implemented": bool(implemented),
+                "signature": str(_property(item, "signature") or ""),
             }
         )
     return sorted(rows, key=lambda item: str(item["name"]).casefold())
@@ -117,6 +168,9 @@ def _components(blueprint: Any) -> list[dict[str, Any]]:
         )
         rows.append(
             {
+                "component_id": stable_fact_id(
+                    "blueprint_component", blueprint.get_path_name(), name, _path(node)
+                ),
                 "name": name,
                 "node": _path(node),
                 "template": _path(template),
@@ -155,53 +209,83 @@ def inspect_blueprint_structure(asset_path: str) -> dict[str, Any]:
         BlueprintTools.list_graphs(blueprint),
         key=lambda item: item.get_name().casefold(),
     ):
-        nodes = [serialize_node(node) for node in BlueprintTools.find_nodes(graph)]
+        graph_path = graph.get_path_name()
+        nodes = [
+            serialize_node(node, graph_path=graph_path, asset_path=asset_path)
+            for node in BlueprintTools.find_nodes(graph)
+        ]
         projection = project_blueprint_nodes(nodes)
         semantic_paths = {
             str(item["object_path"])
             for item in projection["semantic_nodes"]
             if item.get("object_path")
         }
-        semantic_nodes = [
-            node for node in nodes if str(node.get("object_path")) in semantic_paths
-        ]
         graphs.append(
             {
+                "graph_id": stable_fact_id("blueprint_graph", asset_path, graph_path),
                 "name": graph.get_name(),
-                "object_path": graph.get_path_name(),
+                "object_path": graph_path,
                 "class": _path(graph.get_class())
                 if hasattr(graph, "get_class")
                 else None,
                 "node_count": len(nodes),
                 "reachable_node_count": len(projection["reachable_paths"]),
                 "semantic_node_count": len(projection["semantic_nodes"]),
-                "nodes": [
-                    {
-                        "object_path": node["object_path"],
-                        "class": node["class"],
-                        "type_id": node["type_id"],
-                        "title": node["title"],
-                    }
-                    for node in nodes
-                ],
+                "nodes": nodes,
                 "semantic_nodes": projection["semantic_nodes"],
             }
         )
-        references.extend(semantic_node_references(semantic_nodes))
-        observed_references.extend(unique_references(nodes))
+        for node in nodes:
+            if str(node.get("object_path")) not in semantic_paths:
+                continue
+            for reference in semantic_node_references([node]):
+                references.append(
+                    {
+                        **reference,
+                        "asset": asset_path,
+                        "graph": graph.get_name(),
+                        "graph_path": graph_path,
+                        "node": node.get("object_path"),
+                        "node_id": node.get("node_id"),
+                    }
+                )
+        for node in nodes:
+            for reference in unique_references(node):
+                observed_references.append(
+                    {
+                        **reference,
+                        "asset": asset_path,
+                        "graph": graph.get_name(),
+                        "graph_path": graph_path,
+                        "node": node.get("object_path"),
+                        "node_id": node.get("node_id"),
+                    }
+                )
     unique = {
-        (item["kind"], item["target"], item.get("field", "")): item
+        (
+            item["kind"],
+            item["target"],
+            item.get("field", ""),
+            item.get("node_id", ""),
+        ): item
         for item in references
     }
     observed_unique = {
-        (item["kind"], item["target"], item.get("field", "")): item
+        (
+            item["kind"],
+            item["target"],
+            item.get("field", ""),
+            item.get("node_id", ""),
+        ): item
         for item in observed_references
     }
     observed_functions = _callable_info(blueprint, "list_functions")
     observed_events = _callable_info(blueprint, "list_events")
     return {
+        "asset_id": stable_fact_id("blueprint_asset", asset_path),
         "asset": asset_path,
         "asset_object_path": blueprint.get_path_name(),
+        "asset_class": _path(blueprint.get_class()),
         "generated_class": _path(generated),
         "parent_class": _path(parent),
         "interfaces": _interfaces(blueprint),

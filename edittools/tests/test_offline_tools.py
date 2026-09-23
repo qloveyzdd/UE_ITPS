@@ -88,7 +88,109 @@ class OfflineEditorToolTests(unittest.TestCase):
         self.assertEqual(validate_graph(graph), [])
         self.assertIn("PUBLISHES_EVENT", {item["kind"] for item in graph["relations"]})
 
+    def test_knowledge_graph_links_blueprint_nodes_to_native_symbols(self) -> None:
+        project = "D:/Sample/Sample.uproject"
+        blueprint_document = {
+            "schema_version": "ue_editor_scan_blueprint_structure",
+            "editor": {"project": project},
+            "blueprints": [
+                {
+                    "asset": "/Game/BP_Sample",
+                    "asset_object_path": "/Game/BP_Sample.BP_Sample",
+                    "generated_class": "/Game/BP_Sample.BP_Sample_C",
+                    "parent_class": "/Script/Sample.SampleCharacter",
+                    "graphs": [
+                        {
+                            "name": "EventGraph",
+                            "object_path": "/Game/BP_Sample.BP_Sample_C:EventGraph",
+                            "nodes": [
+                                {
+                                    "object_path": "/Game/BP_Sample.BP_Sample_C:EventGraph.Call",
+                                    "class": "K2Node_CallFunction",
+                                    "type_id": "CallFunction",
+                                    "title": "ApplyDamage",
+                                    "symbol": {
+                                        "symbol_kind": "function",
+                                        "symbol_path": "/Script/Sample.SampleCharacter:ApplyDamage",
+                                        "symbol_id": "ue_symbol:test",
+                                    },
+                                    "pins": [
+                                        {
+                                            "name": "Then",
+                                            "direction": "output",
+                                            "connections": [
+                                                {
+                                                    "node": "/Game/BP_Sample.BP_Sample_C:EventGraph.Return",
+                                                    "pin": "Execute",
+                                                }
+                                            ],
+                                        }
+                                    ],
+                                },
+                                {
+                                    "object_path": "/Game/BP_Sample.BP_Sample_C:EventGraph.Return",
+                                    "class": "K2Node_Return",
+                                    "type_id": "Return",
+                                    "title": "Return",
+                                    "pins": [],
+                                },
+                            ],
+                        }
+                    ],
+                    "references": [],
+                }
+            ],
+        }
+        cxx_document = {
+            "schema_version": "ue_list_cxx_functions",
+            "editor": {"project": project},
+            "functions": [
+                {
+                    "qualified_name": "SampleCharacter::ApplyDamage",
+                    "name": "ApplyDamage",
+                    "kind": "method",
+                    "evidence": {"unit": "header", "line": 12},
+                }
+            ],
+        }
+        graph, problems = build_knowledge_graph(
+            [("blueprint.json", blueprint_document), ("cxx.json", cxx_document)]
+        )
+        self.assertEqual(problems, [])
+        kinds = {item["kind"] for item in graph["relations"]}
+        self.assertIn("CALLS", kinds)
+        self.assertIn("MAPS_TO", kinds)
+        self.assertIn("DATA_OR_EXEC_LINK", kinds)
+        self.assertEqual(validate_graph(graph), [])
+
+    def test_knowledge_graph_keeps_level_instance_evidence(self) -> None:
+        document = {
+            "schema_version": "ue_editor_scan_level_actors",
+            "editor": {"project": "D:/Sample/Sample.uproject"},
+            "world": {"object_path": "/Game/Maps/Test.Test", "streaming_levels": []},
+            "actors": [
+                {
+                    "object_path": "/Game/Maps/Test.PersistentLevel.BP_Enemy_1",
+                    "label": "Enemy_1",
+                    "class": "/Game/BP_Enemy.BP_Enemy_C",
+                    "components": [
+                        {
+                            "object_path": "/Game/Maps/Test.PersistentLevel.BP_Enemy_1:Collision",
+                            "name": "Collision",
+                            "class": "/Script/Engine.CapsuleComponent",
+                        }
+                    ],
+                }
+            ],
+        }
+        graph, problems = build_knowledge_graph([("level.json", document)])
+        self.assertEqual(problems, [])
+        kinds = {item["kind"] for item in graph["relations"]}
+        self.assertIn("CONTAINS", kinds)
+        self.assertIn("OWNS_COMPONENT", kinds)
+        self.assertIn("INSTANCE_OF", kinds)
+        self.assertEqual(validate_graph(graph), [])
+
 
 if __name__ == "__main__":
     unittest.main()
-

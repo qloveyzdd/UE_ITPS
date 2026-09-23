@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:edittools:ue_editor_scan_level_actors",
+  "oneOf": [
+    {"$ref": "#/$defs/success"},
+    {"allOf": [{"$ref": "urn:ue-itps:edittools:common#/$defs/errorDocument"}, {"properties": {"schema_version": {"const": "ue_editor_scan_level_actors"}}}]}
+  ],
+  "$defs": {
+    "success": {
+      "type": "object",
+      "required": ["schema_version", "editor", "editor_state", "world", "actor_class_filter", "actor_count", "available_actor_count", "truncated", "actors", "validation", "limits"],
+      "properties": {
+        "schema_version": {"const": "ue_editor_scan_level_actors"},
+        "editor": {"$ref": "urn:ue-itps:edittools:common#/$defs/editor"},
+        "editor_state": {"type": "object"},
+        "world": {"type": "object"},
+        "actor_class_filter": {"type": "string"},
+        "actor_count": {"type": "integer", "minimum": 0},
+        "available_actor_count": {"type": "integer", "minimum": 0},
+        "truncated": {"type": "boolean"},
+        "actors": {"type": "array", "items": {"type": "object"}},
+        "validation": {"$ref": "urn:ue-itps:edittools:common#/$defs/validation"},
+        "limits": {"$ref": "urn:ue-itps:edittools:common#/$defs/limits"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

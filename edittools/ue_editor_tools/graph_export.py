@@ -98,6 +98,8 @@ def export_message_graph(scan: dict[str, Any]) -> dict[str, Any]:
                 "asset": asset,
                 "graph": str(operation["graph"]),
                 "object_path": node_path,
+                "graph_id": operation.get("graph_id"),
+                "node_id": operation.get("node_id"),
                 "class": str(operation["node_class"]),
                 "operation": str(operation["operation"]),
             },

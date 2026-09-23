@@ -5,6 +5,7 @@ from typing import Any
 from editor_toolset.toolsets.blueprint import BlueprintTools
 
 from .blueprints import _load_blueprint, serialize_node
+from ue_editor_tools.identifiers import stable_fact_id
 from ue_editor_tools.message_model import message_operation
 
 
@@ -20,6 +21,9 @@ def scan_blueprint_batch(asset_paths: list[str]) -> dict[str, Any]:
                 graph = {
                     "name": graph_object.get_name(),
                     "object_path": graph_object.get_path_name(),
+                    "graph_id": stable_fact_id(
+                        "blueprint_graph", asset_path, graph_object.get_path_name()
+                    ),
                 }
                 for node_object in BlueprintTools.find_nodes(graph_object):
                     node_class = node_object.get_class().get_name()
@@ -30,7 +34,11 @@ def scan_blueprint_batch(asset_paths: list[str]) -> dict[str, Any]:
                         )
                     ):
                         continue
-                    node = serialize_node(node_object)
+                    node = serialize_node(
+                        node_object,
+                        graph_path=graph["object_path"],
+                        asset_path=asset_path,
+                    )
                     operation = message_operation(asset_path, graph, node)
                     if operation is not None:
                         operations.append(operation)

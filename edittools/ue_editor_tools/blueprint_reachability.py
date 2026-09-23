@@ -45,7 +45,15 @@ def _is_structural(node: dict[str, Any]) -> bool:
 def _summary(node: dict[str, Any]) -> dict[str, Any]:
     return {
         field: node[field]
-        for field in ("object_path", "class", "class_path", "type_id", "title")
+        for field in (
+            "node_id",
+            "object_path",
+            "class",
+            "class_path",
+            "type_id",
+            "title",
+            "symbol",
+        )
         if field in node
     }
 
