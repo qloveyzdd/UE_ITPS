@@ -105,8 +105,13 @@ def _node_symbol(node: Any) -> dict[str, Any] | None:
         normalized = _reference_value(value)
         if normalized not in (None, "", "None", {}):
             values[name] = normalized
-    if not values:
-        return None
+    node_class = ""
+    try:
+        node_class = node.get_class().get_name()
+    except Exception:
+        pass
+    type_id = str(_get_node_type_id(node))
+    title = str(node.get_node_title())
     reference_field = next(
         (
             field
@@ -149,7 +154,61 @@ def _node_symbol(node: Any) -> dict[str, Any] | None:
                 values["symbol_path"] = path
                 values["symbol_id"] = stable_fact_id("ue_symbol", kind, path)
                 break
-    return values
+    if "symbol_path" not in values:
+        function_nodes = {
+            "K2Node_CallFunction",
+            "K2Node_LatentAbilityCall",
+            "K2Node_CallDelegate",
+            "K2Node_CreateDelegate",
+            "K2Node_BindDelegate",
+        }
+        if node_class in function_nodes:
+            candidate = type_id.rsplit("|", 1)[-1].strip() or title
+            if candidate:
+                values.update(
+                    {
+                        "symbol_kind": "function",
+                        "symbol_name": candidate,
+                        "symbol_path": candidate,
+                        "symbol_id": stable_fact_id(
+                            "ue_symbol", "function", candidate
+                        ),
+                        "resolution": "name_only",
+                        "source": "node_type_id_or_title",
+                    }
+                )
+        elif node_class in {"K2Node_VariableGet", "K2Node_VariableSet"}:
+            candidate = title
+            for prefix in ("Get ", "Set "):
+                if candidate.startswith(prefix):
+                    candidate = candidate[len(prefix) :]
+            if candidate:
+                values.update(
+                    {
+                        "symbol_kind": "variable",
+                        "symbol_name": candidate,
+                        "symbol_path": candidate,
+                        "symbol_id": stable_fact_id(
+                            "ue_symbol", "variable", candidate
+                        ),
+                        "resolution": "name_only",
+                        "source": "node_title",
+                    }
+                )
+        elif node_class in {"K2Node_Event", "K2Node_CustomEvent"}:
+            candidate = type_id.rsplit("|", 1)[-1].strip() or title
+            if candidate:
+                values.update(
+                    {
+                        "symbol_kind": "event",
+                        "symbol_name": candidate,
+                        "symbol_path": candidate,
+                        "symbol_id": stable_fact_id("ue_symbol", "event", candidate),
+                        "resolution": "name_only",
+                        "source": "node_type_id_or_title",
+                    }
+                )
+    return values or None
 
 
 def serialize_pin(pin: Any, index: int, *, node_path: str = "") -> dict[str, Any]:

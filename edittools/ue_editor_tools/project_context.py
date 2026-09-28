@@ -13,7 +13,7 @@ if str(TOOLS_ROOT) not in sys.path:
     sys.path.insert(0, str(TOOLS_ROOT))
 
 from ue_project_tools.common import normalized, read_json  # noqa: E402
-from ue_project_tools.engine import resolve_engine  # noqa: E402
+from ue_project_tools.engine import engine_resolution_status, resolve_engine  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -43,7 +43,7 @@ def resolve_project_context(
         association,
         Path(engine_root).expanduser().resolve() if engine_root else None,
     )
-    if result["status"] != "resolved" or not result.get("engine_root"):
+    if engine_resolution_status(result) != "resolved" or not result.get("engine_root"):
         raise ValueError(
             f"Cannot resolve one Engine installation for {normalized(project_file)}; "
             "pass --engine-root explicitly"

@@ -23,10 +23,15 @@ def main() -> int:
         metavar="FILE",
         help="用于解析 Engine 并匹配会话的 .uproject",
     )
+    cli.add_argument(
+        "--engine-root",
+        metavar="PATH",
+        help="显式 Unreal Engine 根目录覆盖 / Explicit Unreal Engine root override",
+    )
     cli.add_argument("--timeout", type=float, default=3.0)
     args = cli.parse_args()
     try:
-        context = resolve_project_context(args.project)
+        context = resolve_project_context(args.project, args.engine_root)
         engine_root = context.engine_root
         version = context.engine_version
         sessions = discover_sessions(engine_root, args.timeout)

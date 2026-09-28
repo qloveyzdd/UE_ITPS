@@ -238,6 +238,23 @@ def inspect_blueprint_structure(asset_path: str) -> dict[str, Any]:
         for node in nodes:
             if str(node.get("object_path")) not in semantic_paths:
                 continue
+            symbol = node.get("symbol")
+            if isinstance(symbol, dict) and symbol.get("symbol_path"):
+                references.append(
+                    {
+                        "kind": "symbol",
+                        "target": str(symbol["symbol_path"]),
+                        "field": "symbol.symbol_path",
+                        "resolution": symbol.get("resolution", "exact"),
+                        "symbol_kind": symbol.get("symbol_kind"),
+                        "symbol_id": symbol.get("symbol_id"),
+                        "asset": asset_path,
+                        "graph": graph.get_name(),
+                        "graph_path": graph_path,
+                        "node": node.get("object_path"),
+                        "node_id": node.get("node_id"),
+                    }
+                )
             for reference in semantic_node_references([node]):
                 references.append(
                     {

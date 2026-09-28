@@ -6,10 +6,77 @@ import tempfile
 import unittest
 
 from ue_editor_tools.config_graph import scan_config_graph
+from ue_editor_tools.graph_summary import summarize_graph
 from ue_editor_tools.knowledge_graph import build_knowledge_graph, validate_graph
 
 
 class OfflineEditorToolTests(unittest.TestCase):
+    def test_knowledge_graph_summary_is_deterministic_and_keeps_evidence(self) -> None:
+        nodes = [
+            {
+                "node_id": "n-death",
+                "kind": "cxx_function",
+                "name": "HandleOutOfHealth",
+                "canonical_key": "Sample|cxx_function|ULyraHealthComponent::HandleOutOfHealth",
+                "properties": {"qualified_name": "ULyraHealthComponent::HandleOutOfHealth"},
+            },
+            {
+                "node_id": "n-message",
+                "kind": "message_channel_expression",
+                "name": "Lyra.Elimination.Message",
+                "canonical_key": "Sample|message|Lyra.Elimination.Message",
+                "properties": {"tag": "Lyra.Elimination.Message"},
+            },
+            {
+                "node_id": "n-engine",
+                "kind": "asset",
+                "name": "SK_Mannequin",
+                "canonical_key": "Sample|asset|/Engine/Characters/Mannequins/SK_Mannequin",
+                "properties": {"package": "/Engine/Characters/Mannequins/SK_Mannequin"},
+            },
+        ]
+        relations = [
+            {
+                "relation_id": "r-publish",
+                "source_id": "n-death",
+                "kind": "PUBLISHES_EVENT",
+                "target_id": "n-message",
+                "certainty": "confirmed",
+                "properties": {},
+            },
+            {
+                "relation_id": "r-dependency",
+                "source_id": "n-death",
+                "kind": "DEPENDS_ON",
+                "target_id": "n-engine",
+                "certainty": "confirmed",
+                "properties": {},
+            },
+        ]
+        document = {
+            "schema_version": "ue_build_knowledge_graph",
+            "graph": {
+                "project": "D:/Sample/Sample.uproject",
+                "nodes": nodes,
+                "relations": relations,
+                "evidence": [
+                    {"evidence_id": "e-publish-1", "relation_id": "r-publish", "producer": "cpp.json"},
+                    {"evidence_id": "e-publish-2", "relation_id": "r-publish", "producer": "message.json"},
+                    {"evidence_id": "e-dependency", "relation_id": "r-dependency", "producer": "asset.json"},
+                ],
+                "counts": {"nodes": 3, "relations": 2, "evidence": 3},
+            },
+        }
+        first = summarize_graph(document, view="all", max_nodes=20, max_relations=20)
+        second = summarize_graph(document, view="all", max_nodes=20, max_relations=20)
+        self.assertEqual(first, second)
+        overview_relation = next(
+            item for item in first["overview"]["featured_relations"] if item["relation_id"] == "r-publish"
+        )
+        self.assertEqual(overview_relation["evidence_ids"], ["e-publish-1", "e-publish-2"])
+        self.assertIn("DEPENDS_ON", first["overview"]["coverage"]["folded_relation_counts"])
+        self.assertIn("n-death", first["slices"]["death"]["node_ids"])
+
     def test_config_scanner_applies_array_operations_and_extracts_references(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -134,6 +201,21 @@ class OfflineEditorToolTests(unittest.TestCase):
                                     "title": "Return",
                                     "pins": [],
                                 },
+                                {
+                                    "object_path": "/Game/BP_Sample.BP_Sample_C:EventGraph.Heal",
+                                    "class": "K2Node_CallFunction",
+                                    "type_id": "CallFunction",
+                                    "title": "Heal",
+                                    "symbol": {
+                                        "symbol_kind": "function",
+                                        "symbol_name": "Heal",
+                                        "symbol_path": "Heal",
+                                        "symbol_id": "ue_symbol:name-only",
+                                        "resolution": "name_only",
+                                        "source": "node_type_id_or_title",
+                                    },
+                                    "pins": [],
+                                },
                             ],
                         }
                     ],
@@ -150,7 +232,13 @@ class OfflineEditorToolTests(unittest.TestCase):
                     "name": "ApplyDamage",
                     "kind": "method",
                     "evidence": {"unit": "header", "line": 12},
-                }
+                },
+                {
+                    "qualified_name": "SampleCharacter::Heal",
+                    "name": "Heal",
+                    "kind": "method",
+                    "evidence": {"unit": "header", "line": 13},
+                },
             ],
         }
         graph, problems = build_knowledge_graph(
@@ -160,6 +248,7 @@ class OfflineEditorToolTests(unittest.TestCase):
         kinds = {item["kind"] for item in graph["relations"]}
         self.assertIn("CALLS", kinds)
         self.assertIn("MAPS_TO", kinds)
+        self.assertIn("CANDIDATE_MATCH", kinds)
         self.assertIn("DATA_OR_EXEC_LINK", kinds)
         self.assertEqual(validate_graph(graph), [])
 

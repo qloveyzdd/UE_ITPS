@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:edittools:ue_summarize_knowledge_graph",
+  "oneOf": [
+    {"$ref": "#/$defs/success"},
+    {"allOf": [{"$ref": "urn:ue-itps:edittools:common#/$defs/errorDocument"}, {"properties": {"schema_version": {"const": "ue_summarize_knowledge_graph"}}}]}
+  ],
+  "$defs": {
+    "node": {
+      "type": "object",
+      "required": ["node_id", "kind", "name", "label", "domains", "confidence", "importance", "properties"],
+      "properties": {
+        "node_id": {"type": "string"},
+        "kind": {"type": "string"},
+        "name": {"type": "string"},
+        "label": {"type": "string"},
+        "canonical_key": {"type": "string"},
+        "domains": {"type": "array", "items": {"type": "string"}},
+        "confidence": {"type": "string"},
+        "importance": {"type": "number"},
+        "properties": {"type": "object"}
+      },
+      "additionalProperties": true
+    },
+    "relation": {
+      "type": "object",
+      "required": ["relation_id", "source_id", "kind", "target_id", "certainty", "evidence_ids", "evidence_count"],
+      "properties": {
+        "relation_id": {"type": "string"},
+        "source_id": {"type": "string"},
+        "source_name": {"type": "string"},
+        "kind": {"type": "string"},
+        "target_id": {"type": "string"},
+        "target_name": {"type": "string"},
+        "certainty": {"type": "string"},
+        "properties": {"type": "object"},
+        "evidence_ids": {"type": "array", "items": {"type": "string"}},
+        "evidence_producers": {"type": "array", "items": {"type": "string"}},
+        "evidence_count": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": true
+    },
+    "overview": {
+      "type": "object",
+      "required": ["project", "raw_counts", "node_counts", "relation_counts", "coverage", "featured_nodes", "featured_relations", "evidence_ids"],
+      "properties": {
+        "project": {"type": "string"},
+        "source_schema": {"type": "string"},
+        "raw_counts": {"type": "object"},
+        "node_counts": {"type": "object"},
+        "relation_counts": {"type": "object"},
+        "relation_confidence_counts": {"type": "object"},
+        "domain_counts": {"type": "object"},
+        "coverage": {"type": "object"},
+        "featured_nodes": {"type": "array", "items": {"$ref": "#/$defs/node"}},
+        "featured_relations": {"type": "array", "items": {"$ref": "#/$defs/relation"}},
+        "evidence_ids": {"type": "array", "items": {"type": "string"}},
+        "guidance": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": true
+    },
+    "systems": {
+      "type": "object",
+      "required": ["project", "systems", "cross_system_relations"],
+      "properties": {
+        "project": {"type": "string"},
+        "systems": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+        "cross_system_relations": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+        "folded_relation_kinds": {"type": "object"}
+      },
+      "additionalProperties": true
+    },
+    "slice": {"type": "object", "additionalProperties": true},
+    "source_graph": {
+      "type": "object",
+      "required": ["schema_version", "project", "counts"],
+      "properties": {
+        "schema_version": {"const": "ue_build_knowledge_graph"},
+        "project": {"type": "string"},
+        "counts": {"type": "object"}
+      },
+      "additionalProperties": true
+    },
+    "success": {
+      "type": "object",
+      "required": ["schema_version", "source_schema", "project", "view", "source_graph", "validation", "limits"],
+      "properties": {
+        "schema_version": {"const": "ue_summarize_knowledge_graph"},
+        "source_schema": {"const": "ue_build_knowledge_graph"},
+        "project": {"type": "string"},
+        "view": {"enum": ["overview", "systems", "slice", "entity", "all"]},
+        "overview": {"$ref": "#/$defs/overview"},
+        "systems": {"$ref": "#/$defs/systems"},
+        "slices": {"type": "object", "additionalProperties": {"$ref": "#/$defs/slice"}},
+        "entities": {"type": "object", "additionalProperties": {"type": "object", "additionalProperties": true}},
+        "source_graph": {"$ref": "#/$defs/source_graph"},
+        "artifacts": {"type": "array", "items": {"type": "string"}},
+        "validation": {"$ref": "urn:ue-itps:edittools:common#/$defs/validation"},
+        "limits": {"$ref": "urn:ue-itps:edittools:common#/$defs/limits"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

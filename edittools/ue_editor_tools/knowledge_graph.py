@@ -130,6 +130,14 @@ def _target_node(graph: KnowledgeGraph, kind: str, target: str) -> str:
         return graph.add_node(
             "class", normalized, normalized.rsplit(".", 1)[-1], {"path": normalized}
         )
+    if kind in {"symbol", "cxx_symbol", "blueprint_symbol"}:
+        symbol_kind = "cxx_symbol" if normalized.startswith("/Script/") else "blueprint_symbol"
+        return graph.add_node(
+            symbol_kind,
+            normalized,
+            normalized.rsplit(".", 1)[-1].rsplit("::", 1)[-1],
+            {"path": normalized},
+        )
     package = package_from_object_path(normalized)
     return graph.add_node(
         "asset", package, package.rsplit("/", 1)[-1], {"package": package}
@@ -416,13 +424,22 @@ def _blueprints(graph: KnowledgeGraph, document: dict[str, Any], producer: str) 
                     symbol_path = normalize_object_path(str(symbol["symbol_path"]))
                     symbol_kind = str(symbol.get("symbol_kind") or "symbol")
                     symbol_node_id = graph.add_node(
-                        "cxx_symbol" if symbol_path.startswith("/Script/") else "symbol",
+                        (
+                            "cxx_symbol"
+                            if symbol_path.startswith("/Script/")
+                            else "blueprint_symbol"
+                            if str(symbol.get("resolution", "")) == "name_only"
+                            else "symbol"
+                        ),
                         symbol_path,
                         symbol_path.rsplit(".", 1)[-1].rsplit("::", 1)[-1],
                         {
                             "path": symbol_path,
                             "symbol_kind": symbol_kind,
                             "symbol_id": symbol.get("symbol_id"),
+                            "symbol_name": symbol.get("symbol_name") or symbol_path,
+                            "resolution": symbol.get("resolution", "exact"),
+                            "source": symbol.get("source"),
                         },
                     )
                     graph.add_relation(
@@ -1209,13 +1226,22 @@ def _level_actors(graph: KnowledgeGraph, document: dict[str, Any], producer: str
             if isinstance(symbol, dict) and symbol.get("symbol_path"):
                 symbol_path = normalize_object_path(str(symbol["symbol_path"]))
                 symbol_node_id = graph.add_node(
-                    "cxx_symbol" if symbol_path.startswith("/Script/") else "symbol",
+                    (
+                        "cxx_symbol"
+                        if symbol_path.startswith("/Script/")
+                        else "blueprint_symbol"
+                        if str(symbol.get("resolution", "")) == "name_only"
+                        else "symbol"
+                    ),
                     symbol_path,
                     symbol_path.rsplit(".", 1)[-1].rsplit("::", 1)[-1],
                     {
                         "path": symbol_path,
                         "symbol_kind": symbol.get("symbol_kind"),
                         "symbol_id": symbol.get("symbol_id"),
+                        "symbol_name": symbol.get("symbol_name") or symbol_path,
+                        "resolution": symbol.get("resolution", "exact"),
+                        "source": symbol.get("source"),
                     },
                 )
                 graph.add_relation(
@@ -1338,6 +1364,45 @@ def _level_actors(graph: KnowledgeGraph, document: dict[str, Any], producer: str
                 )
 
 
+def _resolve_blueprint_symbol_candidates(graph: KnowledgeGraph) -> None:
+    native_functions = [
+        (node_id, node)
+        for node_id, node in graph.nodes.items()
+        if node.get("kind") == "cxx_function"
+    ]
+    for symbol_id, symbol in list(graph.nodes.items()):
+        if symbol.get("kind") != "blueprint_symbol":
+            continue
+        properties = symbol.get("properties", {})
+        if properties.get("resolution") != "name_only":
+            continue
+        candidate = str(properties.get("symbol_name") or symbol.get("name") or "")
+        if not candidate:
+            continue
+        matches = [
+            (node_id, node)
+            for node_id, node in native_functions
+            if str(node.get("properties", {}).get("qualified_name", ""))
+            .rsplit("::", 1)[-1]
+            .casefold()
+            == candidate.casefold()
+        ]
+        for target_id, target in matches:
+            graph.add_relation(
+                symbol_id,
+                "CANDIDATE_MATCH",
+                target_id,
+                certainty="candidate" if len(matches) > 1 else "unresolved",
+                properties={"candidate_count": len(matches)},
+                producer="knowledge_graph:blueprint_symbol_resolver",
+                evidence={
+                    "symbol": candidate,
+                    "native": target.get("properties", {}).get("qualified_name"),
+                    "resolution": "name_only",
+                },
+            )
+
+
 def _import_graph(graph: KnowledgeGraph, source: dict[str, Any], producer: str) -> None:
     mapping: dict[str, str] = {}
     for node in source.get("nodes", []):
@@ -1447,6 +1512,7 @@ def build_knowledge_graph(
             )
             continue
         adapter(graph, document, producer)
+    _resolve_blueprint_symbol_candidates(graph)
     return graph.document(), problems
 
 
