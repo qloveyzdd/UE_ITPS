@@ -83,8 +83,68 @@ def _reference_value(value: Any) -> Any:
     return str(value)
 
 
+def _native_member_reference(node: Any) -> dict[str, Any] | None:
+    """Read the LyraEditor native FMemberReference bridge when available.
+
+    Unreal Python exposes the Blueprint node object, but UE 5.8 does not
+    expose the native FMemberReference properties.  The editor module adds a
+    read-only JSON bridge for that gap.  Keeping this optional preserves the
+    offline/runtime fallback for projects without LyraEditor loaded.
+    """
+
+    library = getattr(unreal, "LyraBlueprintReferenceLibrary", None)
+    method = getattr(library, "get_node_member_reference_json", None)
+    if method is None:
+        return None
+    try:
+        payload = json.loads(str(method(node)))
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    kind = str(payload.get("symbol_kind") or "")
+    member_name = str(payload.get("member_name") or "")
+    field_path = str(payload.get("field_path") or "")
+    if member_name == "None":
+        member_name = ""
+    if field_path == "None":
+        field_path = ""
+    if not kind or kind == "none":
+        return None
+    if str(payload.get("resolution") or "").casefold() == "none":
+        return None
+    if not member_name and not field_path:
+        return None
+    payload["member_name"] = member_name
+    if field_path:
+        payload["field_path"] = field_path
+    return payload
+
+
 def _node_symbol(node: Any) -> dict[str, Any] | None:
     """Read the common UE node reference fields without assuming one wrapper version."""
+
+    native = _native_member_reference(node)
+    if native is not None:
+        kind = str(native.get("symbol_kind") or "symbol")
+        member_name = str(native.get("member_name") or "")
+        field_path = str(native.get("field_path") or "")
+        parent_path = str(native.get("member_parent_path") or "")
+        symbol_path = field_path or (
+            f"{parent_path}:{member_name}" if parent_path and member_name else member_name
+        )
+        symbol_path = normalize_object_path(symbol_path)
+        if symbol_path:
+            symbol = {
+                "symbol_kind": kind,
+                "symbol_name": member_name or symbol_path.rsplit(":", 1)[-1],
+                "symbol_path": symbol_path,
+                "symbol_id": stable_fact_id("ue_symbol", kind, symbol_path),
+                "resolution": str(native.get("resolution") or "reference"),
+                "source": "native_member_reference",
+                "member_reference": native,
+            }
+            return symbol
 
     fields = (
         "function_reference",

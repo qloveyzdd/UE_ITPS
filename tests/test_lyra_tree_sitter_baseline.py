@@ -170,12 +170,12 @@ class LyraTreeSitterBaselineTests(unittest.TestCase):
         model = load_cpp_unit(files[0], files, project_root)
 
         self.assertEqual(model["diagnostic_error_count"], 0)
-        self.assertEqual(len(model["types"]), 2022)
+        self.assertEqual(len(model["types"]), 2024)
         # Nested type bodies must not create spurious outer-class function declarations.
-        self.assertEqual(len(model["functions"]), 6069)
+        self.assertEqual(len(model["functions"]), 6074)
         self.assertEqual(len(model["variables"]), 302)
-        self.assertEqual(len(model["includes"]), 3254)
-        self.assertEqual(len(model["macros"]), 3016)
+        self.assertEqual(len(model["includes"]), 3269)
+        self.assertEqual(len(model["macros"]), 3019)
 
         definitions = [item for item in model["types"] if item["role"] == "definition"]
         self.assertEqual({(t["file"], t["start_offset"]) for t in definitions}, raw_type_definitions)
@@ -193,7 +193,7 @@ class LyraTreeSitterBaselineTests(unittest.TestCase):
             self.assertEqual(macro["end_line"], macro_end_lines[location], location)
         self.assertEqual(sum(len(item.get("fields", [])) for item in definitions), 1850)
         # Include inline definitions, constructors and template member declarations.
-        self.assertEqual(sum(len(item.get("methods", [])) for item in definitions), 3348)
+        self.assertEqual(sum(len(item.get("methods", [])) for item in definitions), 3349)
         self.assertEqual(
             sum(len(item.get("enumerators", [])) for item in definitions), 234
         )

@@ -180,6 +180,13 @@ class OfflineEditorToolTests(unittest.TestCase):
                                         "symbol_kind": "function",
                                         "symbol_path": "/Script/Sample.SampleCharacter:ApplyDamage",
                                         "symbol_id": "ue_symbol:test",
+                                        "resolution": "exact",
+                                        "source": "native_member_reference",
+                                        "member_reference": {
+                                            "member_parent_path": "/Script/Sample.SampleCharacter",
+                                            "field_path": "/Script/Sample.SampleCharacter:ApplyDamage",
+                                            "resolution": "exact",
+                                        },
                                     },
                                     "pins": [
                                         {
@@ -250,6 +257,15 @@ class OfflineEditorToolTests(unittest.TestCase):
         self.assertIn("MAPS_TO", kinds)
         self.assertIn("CANDIDATE_MATCH", kinds)
         self.assertIn("DATA_OR_EXEC_LINK", kinds)
+        symbol = next(
+            item
+            for item in graph["nodes"]
+            if item.get("properties", {}).get("symbol_id") == "ue_symbol:test"
+        )
+        self.assertEqual(
+            symbol["properties"]["member_reference"]["field_path"],
+            "/Script/Sample.SampleCharacter:ApplyDamage",
+        )
         self.assertEqual(validate_graph(graph), [])
 
     def test_knowledge_graph_keeps_level_instance_evidence(self) -> None:

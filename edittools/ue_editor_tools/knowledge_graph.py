@@ -440,6 +440,7 @@ def _blueprints(graph: KnowledgeGraph, document: dict[str, Any], producer: str) 
                             "symbol_name": symbol.get("symbol_name") or symbol_path,
                             "resolution": symbol.get("resolution", "exact"),
                             "source": symbol.get("source"),
+                            "member_reference": symbol.get("member_reference"),
                         },
                     )
                     graph.add_relation(
@@ -1242,6 +1243,7 @@ def _level_actors(graph: KnowledgeGraph, document: dict[str, Any], producer: str
                         "symbol_name": symbol.get("symbol_name") or symbol_path,
                         "resolution": symbol.get("resolution", "exact"),
                         "source": symbol.get("source"),
+                        "member_reference": symbol.get("member_reference"),
                     },
                 )
                 graph.add_relation(

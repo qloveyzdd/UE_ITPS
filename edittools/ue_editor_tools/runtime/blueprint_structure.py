@@ -248,6 +248,7 @@ def inspect_blueprint_structure(asset_path: str) -> dict[str, Any]:
                         "resolution": symbol.get("resolution", "exact"),
                         "symbol_kind": symbol.get("symbol_kind"),
                         "symbol_id": symbol.get("symbol_id"),
+                        "member_reference": symbol.get("member_reference"),
                         "asset": asset_path,
                         "graph": graph.get_name(),
                         "graph_path": graph_path,
