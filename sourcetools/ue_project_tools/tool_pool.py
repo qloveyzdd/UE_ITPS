@@ -121,6 +121,13 @@ _TOOLS: tuple[dict[str, Any], ...] = (
         "capabilities": ["cxx_ast", "scope_navigation", "evidence_drilldown"],
     },
     {
+        "name": "ue_analyze_cxx_dependencies",
+        "category": "source",
+        "entrypoint": "sourcetools/ue_analyze_cxx_dependencies.py",
+        "inputs": ["project"],
+        "capabilities": ["cxx_ast", "project_dependency_graph", "type_dependency_graph"],
+    },
+    {
         "name": "ue_list_tools",
         "category": "pool",
         "entrypoint": "sourcetools/ue_list_tools.py",

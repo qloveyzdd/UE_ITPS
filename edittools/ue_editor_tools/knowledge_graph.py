@@ -1178,6 +1178,69 @@ def _cxx_adapter(graph: KnowledgeGraph, document: dict[str, Any], producer: str)
     _cxx_document(graph, document, producer)
 
 
+def _cxx_dependency_graph(
+    graph: KnowledgeGraph, document: dict[str, Any], producer: str
+) -> None:
+    dependency_graph = document.get("graph", {})
+    if not isinstance(dependency_graph, dict):
+        return
+    nodes = dependency_graph.get("nodes", [])
+    known: dict[str, str] = {}
+    kinds = {"class", "struct", "enum", "union", "type"}
+    for item in nodes if isinstance(nodes, list) else []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        if not name:
+            continue
+        kind = str(item.get("kind") or "type")
+        if kind not in kinds:
+            kind = "type"
+        known[name] = _cxx_symbol(
+            graph,
+            kind,
+            name,
+            {
+                "files": list(item.get("files", []) or []),
+                "base_types": list(item.get("base_types", []) or []),
+                "incoming_count": item.get("incoming_count", 0),
+                "outgoing_count": item.get("outgoing_count", 0),
+                "project_root": document.get("project_root"),
+            },
+        )
+    for item in dependency_graph.get("edges", []) if isinstance(dependency_graph.get("edges", []), list) else []:
+        if not isinstance(item, dict):
+            continue
+        source_name = str(item.get("source") or "").strip()
+        target_name = str(item.get("target") or "").strip()
+        if not source_name or not target_name:
+            continue
+        source_id = known.get(source_name) or _cxx_symbol(
+            graph, "type", source_name, {"external": True}
+        )
+        target_id = known.get(target_name)
+        target_known = target_id is not None
+        if target_id is None:
+            target_id = _cxx_symbol(graph, "type", target_name, {"external": True})
+        edge_kind = str(item.get("kind") or "reference")
+        relation_kind = {
+            "inheritance": "INHERITS",
+            "field": "USES_TYPE",
+        }.get(edge_kind, "REFERENCES_TYPE")
+        evidence = dict(item.get("evidence", {}) or {})
+        if item.get("member"):
+            evidence["member"] = item["member"]
+        graph.add_relation(
+            source_id,
+            relation_kind,
+            target_id,
+            certainty="confirmed" if target_known else "unresolved",
+            producer=producer,
+            properties={"dependency_kind": edge_kind, "member": item.get("member")},
+            evidence=evidence,
+        )
+
+
 def _level_actors(graph: KnowledgeGraph, document: dict[str, Any], producer: str) -> None:
     world = document.get("world", {})
     world_path = str(world.get("object_path") or "")
@@ -1457,6 +1520,7 @@ ADAPTERS: dict[str, Callable[[KnowledgeGraph, dict[str, Any], str], None]] = {
     "ue_list_cxx_functions": _cxx_adapter,
     "ue_inspect_cxx_type": _cxx_adapter,
     "ue_inspect_cxx_function": _cxx_adapter,
+    "ue_analyze_cxx_dependencies": _cxx_dependency_graph,
     "ue_editor_scan_level_actors": _level_actors,
 }
 

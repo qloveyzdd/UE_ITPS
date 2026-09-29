@@ -157,7 +157,7 @@ export default function App() {
     setBusy(true);
     setError("");
     try {
-      const database = await GraphDatabase.open(new Uint8Array(await file.arrayBuffer()));
+      const database = await GraphDatabase.open(new Uint8Array(await file.arrayBuffer()), file.name);
       databaseRef.current?.close();
       databaseRef.current = database;
       const nextSummary = database.summary();
@@ -269,7 +269,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand"><span className="brand-mark">KG</span><div><strong>UE 文件知识图谱</strong><span>第一阶段 · 静态文件关系</span></div></div>
         <label className="file-button">
-          <input type="file" accept=".sqlite3,.sqlite,.db,application/vnd.sqlite3" onChange={(event) => {
+          <input type="file" accept=".json,.sqlite3,.sqlite,.db,application/json,application/vnd.sqlite3" onChange={(event) => {
             const file = event.target.files?.[0];
             if (file) void openDatabase(file);
             event.currentTarget.value = "";
@@ -280,7 +280,7 @@ export default function App() {
 
       <section className="toolbar">
         <form className="search" onSubmit={search}>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={summary ? "搜索文件、模块或插件…" : "请先打开 SQLite 图谱"} disabled={!summary} />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={summary ? "搜索文件、模块或插件…" : "请先打开 JSON 或 SQLite 图谱"} disabled={!summary} />
           <button type="submit" disabled={!summary || !query.trim()}>搜索</button>
           {candidates.length > 0 && (
             <div className="search-results">
@@ -295,7 +295,7 @@ export default function App() {
         </form>
         <label>展开深度<select value={depth} onChange={(event) => setDepth(Number(event.target.value))} disabled={!summary}>{[1, 2, 3, 4, 5].map((value) => <option value={value} key={value}>{value} 层</option>)}</select></label>
         <label>节点上限<select value={maxNodes} onChange={(event) => setMaxNodes(Number(event.target.value))} disabled={!summary}>{[100, 200, 400, 600].map((value) => <option value={value} key={value}>{value}</option>)}</select></label>
-        <button type="button" disabled={!rootId} onClick={() => loadGraph(rootId)}>返回项目根</button>
+        <button type="button" disabled={!rootId} onClick={() => loadGraph(rootId)}>{summary?.schemaVersion === "ue_build_knowledge_graph" ? "返回起始节点" : "返回项目根"}</button>
         <button type="button" disabled={!graph} onClick={() => graph && loadGraph(graph.centerId)}>应用范围</button>
       </section>
 
@@ -329,7 +329,7 @@ export default function App() {
               <p className="hint">双击节点可重新聚焦；虚线表示外部或未完全解析的关系。</p>
             </>
           ) : (
-            <div className="empty-overview"><strong>尚未加载图谱</strong><p>选择由第一阶段构建器生成的 SQLite 文件。</p></div>
+            <div className="empty-overview"><strong>尚未加载图谱</strong><p>选择由构建器生成的 JSON 或 SQLite 文件。</p></div>
           )}
         </aside>
 

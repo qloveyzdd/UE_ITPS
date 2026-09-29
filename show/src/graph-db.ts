@@ -67,6 +67,41 @@ interface RawEdge {
   properties_json: string;
 }
 
+interface LogicalNode {
+  node_id: string;
+  kind: string;
+  name: string;
+  canonical_key?: string;
+  properties?: Record<string, unknown>;
+}
+
+interface LogicalRelation {
+  relation_id: string;
+  source_id: string;
+  kind: string;
+  target_id: string;
+  certainty?: string;
+  properties?: Record<string, unknown>;
+}
+
+interface LogicalEvidence {
+  evidence_id: string;
+  relation_id: string;
+  producer?: string;
+  [key: string]: unknown;
+}
+
+interface LogicalDocument {
+  schema_version: string;
+  graph: {
+    project?: string;
+    nodes: LogicalNode[];
+    relations: LogicalRelation[];
+    evidence: LogicalEvidence[];
+  };
+  validation?: { problem_count?: number };
+}
+
 const REQUIRED_TABLES = ["metadata", "nodes", "edges", "edge_evidence"];
 let runtimePromise: Promise<SqlJsStatic> | null = null;
 
@@ -120,20 +155,59 @@ function escapeLike(value: string): string {
 }
 
 export class GraphDatabase {
-  public constructor(private readonly db: Database) {
+  public constructor(
+    private readonly db: Database | null,
+    private readonly logical: LogicalDocument | null = null,
+  ) {
     this.validate();
   }
 
-  static async open(bytes: Uint8Array): Promise<GraphDatabase> {
+  static async open(bytes: Uint8Array, filename = ""): Promise<GraphDatabase> {
+    if (filename.toLowerCase().endsWith(".json")) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(new TextDecoder().decode(bytes));
+      } catch {
+        throw new Error("JSON 图谱无法解析。请确认文件完整且使用 UTF-8 编码。");
+      }
+      return GraphDatabase.fromLogicalDocument(parsed);
+    }
     const SQL = await runtime();
     return new GraphDatabase(new SQL.Database(bytes));
   }
 
+  static fromLogicalDocument(value: unknown): GraphDatabase {
+    if (value === null || typeof value !== "object") throw new Error("不是有效的 JSON 图谱对象。");
+    const document = value as Partial<LogicalDocument>;
+    if (document.schema_version !== "ue_build_knowledge_graph" || !document.graph) {
+      throw new Error("不支持的 JSON 图谱版本：需要 ue_build_knowledge_graph。");
+    }
+    const graph = document.graph as LogicalDocument["graph"];
+    if (!Array.isArray(graph.nodes) || !Array.isArray(graph.relations) || !Array.isArray(graph.evidence)) {
+      throw new Error("JSON 图谱缺少 nodes、relations 或 evidence。");
+    }
+    return new GraphDatabase(null, {
+      schema_version: document.schema_version,
+      graph,
+      validation: document.validation,
+    });
+  }
+
   close(): void {
-    this.db.close();
+    this.db?.close();
   }
 
   private validate(): void {
+    if (this.logical) {
+      const nodeIds = new Set(this.logical.graph.nodes.map((node) => node.node_id));
+      if (this.logical.graph.nodes.some((node) => !node.node_id || !node.name || !node.kind)) {
+        throw new Error("JSON 图谱包含不完整的节点记录。");
+      }
+      if (this.logical.graph.relations.some((relation) => !nodeIds.has(relation.source_id) || !nodeIds.has(relation.target_id))) {
+        throw new Error("JSON 图谱包含指向不存在节点的关系。");
+      }
+      return;
+    }
     const tableNames = new Set(
       this.rows<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'")
         .map((row) => String(row.name)),
@@ -152,6 +226,15 @@ export class GraphDatabase {
   }
 
   summary(): GraphSummary {
+    if (this.logical) {
+      return {
+        schemaVersion: this.logical.schema_version,
+        projectPath: this.logical.graph.project ?? "",
+        nodeCount: this.logical.graph.nodes.length,
+        edgeCount: this.logical.graph.relations.length,
+        warningCount: Number(this.logical.validation?.problem_count ?? 0),
+      };
+    }
     const values = this.metadata();
     return {
       schemaVersion: values.schema_version,
@@ -163,6 +246,19 @@ export class GraphDatabase {
   }
 
   rootNodeId(): string {
+    if (this.logical) {
+      const preferred = ["project_file", "project", "uproject"];
+      const node = [...this.logical.graph.nodes]
+        .sort((left, right) => {
+          const leftRank = preferred.indexOf(left.kind);
+          const rightRank = preferred.indexOf(right.kind);
+          return (leftRank < 0 ? preferred.length : leftRank) - (rightRank < 0 ? preferred.length : rightRank)
+            || left.name.localeCompare(right.name)
+            || left.node_id.localeCompare(right.node_id);
+        })[0];
+      if (!node) throw new Error("JSON 图谱中没有节点。");
+      return node.node_id;
+    }
     const row = this.rows<{ node_id: string }>(
       "SELECT node_id FROM nodes WHERE kind = 'project_file' ORDER BY path LIMIT 1",
     )[0];
@@ -173,6 +269,25 @@ export class GraphDatabase {
   search(query: string, limit = 30): SearchResult[] {
     const value = query.trim();
     if (!value) return [];
+    if (this.logical) {
+      const folded = value.toLocaleLowerCase();
+      return this.logical.graph.nodes
+        .filter((node) => {
+          const properties = node.properties ?? {};
+          const candidates = [
+            node.name,
+            node.canonical_key ?? "",
+            typeof properties.path === "string" ? properties.path : "",
+            typeof properties.qualified_name === "string" ? properties.qualified_name : "",
+            Array.isArray(properties.files) ? properties.files.join(" ") : "",
+          ];
+          return candidates.some((candidate) => candidate.toLocaleLowerCase().includes(folded));
+        })
+        .sort((left, right) => (left.name.toLocaleLowerCase() === folded ? 0 : 1) - (right.name.toLocaleLowerCase() === folded ? 0 : 1)
+          || left.kind.localeCompare(right.kind) || left.name.localeCompare(right.name))
+        .slice(0, limit)
+        .map((node) => ({ id: node.node_id, kind: node.kind, name: node.name, path: this.nodePath(node) }));
+    }
     const pattern = `%${escapeLike(value)}%`;
     return this.rows<RawNode>(
       `SELECT node_id, kind, name, path, properties_json
@@ -198,6 +313,63 @@ export class GraphDatabase {
     const edgeRows = new Map<string, RawEdge>();
     let frontier = [centerId];
     let truncated = false;
+
+    if (this.logical) {
+      const relations = this.logical.graph.relations;
+      for (let level = 0; level < safeDepth && frontier.length > 0; level += 1) {
+        const next: string[] = [];
+        const frontierSet = new Set(frontier);
+        for (const relation of relations) {
+          const touches = frontierSet.has(relation.source_id) || frontierSet.has(relation.target_id);
+          if (!touches) continue;
+          const candidate = distances.has(relation.source_id) ? relation.target_id : relation.source_id;
+          if (!distances.has(candidate)) {
+            if (distances.size >= safeMaxNodes) {
+              truncated = true;
+              continue;
+            }
+            distances.set(candidate, level + 1);
+            next.push(candidate);
+          }
+        }
+        frontier = [...new Set(next)];
+      }
+      const nodeById = new Map(this.logical.graph.nodes.map((node) => [node.node_id, node]));
+      const nodeRows = [...distances.keys()]
+        .map((id) => nodeById.get(id))
+        .filter((node): node is LogicalNode => Boolean(node));
+      const evidenceByRelation = new Map<string, Evidence[]>();
+      for (const item of this.logical.graph.evidence) {
+        const values = evidenceByRelation.get(item.relation_id) ?? [];
+        const path = typeof item.path === "string" ? item.path : null;
+        const line = typeof item.line === "number" ? item.line : null;
+        const detail = Object.fromEntries(Object.entries(item).filter(([key]) => !["evidence_id", "relation_id", "producer", "path", "line"].includes(key)));
+        values.push({ path, line, extractor: String(item.producer ?? "knowledge_graph"), detail });
+        evidenceByRelation.set(item.relation_id, values);
+      }
+      const visibleIds = new Set(distances.keys());
+      const edges = relations
+        .filter((relation) => visibleIds.has(relation.source_id) && visibleIds.has(relation.target_id))
+        .map<GraphEdge>((relation) => ({
+          id: relation.relation_id,
+          source: relation.source_id,
+          target: relation.target_id,
+          kind: relation.kind,
+          certainty: relation.certainty ?? "confirmed",
+          resolutionStatus: relation.certainty === "confirmed" ? "resolved" : relation.certainty ?? "unresolved",
+          properties: relation.properties ?? {},
+          evidence: evidenceByRelation.get(relation.relation_id) ?? [],
+        }));
+      const nodes = nodeRows.map<GraphNode>((node) => ({
+        id: node.node_id,
+        kind: node.kind,
+        name: node.name,
+        path: this.nodePath(node),
+        properties: node.properties ?? {},
+        distance: distances.get(node.node_id) ?? 0,
+      })).sort((left, right) => left.distance - right.distance || left.name.localeCompare(right.name));
+      return { centerId, nodes, edges, truncated };
+    }
 
     for (let level = 0; level < safeDepth && frontier.length > 0; level += 1) {
       const next: string[] = [];
@@ -290,6 +462,7 @@ export class GraphDatabase {
   }
 
   private rows<T extends object>(sql: string, parameters: unknown[] = []): T[] {
+    if (!this.db) throw new Error("当前图谱不是 SQLite 数据库。");
     const statement = this.db.prepare(sql);
     try {
       statement.bind(parameters as (string | number | null | Uint8Array)[]);
@@ -299,5 +472,12 @@ export class GraphDatabase {
     } finally {
       statement.free();
     }
+  }
+
+  private nodePath(node: LogicalNode): string | null {
+    const properties = node.properties ?? {};
+    if (typeof properties.path === "string") return properties.path;
+    if (Array.isArray(properties.files) && typeof properties.files[0] === "string") return properties.files[0];
+    return null;
   }
 }

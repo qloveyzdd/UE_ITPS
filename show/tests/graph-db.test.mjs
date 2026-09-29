@@ -83,3 +83,38 @@ test("搜索支持名称和路径片段", async () => {
     graph.close();
   }
 });
+
+test("读取并查询 JSON 知识图谱", () => {
+  const { GraphDatabase } = loadTypeScript("src/graph-db.ts");
+  const graph = GraphDatabase.fromLogicalDocument({
+    schema_version: "ue_build_knowledge_graph",
+    graph: {
+      project: "Sample/Sample.uproject",
+      nodes: [
+        { node_id: "a", kind: "cxx_class", name: "Worker", properties: { qualified_name: "Game::Worker", files: ["Source/Worker.h"] } },
+        { node_id: "b", kind: "cxx_class", name: "Actor", properties: { qualified_name: "AActor" } },
+      ],
+      relations: [
+        { relation_id: "r", source_id: "a", target_id: "b", kind: "INHERITS", certainty: "confirmed", properties: {} },
+      ],
+      evidence: [
+        { evidence_id: "e", relation_id: "r", producer: "cxx", path: "Source/Worker.h", line: 12 },
+      ],
+    },
+    validation: { status: "ok", problem_count: 0, problems: [] },
+  });
+  try {
+    assert.deepEqual(graph.summary(), {
+      schemaVersion: "ue_build_knowledge_graph",
+      projectPath: "Sample/Sample.uproject",
+      nodeCount: 2,
+      edgeCount: 1,
+      warningCount: 0,
+    });
+    assert.equal(graph.rootNodeId(), "b");
+    assert.equal(graph.search("Worker")[0].id, "a");
+    assert.equal(graph.queryGraph("a", 1, 20).edges[0].evidence[0].path, "Source/Worker.h");
+  } finally {
+    graph.close();
+  }
+});

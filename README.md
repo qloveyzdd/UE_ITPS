@@ -6,7 +6,7 @@ UE ITPS 将 Unreal Engine 工程中的源码、构建声明和 Editor 现场信�
 
 | 组件 | 当前能力 |
 |---|---|
-| [SourceTools](docs/TOOLS.md) | 16 个核心 CLI：工程与构建入口、头源配对、Include 来源、类型与函数、委托、检索视图及分层证据导航 |
+| [SourceTools](docs/TOOLS.md) | 17 个核心 CLI：工程与构建入口、头源配对、Include 来源、类型与函数、项目级 C++ 依赖、委托、检索视图及分层证据导航 |
 | [Editor 与离线工具](edittools/README.md) | 16 个 CLI：Editor 资产与 Blueprint 查询、配置和 C++ 消息扫描、知识图谱合并/校验/比较 |
 | [文件图谱](information_pool/README.md) | 将工程、模块、Target、文件和直接 Include 关系写入 SQLite |
 | [本地浏览器](show/README.md) | 在浏览器内打开文件图谱，搜索、展开关系并查看证据 |
@@ -44,6 +44,7 @@ python sourcetools/ue_find_projects.py --search-root D:/Projects
 ```bash
 python sourcetools/ue_list_cxx_functions.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp D:/Projects/MyGame/Source/MyGame/Public/MyActor.h
 python sourcetools/ue_inspect_cxx_function.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp D:/Projects/MyGame/Source/MyGame/Public/MyActor.h --function AMyActor::BeginPlay --include-syntax-flow
+python sourcetools/ue_analyze_cxx_dependencies.py --project LyraStarterGame/LyraStarterGame.uproject
 ```
 
 函数选择名应来自函数清单。输出中的 `validation` 是本次扫描校验，`limits` 说明分析边界；`ok` 不代表编译或运行通过。

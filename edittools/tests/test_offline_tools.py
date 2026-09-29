@@ -268,6 +268,29 @@ class OfflineEditorToolTests(unittest.TestCase):
         )
         self.assertEqual(validate_graph(graph), [])
 
+    def test_knowledge_graph_imports_project_cxx_dependencies(self) -> None:
+        document = {
+            "schema_version": "ue_analyze_cxx_dependencies",
+            "project_root": "D:/Sample",
+            "graph": {
+                "nodes": [
+                    {"name": "SampleActor", "kind": "class", "files": ["Source/SampleActor.h"], "base_types": ["AActor"], "incoming_count": 0, "outgoing_count": 1},
+                    {"name": "SampleState", "kind": "struct", "files": ["Source/SampleState.h"], "base_types": [], "incoming_count": 1, "outgoing_count": 0},
+                ],
+                "edges": [
+                    {"source": "SampleActor", "target": "SampleState", "kind": "field", "member": "State", "evidence": {"path": "Source/SampleActor.h", "line": 8}},
+                ],
+                "cycles": [],
+            },
+            "validation": {"status": "ok", "problem_count": 0, "problems": []},
+            "limits": {"responsibility": "test", "boundaries": ["test"]},
+        }
+        graph, problems = build_knowledge_graph([("cxx-dependencies.json", document)])
+        self.assertEqual(problems, [])
+        self.assertIn("USES_TYPE", {item["kind"] for item in graph["relations"]})
+        self.assertIn("cxx_class", {item["kind"] for item in graph["nodes"]})
+        self.assertEqual(validate_graph(graph), [])
+
     def test_knowledge_graph_keeps_level_instance_evidence(self) -> None:
         document = {
             "schema_version": "ue_editor_scan_level_actors",

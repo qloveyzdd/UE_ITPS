@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:schema:ue_analyze_cxx_dependencies",
+  "title": "ue_analyze_cxx_dependencies.py result",
+  "oneOf": [
+    {"$ref": "#/$defs/success"},
+    {"allOf": [
+      {"$ref": "urn:ue-itps:schema:common#/$defs/errorDocument"},
+      {"properties": {"schema_version": {"const": "ue_analyze_cxx_dependencies"}}}
+    ]}
+  ],
+  "$defs": {
+    "text": {"type": "string", "minLength": 1},
+    "location": {
+      "type": "object",
+      "required": ["path"],
+      "properties": {
+        "path": {"$ref": "#/$defs/text"},
+        "line": {"type": "integer", "minimum": 1}
+      },
+      "additionalProperties": false
+    },
+    "node": {
+      "type": "object",
+      "required": ["name", "kind", "files", "base_types", "incoming_count", "outgoing_count"],
+      "properties": {
+        "name": {"$ref": "#/$defs/text"},
+        "kind": {"enum": ["class", "struct", "enum", "union", "type"]},
+        "files": {"type": "array", "items": {"$ref": "#/$defs/text"}, "uniqueItems": true},
+        "base_types": {"type": "array", "items": {"$ref": "#/$defs/text"}, "uniqueItems": true},
+        "incoming_count": {"type": "integer", "minimum": 0},
+        "outgoing_count": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "edge": {
+      "type": "object",
+      "required": ["source", "target", "kind", "member", "evidence"],
+      "properties": {
+        "source": {"$ref": "#/$defs/text"},
+        "target": {"$ref": "#/$defs/text"},
+        "kind": {"enum": ["inheritance", "field", "reference"]},
+        "member": {"type": ["string", "null"]},
+        "evidence": {"$ref": "#/$defs/location"}
+      },
+      "additionalProperties": false
+    },
+    "graph": {
+      "type": "object",
+      "required": ["nodes", "edges", "cycles"],
+      "properties": {
+        "nodes": {"type": "array", "items": {"$ref": "#/$defs/node"}},
+        "edges": {"type": "array", "items": {"$ref": "#/$defs/edge"}},
+        "cycles": {"type": "array", "items": {"type": "array", "items": {"$ref": "#/$defs/text"}}}
+      },
+      "additionalProperties": false
+    },
+    "success": {
+      "type": "object",
+      "required": ["schema_version", "project_root", "source_file_count", "graph", "validation", "limits"],
+      "properties": {
+        "schema_version": {"const": "ue_analyze_cxx_dependencies"},
+        "project_root": {"$ref": "#/$defs/text"},
+        "source_file_count": {"type": "integer", "minimum": 0},
+        "graph": {"$ref": "#/$defs/graph"},
+        "validation": {"$ref": "urn:ue-itps:schema:common#/$defs/validation"},
+        "limits": {"$ref": "urn:ue-itps:schema:common#/$defs/limits"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -31,6 +31,7 @@ _TREE_SITTER_CPP_TOOLS = {
     "ue_list_cxx_types",
     "ue_list_cxx_functions",
     "ue_inspect_module_entry",
+    "ue_analyze_cxx_dependencies",
 }
 _GRAPH_TOOLS = {
     "ue_read_plugin_descriptor",
