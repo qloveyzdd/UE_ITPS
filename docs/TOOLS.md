@@ -20,7 +20,7 @@
 | 类型 | `ue_inspect_cxx_type` | `--source --type` → 基类、直接成员、成员定义与接口候选依据 |
 | 函数 | `ue_list_cxx_functions` | `--source` → 每处函数定义、限定名、签名及位置 |
 | 函数 | `ue_inspect_cxx_function` | `--source --function` → 符号候选、委托及可选语法详情 |
-| 依赖 | `ue_analyze_cxx_dependencies` | `--project` → 项目范围 C++ 类型、继承与字段依赖及静态环 |
+| 依赖 | `ue_analyze_cxx_dependencies` | `--project` → 项目范围 C++ 类型、继承、字段依赖、直接项目内调用图及静态环；调用边区分 confirmed/candidate，无法静态归属的调用计入 unresolved |
 | 检索 | `ue_inspect_cxx_scope` | `--project --profile` → 系统/类型/函数/证据四级导航 |
 | 工具池 | `ue_list_tools` | 无参数 → 入口、输入和能力清单 |
 

@@ -7,6 +7,7 @@ from .cpp_frontend import CppFrontendError, load_cpp_unit
 from .common import iter_files, normalized, result_document
 from .dependency_graph import DependencyGraph, type_names
 from .source_context import load_source_context
+from .source_name_resolution import LocalNameResolver
 
 
 _SUFFIXES = (".h", ".hpp", ".cpp", ".cc")
@@ -208,21 +209,109 @@ def dependency_result(
     project_root: Path,
 ) -> dict[str, Any]:
     graph, parsed_files, problems = build_project_graph(project_root)
+    call_graph = _build_call_graph(project_root)
     return result_document(
         "ue_analyze_cxx_dependencies",
         {
             "project_root": normalized(project_root),
             "source_file_count": len(parsed_files),
             "graph": graph.document(),
+            "call_graph": call_graph,
         },
         problems,
-        responsibility="Build a project-local C++ type dependency graph and detect cycles.",
+        responsibility="Build project-local C++ type dependencies, direct calls and type dependency cycles.",
         boundaries=[
             "Only project-local C++ text under Source, Plugins, Platforms, and Mods is scanned.",
             "Edges cover inheritance and directly declared field types; compiler-resolved aliases and generated code are not inferred.",
             "Cycle and coupling results describe the observed static graph, not runtime object ownership.",
+            "Call edges are direct project-local syntax edges resolved to one project definition; overloaded, external, indirect, and generated calls remain candidates or unresolved counts.",
         ],
     )
+
+
+def _build_call_graph(project_root: Path) -> dict[str, Any]:
+    """Project-local direct calls from the same Tree-sitter model used by type analysis."""
+    project_files = project_cpp_files(project_root)
+    if not project_files:
+        return {"functions": [], "edges": [], "unresolved_count": 0, "candidate_count": 0}
+    try:
+        model = load_cpp_unit(project_files[0], project_files, project_root)
+    except CppFrontendError:
+        return {"functions": [], "edges": [], "unresolved_count": 0, "candidate_count": 0}
+    definitions = [item for item in model["functions"] if item.get("role") == "definition"]
+    resolver = LocalNameResolver(model)
+    function_ids = {
+        item["occurrence_id"]: Path(item["file"]).resolve().relative_to(project_root).as_posix()
+        + ":" + item["occurrence_id"].rsplit(":", 1)[-1]
+        for item in definitions
+    }
+    functions = [
+        {
+            "function_id": function_ids[item["occurrence_id"]],
+            "name": str(item["qualified_name"]),
+            "kind": str(item.get("kind", "function")),
+            "files": [Path(item["file"]).resolve().relative_to(project_root).as_posix()],
+            "signature": str(item.get("signature", "")),
+            "line": int(item["line"]),
+        }
+        for item in sorted(definitions, key=lambda value: str(value["qualified_name"]).casefold())
+    ]
+    edges: list[dict[str, Any]] = []
+    unresolved_count = 0
+    candidate_count = 0
+    for source in definitions:
+        refs = model["references"].get(source["occurrence_id"], {})
+        for call in refs.get("call_details", []):
+            owner = str(call.get("target_owner") or "")
+            target_name = str(call.get("target_name") or "")
+            found = None
+            if call.get("receiver_kind") == "member":
+                if owner and target_name:
+                    found = resolver.resolve(f"::{owner}::{target_name}", "", {})
+            else:
+                qualified = "::".join(str(part) for part in call.get("callee_path", []))
+                if call["syntax"]["function"]["expression"].lstrip().startswith("::"):
+                    qualified = "::" + qualified
+                found = resolver.resolve(qualified, source["qualified_name"], call.get("bindings", {}))
+            matches = found["value"] if found and found["kind"] == "function" else []
+            # Internal free functions in other translation units are not visible.
+            matches = [item for item in matches if not (
+                (item.get("anonymous_namespace") or (not item.get("owner") and item.get("linkage") == "internal"))
+                and item["file"] != source["file"]
+            )]
+            candidates = list({item["occurrence_id"]: item for item in matches if item.get("role") == "definition"}.values())
+            ambiguous = len({item["usr"] for item in matches}) > 1 or any(
+                "virtual" in item.get("qualifiers", []) for item in matches
+            )
+            resolution = ("unresolved" if not candidates else
+                          "confirmed" if len(candidates) == 1 and not ambiguous else "candidate")
+            if resolution == "unresolved":
+                unresolved_count += 1
+                continue
+            if resolution == "candidate":
+                candidate_count += 1
+            target_names = [str(item["qualified_name"]) for item in candidates]
+            path = Path(source["file"]).resolve().relative_to(project_root).as_posix()
+            edges.append(
+                {
+                    "source": str(source["qualified_name"]),
+                    "source_id": function_ids[source["occurrence_id"]],
+                    "target": target_names[0] if resolution == "confirmed" else None,
+                    "target_id": function_ids[candidates[0]["occurrence_id"]] if resolution == "confirmed" else None,
+                    "kind": "direct_call",
+                    "resolution": resolution,
+                    "candidates": target_names,
+                    "candidate_ids": [function_ids[item["occurrence_id"]] for item in candidates],
+                    "callee": str(call.get("callee", "")),
+                    "evidence": {"path": path, "line": int(call["line"]), "column": int(call["syntax"]["column"])},
+                }
+            )
+    return {
+        "functions": functions,
+        "edges": sorted(edges, key=lambda item: (item["source"], item["evidence"]["path"], item["evidence"]["line"], item["callee"])),
+        "unresolved_count": unresolved_count,
+        "candidate_count": candidate_count,
+    }
 
 
 def hierarchy_result(

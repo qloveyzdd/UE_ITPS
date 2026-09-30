@@ -28,7 +28,7 @@ python edittools/ue_summarize_knowledge_graph.py --input graph.json --view all -
 
 Blueprint 结构扫描会返回稳定的 Blueprint、Graph、Node、Pin、变量和可见组件标识，包含 Pin 类型、默认值、连线、节点符号和直接引用。LyraEditor 加载 `ULyraBlueprintReferenceLibrary` 后，扫描会通过只读原生桥接读取 `FMemberReference`、异步任务工厂函数和委托目标，并在 `symbol.member_reference` 保留成员父类、路径、Guid、作用域和解析状态；未加载该桥接时才回退到 `resolution=name_only`，知识图谱只生成候选匹配，不宣称精确 C++ 绑定。同样，若封装未暴露 Simple Construction Script，蓝图组件列表会为空，Actor 实例组件仍由关卡扫描提供。`ue_editor_find_blueprint_references.py` 可按符号或对象路径查找蓝图引用，`ue_editor_scan_level_actors.py` 读取当前已加载世界中的 Level Blueprint、Actor 实例、组件层级、Transform、Tags、Data Layers 和常见实例属性。
 
-`ue_build_knowledge_graph.py` 可以同时接收 `ue_editor_scan_blueprint_structure`、资产图谱以及 `ue_list_cxx_types`、`ue_list_cxx_functions`、`ue_inspect_cxx_type`、`ue_inspect_cxx_function` 的结果，生成 `CALLS`、`READS`、`WRITES`、`MAPS_TO`、`REFERENCES_SYMBOL` 和图节点连线关系。
+`ue_build_knowledge_graph.py` 可以同时接收 `ue_editor_scan_blueprint_structure`、资产图谱以及 `ue_list_cxx_types`、`ue_list_cxx_functions`、`ue_inspect_cxx_type`、`ue_inspect_cxx_function`、`ue_analyze_cxx_dependencies` 的结果，生成 Blueprint/符号引用关系，以及 C++ 项目内直接调用的 `CALLS_FUNCTION` 关系。调用图和 Gameplay Message 通道都保留 `confirmed`、`candidate`、`unresolved` 状态与证据，不把运行时动态行为误报为静态确定关系。
 
 测试命令：
 

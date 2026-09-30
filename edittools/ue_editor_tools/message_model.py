@@ -50,6 +50,11 @@ def channel_fact(pin: dict[str, Any]) -> dict[str, Any]:
             "tag": None,
             "value": value,
             "connections": connections,
+            "resolution": {
+                "reason": "connected_pin",
+                "next_step": "Follow the connected Blueprint pin or inspect the producing variable/default value.",
+                "connections": connections,
+            },
         }
     if match:
         return {
@@ -57,8 +62,18 @@ def channel_fact(pin: dict[str, Any]) -> dict[str, Any]:
             "tag": match.group(1),
             "value": value,
             "connections": [],
+            "resolution": {
+                "reason": "pin_literal",
+                "next_step": "The channel is represented by a literal Gameplay Tag in the pin value.",
+            },
         }
-    return {"status": "unresolved", "tag": None, "value": value, "connections": []}
+    return {
+        "status": "unresolved", "tag": None, "value": value, "connections": [],
+        "resolution": {
+            "reason": "empty_channel_pin",
+            "next_step": "Provide a literal tag or follow the runtime value feeding the Channel pin.",
+        },
+    }
 
 
 def payload_type(operation: str, inputs: dict[str, dict[str, Any]]) -> str | None:

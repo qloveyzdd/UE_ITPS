@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT / "sourcetools"))
 
 from ue_project_tools import cpp_frontend
 from ue_project_tools.cpp_frontend import load_cpp_unit
-from ue_project_tools.project_graph import build_project_graph
+from ue_project_tools.project_graph import build_project_graph, dependency_result
 from ue_project_tools.syntax_tree import parse_csharp_model
 
 
@@ -462,6 +462,68 @@ class FOwner : public FBase
         }
         self.assertIn(("FOwner", "FBase", "inheritance", ""), edges)
         self.assertIn(("FOwner", "FDependency", "field", "Values"), edges)
+
+    def test_dependency_result_exposes_project_local_direct_calls(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "Source" / "Sample.cpp"
+            source.parent.mkdir(parents=True)
+            source.write_text(
+                """
+void Target() {}
+void Caller() { Target(); External(); }
+""",
+                encoding="utf-8",
+            )
+            result = dependency_result(root)
+
+        self.assertEqual(result["validation"]["status"], "ok")
+        calls = result["call_graph"]
+        self.assertEqual(calls["candidate_count"], 0)
+        self.assertIn(
+            ("Caller", "Target"),
+            {(edge["source"], edge["target"]) for edge in calls["edges"]},
+        )
+
+    def test_call_graph_respects_receivers_bindings_scopes_and_recursion(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "Source" / "Sample.cpp"
+            source.parent.mkdir(parents=True)
+            source.write_text('''
+void Target() {}
+namespace Hidden { void Unique() {} }
+class Local { public: void Run() {} void Send(External& Other) { Other.Run(); } };
+void Recursive() { Recursive(); }
+void Indirect(void (*Target)()) { Target(); }
+void Caller(External& Other) { Other.Run(); Other.Target(); Unknown::Target(); Unique(); }
+namespace Nested { void Target() {} void Caller() { Target(); ::Target(); } }
+''', encoding="utf-8")
+            calls = dependency_result(root)["call_graph"]
+        edges = {(edge["source"], edge["target"]) for edge in calls["edges"]}
+        self.assertEqual(edges, {
+            ("Recursive", "Recursive"), ("Nested::Caller", "Nested::Target"),
+            ("Nested::Caller", "Target"),
+        })
+        self.assertEqual(calls["unresolved_count"], 6)
+
+    def test_call_graph_keeps_overloads_as_distinct_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "Source" / "Sample.cpp"
+            source.parent.mkdir(parents=True)
+            source.write_text('''
+void Target(int Value) {}
+void Target(float Value) {}
+void Caller() { Target(1); }
+''', encoding="utf-8")
+            calls = dependency_result(root)["call_graph"]
+        targets = [item for item in calls["functions"] if item["name"] == "Target"]
+        self.assertEqual(len({item["function_id"] for item in targets}), 2)
+        edge, = calls["edges"]
+        self.assertEqual(edge["resolution"], "candidate")
+        self.assertIsNone(edge["target_id"])
+        self.assertEqual(set(edge["candidate_ids"]), {item["function_id"] for item in targets})
 
     def test_dependency_graph_reports_cpp_syntax_recovery(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

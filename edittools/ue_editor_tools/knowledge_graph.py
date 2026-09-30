@@ -994,18 +994,50 @@ def _cxx_messages(
                 "message_channel_expression",
                 f"{evidence.get('path')}:{evidence.get('line')}|{expression}",
                 expression or "Dynamic Channel",
-                {"expression": expression},
+                {"expression": expression, "resolution": channel.get("resolution")},
             )
             certainty = "unresolved"
+        listener = item.get("listener")
+        listener_id = None
+        if isinstance(listener, dict) and listener.get("listener_id"):
+            listener_id = graph.add_node(
+                "message_listener_handle",
+                str(listener["listener_id"]),
+                str(listener.get("expression") or listener["listener_id"]),
+                {
+                    "listener_id": listener["listener_id"],
+                    "owner": listener.get("owner"),
+                    "scope": listener.get("scope"),
+                    "type": listener.get("type"),
+                    "registration_candidates": listener.get("registration_candidates", []),
+                },
+            )
+            if str(item["operation"]) == "unsubscribe":
+                target_id = listener_id
+                certainty = "candidate" if listener.get("registration_candidates") else "unresolved"
         graph.add_relation(
             function_id,
             relation_kind[str(item["operation"])],
             target_id,
             certainty=certainty,
             producer=producer,
-            properties={"channel_status": channel.get("status")},
+            properties={
+                "channel_status": channel.get("status"),
+                "channel_resolution": channel.get("resolution"),
+                "listener_id": listener.get("listener_id") if isinstance(listener, dict) else None,
+                "registration_candidates": listener.get("registration_candidates", []) if isinstance(listener, dict) else [],
+            },
             evidence=evidence,
         )
+        if listener_id and str(item["operation"]) == "subscribe":
+            graph.add_relation(
+                function_id,
+                "RETURNS_LISTENER_HANDLE",
+                listener_id,
+                producer=producer,
+                evidence=evidence,
+                properties={"listener_id": listener.get("listener_id")},
+            )
         if item.get("payload_type"):
             payload = str(item["payload_type"])
             payload_id = graph.add_node(
@@ -1239,6 +1271,63 @@ def _cxx_dependency_graph(
             properties={"dependency_kind": edge_kind, "member": item.get("member")},
             evidence=evidence,
         )
+    call_graph = document.get("call_graph", {})
+    if isinstance(call_graph, dict):
+        call_nodes: dict[str, str] = {}
+        call_functions = [
+            item for item in call_graph.get("functions", [])
+            if isinstance(item, dict) and item.get("function_id") and item.get("name")
+        ] if isinstance(call_graph.get("functions", []), list) else []
+        name_counts: dict[str, int] = {}
+        for item in call_functions:
+            name_counts[str(item["name"])] = name_counts.get(str(item["name"]), 0) + 1
+        for item in call_functions:
+            name = str(item["name"])
+            function_id = str(item["function_id"])
+            existing = graph.node_by_key.get(("cxx_function", name)) if name_counts[name] == 1 else None
+            call_nodes[function_id] = existing or graph.add_node(
+                "cxx_function",
+                name if existing else f"{name}|{function_id}",
+                name.rsplit("::", 1)[-1],
+                {
+                    "qualified_name": name,
+                    "files": list(item.get("files", []) or []),
+                    "signature": item.get("signature"),
+                    "line": item.get("line"),
+                    "function_id": function_id,
+                    "call_graph": True,
+                },
+            )
+        for item in call_graph.get("edges", []) if isinstance(call_graph.get("edges", []), list) else []:
+            if not isinstance(item, dict) or not item.get("source"):
+                continue
+            source_name = str(item["source"])
+            source_id = call_nodes.get(str(item.get("source_id") or "")) or _cxx_symbol(graph, "function", source_name)
+            target_name = str(item.get("target") or "")
+            target_id = call_nodes.get(str(item.get("target_id") or ""))
+            if not target_name:
+                for candidate_id, candidate in zip(item.get("candidate_ids", []) or [], item.get("candidates", []) or []):
+                    target_id = call_nodes.get(str(candidate_id)) or _cxx_symbol(graph, "function", str(candidate), {"call_graph": True})
+                    graph.add_relation(
+                        source_id,
+                        "CALLS_FUNCTION",
+                        target_id,
+                        certainty="candidate",
+                        producer=producer,
+                        properties={"resolution": "candidate", "callee": item.get("callee"), "candidates": item.get("candidates", [])},
+                        evidence=dict(item.get("evidence", {}) or {}),
+                    )
+                continue
+            target_id = target_id or _cxx_symbol(graph, "function", target_name, {"call_graph": True})
+            graph.add_relation(
+                source_id,
+                "CALLS_FUNCTION",
+                target_id,
+                certainty="confirmed",
+                producer=producer,
+                properties={"resolution": "confirmed", "callee": item.get("callee")},
+                evidence=dict(item.get("evidence", {}) or {}),
+            )
 
 
 def _level_actors(graph: KnowledgeGraph, document: dict[str, Any], producer: str) -> None:

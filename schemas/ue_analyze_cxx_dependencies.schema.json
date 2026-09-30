@@ -16,7 +16,8 @@
       "required": ["path"],
       "properties": {
         "path": {"$ref": "#/$defs/text"},
-        "line": {"type": "integer", "minimum": 1}
+        "line": {"type": "integer", "minimum": 1},
+        "column": {"type": "integer", "minimum": 0}
       },
       "additionalProperties": false
     },
@@ -55,6 +56,47 @@
       },
       "additionalProperties": false
     },
+    "call_function": {
+      "type": "object",
+      "required": ["function_id", "name", "kind", "files", "signature", "line"],
+      "properties": {
+        "function_id": {"$ref": "#/$defs/text"},
+        "name": {"$ref": "#/$defs/text"},
+        "kind": {"$ref": "#/$defs/text"},
+        "files": {"type": "array", "items": {"$ref": "#/$defs/text"}},
+        "signature": {"type": "string"},
+        "line": {"type": "integer", "minimum": 1}
+      },
+      "additionalProperties": false
+    },
+    "call_edge": {
+      "type": "object",
+      "required": ["source", "source_id", "target", "target_id", "kind", "resolution", "candidates", "candidate_ids", "callee", "evidence"],
+      "properties": {
+        "source": {"$ref": "#/$defs/text"},
+        "source_id": {"$ref": "#/$defs/text"},
+        "target": {"type": ["string", "null"]},
+        "target_id": {"type": ["string", "null"]},
+        "kind": {"const": "direct_call"},
+        "resolution": {"enum": ["confirmed", "candidate"]},
+        "candidates": {"type": "array", "items": {"$ref": "#/$defs/text"}},
+        "candidate_ids": {"type": "array", "items": {"$ref": "#/$defs/text"}},
+        "callee": {"$ref": "#/$defs/text"},
+        "evidence": {"$ref": "#/$defs/location"}
+      },
+      "additionalProperties": false
+    },
+    "call_graph": {
+      "type": "object",
+      "required": ["functions", "edges", "unresolved_count", "candidate_count"],
+      "properties": {
+        "functions": {"type": "array", "items": {"$ref": "#/$defs/call_function"}},
+        "edges": {"type": "array", "items": {"$ref": "#/$defs/call_edge"}},
+        "unresolved_count": {"type": "integer", "minimum": 0},
+        "candidate_count": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
     "success": {
       "type": "object",
       "required": ["schema_version", "project_root", "source_file_count", "graph", "validation", "limits"],
@@ -63,6 +105,7 @@
         "project_root": {"$ref": "#/$defs/text"},
         "source_file_count": {"type": "integer", "minimum": 0},
         "graph": {"$ref": "#/$defs/graph"},
+        "call_graph": {"$ref": "#/$defs/call_graph"},
         "validation": {"$ref": "urn:ue-itps:schema:common#/$defs/validation"},
         "limits": {"$ref": "urn:ue-itps:schema:common#/$defs/limits"}
       },
