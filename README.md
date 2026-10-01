@@ -11,6 +11,7 @@ UE ITPS 将 Unreal Engine 工程中的源码、构建声明和 Editor 现场信�
 | [文件图谱](information_pool/README.md) | 将工程、模块、Target、文件和直接 Include 关系写入 SQLite |
 | [本地浏览器](show/README.md) | 在浏览器内打开文件图谱，搜索、展开关系并查看证据 |
 | [MCP 连接池](mcp_connection_pool/README.md) | 根据宿主提供的连接信息，被动选择兼容 UE 5.8 的只读连接 |
+| [问题路由原型](edittools/ue_editor_tools/question_router.py) | 以 100 个 UE 问题模板验证自然语言问题到知识图谱查询的路由链路 |
 
 C++/UE 宏与 C# 均由 Tree-sitter 前端解析。源码工具只分析明确选择的文件或配置范围；不执行编译、预处理、跨文件语义绑定或运行时验证。职责标签与导航提示来自人工配置。
 
