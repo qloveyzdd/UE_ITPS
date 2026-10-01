@@ -27,10 +27,14 @@ class EditorContractTests(unittest.TestCase):
         self.assertIn("2 dirty packages", str(problems[0]["message"]))
 
     def test_entrypoints_and_schemas_are_one_to_one(self) -> None:
-        entrypoints = {path.stem for path in EDITOR_ROOT.glob("ue_*.py")}
+        entrypoints = {
+            path.stem
+            for path in EDITOR_ROOT.rglob("ue_*.py")
+            if "tests" not in path.parts
+        }
         schemas = {
             path.name.removesuffix(".schema.json")
-            for path in (EDITOR_ROOT / "schemas").glob("ue_*.schema.json")
+            for path in EDITOR_ROOT.rglob("ue_*.schema.json")
         }
         self.assertEqual(entrypoints, schemas)
 
@@ -42,7 +46,9 @@ class EditorContractTests(unittest.TestCase):
                 Draft202012Validator.check_schema(schema)
 
     def test_every_entrypoint_exposes_help(self) -> None:
-        for path in sorted(EDITOR_ROOT.glob("ue_*.py")):
+        for path in sorted(EDITOR_ROOT.rglob("ue_*.py")):
+            if "tests" in path.parts:
+                continue
             with self.subTest(cli=path.name):
                 completed = subprocess.run(
                     [sys.executable, str(path), "--help"],

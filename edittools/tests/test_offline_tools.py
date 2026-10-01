@@ -6,7 +6,7 @@ import tempfile
 import unittest
 
 from ue_editor_tools.config_graph import scan_config_graph
-from ue_editor_tools.graph_query import KnowledgeGraphQuery
+from knowledge_query.graph_query import KnowledgeGraphQuery
 from ue_editor_tools.graph_summary import summarize_graph
 from ue_editor_tools.knowledge_graph import build_knowledge_graph, validate_graph
 
@@ -68,6 +68,40 @@ class OfflineEditorToolTests(unittest.TestCase):
         evidence = query.query("evidence", selectors=["r-publish"])
         self.assertEqual(evidence["evidence"][0]["path"], "Source/Health.cpp")
         self.assertEqual(evidence["evidence"][0]["line"], 42)
+
+    def test_knowledge_graph_query_supports_llm_operations(self) -> None:
+        document = {
+            "schema_version": "ue_build_knowledge_graph",
+            "graph": {
+                "project": "D:/Sample/Sample.uproject",
+                "nodes": [
+                    {"node_id": "n-a", "kind": "cxx_function", "name": "Work", "properties": {}},
+                    {"node_id": "n-b", "kind": "cxx_function", "name": "Helper", "properties": {}},
+                    {"node_id": "n-c", "kind": "cxx_class", "name": "Worker", "properties": {}},
+                ],
+                "relations": [
+                    {"relation_id": "r-ab", "source_id": "n-a", "kind": "CALLS", "target_id": "n-b", "certainty": "confirmed", "properties": {}},
+                    {"relation_id": "r-bc", "source_id": "n-b", "kind": "USES_TYPE", "target_id": "n-c", "certainty": "confirmed", "properties": {}},
+                    {"relation_id": "r-ca", "source_id": "n-c", "kind": "CANDIDATE_MATCH", "target_id": "n-a", "certainty": "candidate", "properties": {}},
+                ],
+                "evidence": [],
+                "counts": {"nodes": 3, "relations": 3, "evidence": 0},
+            },
+        }
+        query = KnowledgeGraphQuery(document, max_nodes=20, max_relations=20)
+
+        search = query.query(operation="search", query="Work", node_kinds=["cxx_function"])
+        self.assertEqual([item["node_id"] for item in search["nodes"]], ["n-a"])
+        neighbors = query.query(operation="neighbors", selectors=["n-a"], direction="outgoing", relation_kinds=["CALLS"])
+        self.assertEqual([item["node_id"] for item in neighbors["nodes"]], ["n-a", "n-b"])
+        trace = query.query(operation="trace", selectors=["n-a"], direction="outgoing", depth=2)
+        self.assertEqual({item["node_id"] for item in trace["nodes"]}, {"n-a", "n-b", "n-c"})
+        impact = query.query(operation="impact", selectors=["n-a"], depth=1)
+        self.assertEqual({item["node_id"] for item in impact["nodes"]}, {"n-a", "n-c"})
+        uncertainty = query.query(operation="uncertainty")
+        self.assertEqual([item["relation_id"] for item in uncertainty["relations"]], ["r-ca"])
+        comparison = query.query(operation="compare", selectors=["n-a", "n-b"])
+        self.assertEqual(comparison["relation_kind_counts"]["shared"], ["CALLS"])
 
     def test_knowledge_graph_summary_is_deterministic_and_keeps_evidence(self) -> None:
         nodes = [

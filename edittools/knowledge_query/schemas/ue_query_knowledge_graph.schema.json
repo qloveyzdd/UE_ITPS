@@ -23,12 +23,13 @@
   "$defs": {
     "success": {
       "type": "object",
-      "required": ["schema_version", "source_schema", "project", "level", "request", "result", "source_graph", "validation", "limits"],
+      "required": ["schema_version", "source_schema", "project", "operation", "level", "request", "result", "source_graph", "validation", "limits"],
       "properties": {
         "schema_version": {"const": "ue_query_knowledge_graph"},
         "source_schema": {"const": "ue_build_knowledge_graph"},
         "project": {"type": "string"},
-        "level": {"enum": ["overview", "system", "entity", "evidence"]},
+        "operation": {"enum": ["search", "inspect", "neighbors", "trace", "impact", "evidence", "uncertainty", "domain", "compare"]},
+        "level": {"type": ["string", "null"], "enum": ["overview", "system", "entity", "evidence", null]},
         "request": {"type": "object", "additionalProperties": true},
         "result": {"type": "object", "additionalProperties": true},
         "source_graph": {"type": "object", "additionalProperties": true},

@@ -20,14 +20,14 @@ python edittools/ue_scan_cxx_gameplay_messages.py --project D:/Projects/MyGame/M
 python edittools/ue_build_knowledge_graph.py --input facts.json > graph.json
 python edittools/ue_validate_knowledge_graph.py --input graph.json
 python edittools/ue_summarize_knowledge_graph.py --input graph.json --view all --output-dir summary
-python edittools/ue_query_knowledge_graph.py --input graph.json --level entity --select <node-id>
+python edittools/knowledge_query/ue_query_knowledge_graph.py --input graph.json --operation inspect --select <node-id>
 ```
 
 `ue_summarize_knowledge_graph.py` 在原始图之上生成面向使用人员的工程总览、业务系统和死亡/装备/角色/武器切片。默认折叠 Blueprint 节点与 Pin 级连线、资源注册表依赖和大规模资产引用；每个摘要节点、关系和证据仍保留 `node_id`、`relation_id`、`evidence_ids`，可回查原始图。`--view entity --entity <node-id>` 可展开一个实体的一跳关系；`--output-dir` 会额外写出 JSON 和 Markdown 文件。
 
-`ue_query_knowledge_graph.py` 是知识图谱的独立分级查询入口，不读取或执行原始事实脚本。`--level overview` 只返回规模、领域和高价值关系；`--level system` 按业务系统筛选；`--level entity --select <node-id>` 返回实体及一跳关系；`--level evidence --select <relation-id>` 才展开证据路径、行号和生产者。实体选择器也可以使用实体名称，`--query` 可按名称、路径、类型或系统名称筛选。四个层级均保留原始节点、关系和证据 ID，方便从摘要回查图谱。
+`knowledge_query/` 是知识图谱的独立细粒度查询目录，不读取或执行原始事实脚本。入口支持 `search`、`inspect`、`neighbors`、`trace`、`impact`、`evidence`、`uncertainty`、`domain` 和 `compare`；实体选择器可以使用实体名称，`--query` 可按名称、路径、类型或系统名称筛选，`--relation`、`--direction` 和 `--depth` 用于限制关系追踪。旧版 `--level overview/system/entity/evidence` 仍然兼容。
 
-每个公开 CLI 在 `edittools/schemas/` 有同名 Schema。
+每个公开 CLI 在对应目录的 `schemas/` 下有同名 Schema；知识图谱查询契约位于 `edittools/knowledge_query/schemas/`。
 
 Blueprint 结构扫描会返回稳定的 Blueprint、Graph、Node、Pin、变量和可见组件标识，包含 Pin 类型、默认值、连线、节点符号和直接引用。LyraEditor 加载 `ULyraBlueprintReferenceLibrary` 后，扫描会通过只读原生桥接读取 `FMemberReference`、异步任务工厂函数和委托目标，并在 `symbol.member_reference` 保留成员父类、路径、Guid、作用域和解析状态；未加载该桥接时才回退到 `resolution=name_only`，知识图谱只生成候选匹配，不宣称精确 C++ 绑定。同样，若封装未暴露 Simple Construction Script，蓝图组件列表会为空，Actor 实例组件仍由关卡扫描提供。`ue_editor_find_blueprint_references.py` 可按符号或对象路径查找蓝图引用，`ue_editor_scan_level_actors.py` 读取当前已加载世界中的 Level Blueprint、Actor 实例、组件层级、Transform、Tags、Data Layers 和常见实例属性。
 
