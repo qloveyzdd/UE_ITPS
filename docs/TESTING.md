@@ -1,87 +1,45 @@
 # 测试与验证
 
-## 分组入口
+项目测试分为三层：仓库根目录的 SourceTools 核心测试、辅助组件测试，以及依赖本地参考工程的 Lyra 回归。统一入口是 `python -m tests`。
 
-所有命令从仓库根目录运行，页面命令除外。Python 测试使用 unittest；安装 `requirements-dev.txt` 即可，不要求 pytest。
+## 测试套件
+
+| 套件 | 命令 | 内容 | 外部前提 |
+| --- | --- | --- | --- |
+| `core` | `python -m tests --suite core` | 工程描述符、C++/C# 前端、类型、函数、委托、Scope、导航和输出契约 | 无 |
+| `components` | `python -m tests --suite components` | Editor/离线工具、知识图谱、文件图谱、MCP 连接池和问答路由 | Python 依赖 |
+| `lyra` | `python -m tests --suite lyra` | Lyra 参考工程回归、AST 基线、检索准确性和 Scope 配置 | Lyra 工程及可解析的 Engine |
+| `all` | `python -m tests --suite all` | 上述三套测试 | Lyra 工程及可解析的 Engine |
+
+使用 `--list` 查看选中的测试模块，使用 `-v` 查看每个用例：
 
 ```bash
-python -m tests
-python -m tests --suite lyra -v
-python -m tests --suite all
 python -m tests --suite core --list
+python -m tests --suite components -v
 ```
 
-- `core`（默认）：自动发现 `tests/test_*.py` 中不以 `test_lyra` 开头的模块，只使用临时/合成工程。
-- `lyra`：运行全部 `test_lyra*.py`，要求真实参考工程。
-- `all`：上述两组，仍要求真实参考工程；不包含其他组件的独立测试。
-- `--list`：只显示所选模块；`-v`：显示各测试结果。
-
-原始 `python -m unittest discover -s tests -v` 仍可用，但有本地 Lyra 时会连同较慢的参考工程回归一起执行，不再作为默认快速入口。
-
-## 核心覆盖
-
-| 测试模块 | 主要覆盖 |
-|---|---|
-| `test_contracts` | 16 个入口/Schema/工具池一致性、帮助、分组无遗漏、缺失 Lyra 的处理 |
-| `test_workflows` | 临时项目、Build.cs、描述符导航、原生 GameplayTag |
-| `test_structured_frontends` | C++/C# AST、UE 宏、声明/执行区域、语法恢复、独立调用归属检查 |
-| `test_source_type_semantics` | 类型、成员、变量、反射位置及条件定义 |
-| `test_source_function_inventory` | 完整函数定义清单、名称选择与身份 |
-| `test_cxx_function_semantics` | 调用、类型、地址、转换、遮蔽、间接调用与定义隔离 |
-| `test_delegate_analysis` | 委托 revision 2 的操作、参数、回调及候选边界 |
-| `test_source_pairing` | 同目录/镜像/模块内配对、歧义及嵌套模块 |
-| `test_source_priority` | 视图、精确关注、日志上下文、状态写入和非调用语句 |
-| `test_source_scope` | 四级导航、分页、证据、快照与选择范围 |
-| `test_scope_analysis` | 覆盖与输入指纹、未知原因、跨文件候选、有限契约与同名误判反例、布尔回调、成员地址、重载/条件定义、声明隔离、嵌套调用、目录复用一致性 |
-| `test_source_navigation_map` | 地图导出、查询路径、改名/移除/实现变更 |
-| `test_navigation_guidance` | 人工提示、指纹、缺证据、解析告警、歧义与过期降级 |
-
-原 `test_retrieval_context.py` 的 4 个用例已并入 `test_source_priority.py`，断言保留。合成源码的调用归属用例移至前端测试；真实 Lyra 的 AST 对照仍单独保留。
-
-## Lyra 回归前提
-
-默认工程为仓库下的 `LyraStarterGame/LyraStarterGame.uproject`。参考工程不随仓库分发，其他位置可用环境变量明确指定，例如 PowerShell：
+Lyra 默认路径为 `LyraStarterGame/LyraStarterGame.uproject`，可通过环境变量覆盖：
 
 ```powershell
 $env:UE_ITPS_LYRA_PROJECT = 'D:/Projects/LyraStarterGame/LyraStarterGame.uproject'
 python -m tests --suite lyra -v
 ```
 
-需要匹配当前测试基线的完整项目及插件源码；涉及 Include 来源的 Scope 查询还依赖可解析的 Engine 关联。不同版本或修改后的源码可能改变固定计数、行号和人工复核指纹；应核实变化，不能直接修改期望值来消除失败。
+显式选择 `lyra` 或 `all` 时，如果工程不存在，入口返回退出码 2 并报告环境问题。直接使用 unittest 发现 Lyra 模块时，缺少工程的用例会跳过；跳过不计为真实工程验证通过。
 
-显式选择 lyra/all 而工程缺失时返回退出码 2；直接 unittest 发现这些模块时全部 Lyra 用例明确跳过。跳过不算真实工程验证通过。
+## 组件测试
 
-| 模块 | 验证内容 |
-|---|---|
-| `test_lyra_sourcetools_regressions` | 通过公开 CLI 检查宏文本、构造初始化、接收者和限定名 |
-| `test_lyra_tree_sitter_baseline` | 707 个头/实现文件的原始 AST 与前端事实逐位置对照、委托与成员投影 |
-| `test_lyra_source_scope` | 原装备配置的 6 组/12 文件导航；新增授予链 5 组/10 文件候选、457 文件清单覆盖、引擎方法边界、提示指纹与目录复用一致性 |
-| `test_lyra_retrieval_accuracy` | 21 个配置问题与 6 个独立保留问题 |
-| `test_lyra_retrieval_sampling` | 30 个抽样问题与 4 个新增保留问题，含重载候选、日志和非调用证据 |
+统一入口会加载以下组件模块：
 
-单独运行一个模块：
+- `edittools.tests.test_contracts`
+- `edittools.tests.test_cxx_messages`
+- `edittools.tests.test_message_resolution`
+- `edittools.tests.test_offline_tools`
+- `edittools.tests.test_question_router`
+- `information_pool.tests.test_file_graph`
+- `mcp_connection_pool.tests.test_pool`
 
-```bash
-python -m unittest tests.test_lyra_sourcetools_regressions -v
-```
-
-除 `test_lyra_tree_sitter_baseline` 为独立校验而直接遍历源码和原始 AST 外，其余 Lyra 测试通过 SourceTools 读取源码事实。61 个预选问题是回归语料，不代表自然语言检索准确率。42 文件导航样本、707 文件 AST 基线和单模块文件清单的范围不同，不混用计数。
-
-夹具位于 `tests/fixtures/`，人工配置位于 `sourcetools/profiles/`。测试不依赖忽略跟踪的 `Saved/SourceTools/` 历次产物。
-
-## 其他组件
-
-```bash
-python -m unittest discover -s edittools/tests -t edittools -v
-python -m unittest discover -s information_pool/tests -v
-python -m unittest discover -s mcp_connection_pool/tests -t . -v
-```
-
-- Editor/离线测试：CLI/Schema、配置、C++ 消息、知识图谱；不连接真实 Editor。
-- 文件图谱：用临时工程生成真实 SQLite，检查节点、关系、证据和外键。
-- MCP 连接池：使用构造的宿主连接，覆盖缺失、唯一匹配、版本不兼容与歧义；不测试真实网络连接。
-
-页面单独运行：
+页面测试独立运行：
 
 ```bash
 cd show
@@ -89,34 +47,29 @@ npm ci
 npm test
 ```
 
-`npm test` 先做 TypeScript 检查和生产构建，再执行内存 SQLite 的摘要、关系/证据、搜索测试。没有浏览器交互端到端测试。
+页面测试包括 TypeScript 检查、生产构建和内存 SQLite 查询；没有浏览器端到端测试。
 
-## 最近验证
+## 验证边界
 
-2026-09-23：语义契约与成员地址分类更新后，核心 **149 项**、Lyra **31 项**回归全部通过，共 **180 项 SourceTools 用例**。Lyra 回归包含 707 文件 AST 对照；装备链 5 项定向回归也通过。
+- Python 测试验证 CLI、Schema、解析事实、图谱结构和确定性输出，不证明 UE 工程可以编译或运行。
+- Lyra AST 基线验证源文件解析结果与固定参考快照的一致性，不替代 UBT、UHT、Editor、PIE 或网络模式测试。
+- Editor/离线测试使用合成输入或离线图谱，不连接真实 Editor；真实 Editor 结果必须由对应工具单独取得。
+- 页面构建通过只说明 TypeScript 和生产构建成功，不说明浏览器交互全部可用。
 
-Scope 关键 JSON 产物通过 Schema 校验，说明文件的本地链接检查和 `git diff --check` 通过。旧组件结果保留其实际执行日期，执行次数不作为永久能力指标。
+## 当前验证记录
 
-装备链定向扫描：5 组、10 个解析文件、13 个类型、73 个函数定义；LyraGame 模块清单 457 个文件，其中 447 个未选中。99 个 unknown 符号位置中，55 个得到有限 UE API 契约、1 个归为成员地址，剩余 33 个声明不在范围、10 个接收者类型未确定；另有 58 条调用级契约（含已知符号的语义提示）。这些计数不是全 Lyra 覆盖率或编译诊断。
+本轮整理前的已执行结果：
 
-本机同一装备配置的单次对照中，模块目录复用扫描约 19.5 秒，逐文件组重新发现目录约 45.3 秒；概览、地图和函数查询一致，新增 Lyra 用例进一步验证了完整事实记录一致。该测量受文件系统缓存及系统负载影响，不作为性能保证。目录复用仅覆盖单次扫描，不是磁盘解析缓存。
+- SourceTools 核心：153 项通过。
+- Editor/离线、文件图谱和 MCP 组件：27 项原有测试通过；统一入口纳入问答路由后为 35 项。
+- 全量套件实际运行 219 项，其中 217 项通过、2 项失败；失败集中在 Lyra AST 基线的两个局部扫描，原因都是当前 Engine provenance 无法解析，扫描返回 `source-unit-engine-unresolved` warning，而基线断言要求 `validation.status == "ok"`。
+- Lyra 回归必须在本机 Engine 关联可解析时重新执行；不能仅凭参考工程文件存在判定通过，也不应为了消除环境 warning 放宽基线断言。
 
-此前 2026-09-15 的组件验证：
+测试数量随用例和参考工程版本变化；文档中的数字只记录最近一次实际执行结果，不是永久能力保证。修改解析规则、Schema、测试入口或参考工程后，应重新运行受影响的套件。
 
-| 范围 | 结果 |
-|---|---|
-| SourceTools 核心 | 129 项通过 |
-| 本地 Lyra | 26 项通过，含 707 文件 AST 基线 |
-| Editor/离线 | 10 项通过 |
-| 文件图谱 | 1 项通过 |
-| MCP 连接池 | 4 项通过 |
-| 页面 | TypeScript 与构建通过，3 项查询测试通过 |
+## 维护规则
 
-页面构建仍提示单个产物超过 500 kB；这是现有构建体积提示，不影响本轮测试通过。以上结果不包含 UE 编译、Editor/PIE、网络模式或 Blueprint 运行验证。
-
-## 维护与验收
-
-- 合并文件时保留不同场景的断言；先确认新旧用例清单，再运行对应组。
-- 先检查原因，再更新固定基线；不要因版本变化自动放宽关键断言。
-- 运行与改动相关的核心及组件测试；依赖真实工程的用例单独说明通过、失败或跳过。
-- 文档入口、相对链接、工具数量及能力边界与实现一致。
+1. 先运行与改动直接相关的套件，再运行 `core` 或 `all` 做集成确认。
+2. 固定基线失败时先判断源码、Engine、配置还是解析规则发生变化，再调整期望值。
+3. 新增 CLI 时同时新增 Schema、帮助检查和工具池契约；新增组件时加入 `components` 套件清单。
+4. 测试无法执行时明确区分失败、跳过和环境不可用，不把环境问题改写成代码通过。

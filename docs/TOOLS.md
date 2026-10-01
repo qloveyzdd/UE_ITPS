@@ -104,7 +104,7 @@ Scope 和地图的 `provenance` 记录分析修订号、语法包/检索规则�
 - 契约要求匹配未被选中声明遮蔽的自由函数名，或接收者/基类类型与调用形状；布尔回调检查实际类型签名及别名。普通同名方法、局部遮蔽和无法确定类型的迭代器保持未解析。当前 `analysis_revision=2`，旧快照的选择 ID 需重新获取。
 - `summary.unresolved_symbols` 仍为原始 unknown 符号出现次数；`unresolved_by_reason` 的和与其相等。`summary.semantic_contracts` 按唯一调用位置统计有限契约，跨文件找到候选或契约也不改写原始事实。断言、日志、保护函数不新增契约。`call_occurrences` 按调用起止位置去重，包含隐藏调用和 Lambda；`candidate_status` 对这些调用统计解析状态，因此与 unknown 符号数不同。
 
-导航地图导出器位于 `sourcetools/lyra/`，不属于 16 个核心入口：
+导航地图导出器位于 `sourcetools/lyra/`，不属于 17 个核心入口：
 
 ```bash
 python sourcetools/lyra/export_navigation_map.py --project LyraStarterGame/LyraStarterGame.uproject --profile sourcetools/profiles/lyra_equipment.json --output lyra-equipment-map.json

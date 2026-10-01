@@ -1,27 +1,34 @@
 # UE ITPS
 
-UE ITPS 将 Unreal Engine 工程中的源码、构建声明和 Editor 现场信息提取为结构化事实，供命令行、Agent 和本地文件图谱浏览器使用。检查工具不修改被检查工程；导出器只写入明确指定的结果文件。
+UE ITPS 是面向 Unreal Engine 工程的只读分析工具集。它把工程描述符、构建规则、C++/C# 源码和可选的 Editor 证据转换成结构化 JSON，并提供文件图谱与本地浏览器，帮助定位类型、函数、依赖、委托和业务链路。
 
-## 已实现的组成
+## 能力范围
 
-| 组件 | 当前能力 |
-|---|---|
-| [SourceTools](docs/TOOLS.md) | 17 个核心 CLI：工程与构建入口、头源配对、Include 来源、类型与函数、项目级 C++ 类型/直接调用依赖、委托、检索视图及分层证据导航 |
-| [Editor 与离线工具](edittools/README.md) | Editor 资产与 Blueprint 查询、配置和 C++ 消息扫描、知识图谱合并/校验/比较及分级查询；动态消息和调用关系保留解析状态与证据 |
-| [文件图谱](information_pool/README.md) | 将工程、模块、Target、文件和直接 Include 关系写入 SQLite |
-| [本地浏览器](show/README.md) | 在浏览器内打开文件图谱，搜索、展开关系并查看证据 |
-| [MCP 连接池](mcp_connection_pool/README.md) | 根据宿主提供的连接信息，被动选择兼容 UE 5.8 的只读连接 |
-| [问题路由原型](edittools/ue_editor_tools/question_router.py) | 以 100 个 UE 问题模板验证自然语言问题到知识图谱查询的路由链路 |
+| 子系统 | 作用 |
+| --- | --- |
+| `sourcetools/` | 17 个核心 CLI，覆盖工程、构建、模块、Include、类型、函数、依赖和 Scope 导航 |
+| `edittools/` | 20 个 Editor/离线 CLI，覆盖资产、Blueprint、配置、Gameplay Message 和知识图谱 |
+| `information_pool/` | 扫描工程文件并生成带证据的 SQLite 文件图谱 |
+| `show/` | 在浏览器中搜索、查看文件关系和证据 |
+| `mcp_connection_pool/` | 被动匹配宿主已经暴露的 UE 5.8 只读连接 |
+| `tests/` | 统一运行核心、组件和 Lyra 回归测试 |
 
-C++/UE 宏与 C# 均由 Tree-sitter 前端解析。源码工具只分析明确选择的文件或配置范围；不执行编译、预处理、跨文件语义绑定或运行时验证。职责标签与导航提示来自人工配置。
+核心数据流如下：
 
-Scope 已支持输入指纹、按需覆盖审计、未解析原因、范围内跨文件候选声明和有限 UE API 语义契约。候选保留签名、声明/定义位置与导航 ID；重载和条件定义不自动择一。单次扫描复用模块目录，独立扫描仍重新发现环境。
+```text
+.uproject / .uplugin / Build.cs / Target.cs / 源码
+                         │
+                         ▼
+               sourcetools / edittools
+                         │
+                JSON + validation + limits
+                         │
+             文件图谱、浏览器或 Agent 查询
+```
 
-当前文件数据库尚未实现提交绑定、不可变快照、增量更新或权威审查；完整业务关系图、自然语言自动路由和 Agent 写入编排也未实现。详见[架构与边界](docs/ARCHITECTURE.md)。
+## 快速开始
 
-## 安装
-
-需要 Python 3.10 或更高版本。首次克隆后先初始化语法子模块，再安装依赖：
+需要 Python 3.10 或更高版本。首次使用时初始化语法子模块并安装依赖：
 
 ```bash
 git submodule update --init parsers/tree-sitter-ue-cpp
@@ -29,60 +36,48 @@ python -m pip install -r requirements.txt
 python -m pip install -r requirements-dev.txt
 ```
 
-安装与执行使用同一个 Python 环境。更新语法子模块后需重新安装本地语法包；具体步骤见[开发约定](docs/DEVELOPMENT.md)。
-
-## 快速开始
-
-在仓库根目录执行：
+先发现并明确选择工程：
 
 ```bash
-python sourcetools/ue_list_tools.py
 python sourcetools/ue_find_projects.py --search-root D:/Projects
+python sourcetools/ue_list_tools.py
 ```
 
-从结果中明确选择工程，再按问题选择最小工具。检查一对已选定的同名头源文件：
+选择工程后按问题调用最小工具。例如查看某个函数：
 
 ```bash
-python sourcetools/ue_list_cxx_functions.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp D:/Projects/MyGame/Source/MyGame/Public/MyActor.h
-python sourcetools/ue_inspect_cxx_function.py --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp D:/Projects/MyGame/Source/MyGame/Public/MyActor.h --function AMyActor::BeginPlay --include-syntax-flow
-python sourcetools/ue_analyze_cxx_dependencies.py --project LyraStarterGame/LyraStarterGame.uproject
+python sourcetools/ue_list_cxx_functions.py \
+  --source D:/Projects/MyGame/Source/MyGame/Private/MyActor.cpp \
+           D:/Projects/MyGame/Source/MyGame/Public/MyActor.h
 ```
 
-函数选择名应来自函数清单。输出中的 `validation` 是本次扫描校验，`limits` 说明分析边界；`ok` 不代表编译或运行通过。
-
-检查装备→AbilitySet→AbilitySystem 的候选链及扫描覆盖：
-
-```bash
-python sourcetools/ue_inspect_cxx_scope.py --project LyraStarterGame/LyraStarterGame.uproject --profile sourcetools/profiles/lyra_equipment_chain.json --include-audit
-```
-
-`audit` 区分模块文件清单与实际解析文件；详细候选在 evidence 层的 `resolution` 中。范围内缺少方法声明时，可通过 `receiver_types` 查看已知接收者类型。
+所有 CLI 都输出 JSON。`validation` 表示本次扫描是否有问题，`limits` 表示工具边界；退出码 0、1、2 分别表示完成、发现阻断问题、参数或输入失败。
 
 ## 测试
 
-默认运行不依赖真实 UE 工程、Engine 安装或 Editor 的核心测试：
+从仓库根目录执行：
 
 ```bash
-python -m tests
+python -m tests                         # 核心 SourceTools
+python -m tests --suite components      # Editor/离线、文件图谱、MCP 连接池
+python -m tests --suite lyra -v         # 本地 Lyra 回归
+python -m tests --suite all             # 核心 + 组件 + Lyra
+python -m tests --suite core --list     # 查看选中的模块
 ```
 
-明确运行本地 Lyra 回归：
+Lyra 工程默认使用 `LyraStarterGame/LyraStarterGame.uproject`，也可以通过 `UE_ITPS_LYRA_PROJECT` 指定其他路径。缺少参考工程时，`lyra` 和 `all` 会以退出码 2 明确报告环境问题；不会伪装成通过。
 
-```bash
-python -m tests --suite lyra
-```
+页面测试需要进入 `show/` 后执行 `npm test`。这些测试覆盖 TypeScript 检查、生产构建和内存 SQLite 查询，不等同于浏览器端到端测试。
 
-测试分组、参考工程前提、各组件命令及最近验证结果统一维护在[测试与验证](docs/TESTING.md)。
+## 设计边界
 
-## 文档与参考资料
+- 源码工具只解析明确选择的文件或配置范围，不执行预处理、编译、UHT 或跨文件语义绑定。
+- 候选调用、委托和有限 UE API 契约用于导航和复核，不代表编译可见性、重载决议或运行时派发已经确定。
+- Editor 结果是现场证据；离线扫描结果不能替代真实 Editor、PIE、网络模式或资产行为验证。
+- 文件图谱当前是文件级存储，没有 Git 提交绑定、不可变历史快照或增量更新。
+- `LyraStarterGame/` 和 `ExternalProjects/` 是本地参考工程，不属于工具实现。
 
-- [工具清单与输出契约](docs/TOOLS.md)
-- [实现架构与未完成边界](docs/ARCHITECTURE.md)
-- [开发约定](docs/DEVELOPMENT.md)
-- [测试与验证](docs/TESTING.md)
-- [当前项目状态与长期方向](.planning/PROJECT.md)
-
-`LyraStarterGame/` 和 `ExternalProjects/` 是本地参考工程，不属于工具实现，也不随本仓库分发。`.planning/codebase/` 保存旧版 Lyra 调查，历史证据入口见[基线归档](.planning/codebase/BASELINE.md)；它们不代表当前工具能力或当前 Engine 运行结论。`Saved/` 是忽略跟踪的本地产物，历史运行次数和性能数字不作为当前验收结果。
+更细的入口说明见 [工具清单](docs/TOOLS.md)，架构边界见 [架构说明](docs/ARCHITECTURE.md)，测试约定见 [测试说明](docs/TESTING.md)。
 
 ## 许可证
 

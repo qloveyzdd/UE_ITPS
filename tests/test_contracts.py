@@ -18,13 +18,17 @@ class PublicContractTests(unittest.TestCase):
     def test_suite_selection_covers_each_module_once(self) -> None:
         from tests.__main__ import selected_modules
 
-        core, lyra = set(selected_modules("core")), set(selected_modules("lyra"))
+        core = set(selected_modules("core"))
+        lyra = set(selected_modules("lyra"))
+        components = set(selected_modules("components"))
         all_modules = {"tests." + p.stem for p in (ROOT / "tests").glob("test_*.py")}
         self.assertTrue(core)
         self.assertTrue(lyra)
+        self.assertTrue(components)
         self.assertFalse(core & lyra)
         self.assertEqual(core | lyra, all_modules)
-        self.assertEqual(set(selected_modules("all")), all_modules)
+        self.assertFalse((core | lyra) & components)
+        self.assertEqual(set(selected_modules("all")), all_modules | components)
 
     def test_missing_lyra_is_explicit_and_direct_discovery_skips(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
