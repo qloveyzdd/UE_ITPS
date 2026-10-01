@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from collections import Counter
 from typing import Any
 
 from .cpp_frontend import CppFrontendError, load_cpp_unit
@@ -233,11 +234,8 @@ def _build_call_graph(project_root: Path) -> dict[str, Any]:
     """Project-local direct calls from the same Tree-sitter model used by type analysis."""
     project_files = project_cpp_files(project_root)
     if not project_files:
-        return {"functions": [], "edges": [], "unresolved_count": 0, "candidate_count": 0}
-    try:
-        model = load_cpp_unit(project_files[0], project_files, project_root)
-    except CppFrontendError:
-        return {"functions": [], "edges": [], "unresolved_count": 0, "candidate_count": 0}
+        return {"functions": [], "edges": [], "unresolved_calls": [], "unresolved_count": 0, "candidate_count": 0, "resolution_reason_counts": {}}
+    model = load_cpp_unit(project_files[0], project_files, project_root)
     definitions = [item for item in model["functions"] if item.get("role") == "definition"]
     resolver = LocalNameResolver(model)
     function_ids = {
@@ -253,11 +251,13 @@ def _build_call_graph(project_root: Path) -> dict[str, Any]:
             "files": [Path(item["file"]).resolve().relative_to(project_root).as_posix()],
             "signature": str(item.get("signature", "")),
             "line": int(item["line"]),
+            "owner": str(item.get("owner") or ""),
         }
         for item in sorted(definitions, key=lambda value: str(value["qualified_name"]).casefold())
     ]
     edges: list[dict[str, Any]] = []
-    unresolved_count = 0
+    unresolved_calls: list[dict[str, Any]] = []
+    reason_counts: Counter[str] = Counter()
     candidate_count = 0
     for source in definitions:
         refs = model["references"].get(source["occurrence_id"], {})
@@ -280,18 +280,47 @@ def _build_call_graph(project_root: Path) -> dict[str, Any]:
                 and item["file"] != source["file"]
             )]
             candidates = list({item["occurrence_id"]: item for item in matches if item.get("role") == "definition"}.values())
-            ambiguous = len({item["usr"] for item in matches}) > 1 or any(
-                "virtual" in item.get("qualifiers", []) for item in matches
-            )
+            # A static member's out-of-class definition omits `static`.
+            # It must not create an artificial overload beside its declaration.
+            signatures = set()
+            for item in matches:
+                parts = item["usr"].split("|")
+                if item.get("owner"):
+                    parts[-1] = ",".join(q for q in parts[-1].split(",") if q != "static")
+                signatures.add("|".join(parts))
+            reasons = []
+            if len(signatures) > 1:
+                reasons.append("overload_set")
+            if len(candidates) > 1 and len(signatures) == 1:
+                reasons.append("multiple_definitions")
+            if call.get("receiver_kind") != "scope" and any(
+                {"virtual", "override"} & set(item.get("qualifiers", [])) for item in matches
+            ):
+                reasons.append("virtual_dispatch")
+            ambiguous = bool(reasons)
             resolution = ("unresolved" if not candidates else
                           "confirmed" if len(candidates) == 1 and not ambiguous else "candidate")
+            path = Path(source["file"]).resolve().relative_to(project_root).as_posix()
+            evidence = {"path": path, "line": int(call["line"]), "column": int(call["syntax"]["column"])}
             if resolution == "unresolved":
-                unresolved_count += 1
+                reason = ("declaration_without_definition" if matches else
+                          "indirect_call" if found and found["kind"] in {"parameter", "local", "member", "global"} else
+                          "unresolved_receiver" if call.get("receiver_kind") == "member" and not owner else
+                          "outside_project_or_unresolved_name")
+                unresolved_calls.append({
+                    "source": str(source["qualified_name"]), "source_id": function_ids[source["occurrence_id"]],
+                    "callee": str(call.get("callee", "")), "reason": reason, "evidence": evidence,
+                    "declarations": [{"function_id": function_ids.get(m["occurrence_id"]), "name": m["qualified_name"], "signature": m["signature"],
+                                      "path": Path(m["file"]).resolve().relative_to(project_root).as_posix(),
+                                      "line": m["line"]} for m in matches],
+                })
+                reason_counts[reason] += 1
                 continue
             if resolution == "candidate":
                 candidate_count += 1
             target_names = [str(item["qualified_name"]) for item in candidates]
-            path = Path(source["file"]).resolve().relative_to(project_root).as_posix()
+            reasons = reasons or ["unique_project_definition"]
+            reason_counts.update(reasons)
             edges.append(
                 {
                     "source": str(source["qualified_name"]),
@@ -300,17 +329,24 @@ def _build_call_graph(project_root: Path) -> dict[str, Any]:
                     "target_id": function_ids[candidates[0]["occurrence_id"]] if resolution == "confirmed" else None,
                     "kind": "direct_call",
                     "resolution": resolution,
+                    "resolution_reasons": reasons,
                     "candidates": target_names,
                     "candidate_ids": [function_ids[item["occurrence_id"]] for item in candidates],
+                    "candidate_details": [{"function_id": function_ids[item["occurrence_id"]],
+                                           "name": item["qualified_name"], "signature": item["signature"],
+                                           "path": Path(item["file"]).resolve().relative_to(project_root).as_posix(),
+                                           "line": item["line"]} for item in candidates],
                     "callee": str(call.get("callee", "")),
-                    "evidence": {"path": path, "line": int(call["line"]), "column": int(call["syntax"]["column"])},
+                    "evidence": evidence,
                 }
             )
     return {
         "functions": functions,
         "edges": sorted(edges, key=lambda item: (item["source"], item["evidence"]["path"], item["evidence"]["line"], item["callee"])),
-        "unresolved_count": unresolved_count,
+        "unresolved_calls": unresolved_calls,
+        "unresolved_count": len(unresolved_calls),
         "candidate_count": candidate_count,
+        "resolution_reason_counts": dict(sorted(reason_counts.items())),
     }
 
 

@@ -55,6 +55,17 @@ void UThing::Send() {
         self.assertEqual(channel['status'], 'dynamic')
         self.assertEqual(channel['resolution']['reason'], 'runtime_parameter')
 
+    def test_runtime_channel_keeps_static_callers_for_follow_up(self):
+        operations = self.scan('''
+void Forward(const FPayload& Message) {
+    Router.BroadcastMessage(Message.Verb, Message);
+}
+void Caller(const FPayload& Message) { Forward(Message); }
+''')
+        operation = operations[0]
+        self.assertEqual(operation['channel']['resolution']['reason'], 'runtime_parameter')
+        self.assertEqual(operation['runtime_callers'][0]['source'], 'Caller')
+
     def test_handle_keeps_registration_candidate_and_stable_identity(self):
         operations = self.scan('''
 UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Test, "Game.Test");

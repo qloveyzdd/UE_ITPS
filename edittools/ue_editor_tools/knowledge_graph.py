@@ -994,7 +994,11 @@ def _cxx_messages(
                 "message_channel_expression",
                 f"{evidence.get('path')}:{evidence.get('line')}|{expression}",
                 expression or "Dynamic Channel",
-                {"expression": expression, "resolution": channel.get("resolution")},
+                {
+                    "expression": expression,
+                    "resolution": channel.get("resolution"),
+                    "runtime_callers": item.get("runtime_callers", []),
+                },
             )
             certainty = "unresolved"
         listener = item.get("listener")
@@ -1026,6 +1030,7 @@ def _cxx_messages(
                 "channel_resolution": channel.get("resolution"),
                 "listener_id": listener.get("listener_id") if isinstance(listener, dict) else None,
                 "registration_candidates": listener.get("registration_candidates", []) if isinstance(listener, dict) else [],
+                "runtime_callers": item.get("runtime_callers", []),
             },
             evidence=evidence,
         )
@@ -1314,7 +1319,13 @@ def _cxx_dependency_graph(
                         target_id,
                         certainty="candidate",
                         producer=producer,
-                        properties={"resolution": "candidate", "callee": item.get("callee"), "candidates": item.get("candidates", [])},
+                        properties={
+                            "resolution": "candidate",
+                            "resolution_reasons": item.get("resolution_reasons", []),
+                            "callee": item.get("callee"),
+                            "candidates": item.get("candidates", []),
+                            "candidate_details": item.get("candidate_details", []),
+                        },
                         evidence=dict(item.get("evidence", {}) or {}),
                     )
                 continue
@@ -1325,7 +1336,11 @@ def _cxx_dependency_graph(
                 target_id,
                 certainty="confirmed",
                 producer=producer,
-                properties={"resolution": "confirmed", "callee": item.get("callee")},
+                properties={
+                    "resolution": "confirmed",
+                    "resolution_reasons": item.get("resolution_reasons", []),
+                    "callee": item.get("callee"),
+                },
                 evidence=dict(item.get("evidence", {}) or {}),
             )
 
@@ -1529,6 +1544,12 @@ def _resolve_blueprint_symbol_candidates(graph: KnowledgeGraph) -> None:
             continue
         properties = symbol.get("properties", {})
         if properties.get("resolution") != "name_only":
+            continue
+        # A CustomEvent is a Blueprint-local event. Its display name can match
+        # a native function, but the name alone is not evidence of a C++ call.
+        # Keep the symbol for Blueprint navigation while avoiding a false
+        # CANDIDATE_MATCH relation to an unrelated native function.
+        if str(properties.get("symbol_kind", "")).casefold() == "event":
             continue
         candidate = str(properties.get("symbol_name") or symbol.get("name") or "")
         if not candidate:

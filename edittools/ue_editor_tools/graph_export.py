@@ -131,6 +131,7 @@ def export_message_graph(scan: dict[str, Any]) -> dict[str, Any]:
                     "status": channel.get("status"),
                     "connections": channel.get("connections", []),
                     "resolution": channel.get("resolution"),
+                    "runtime_callers": operation.get("runtime_callers", []),
                 },
             )
             certainty = "unresolved"
@@ -148,6 +149,7 @@ def export_message_graph(scan: dict[str, Any]) -> dict[str, Any]:
                 "channel_status": channel.get("status"),
                 "match_type": operation.get("match_type"),
                 "channel_resolution": channel.get("resolution"),
+                "runtime_callers": operation.get("runtime_callers", []),
             },
             asset=asset,
             graph=str(operation["graph"]),

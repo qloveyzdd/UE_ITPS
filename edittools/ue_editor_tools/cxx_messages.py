@@ -12,7 +12,7 @@ if str(SOURCE_TOOLS) not in sys.path:
     sys.path.insert(0, str(SOURCE_TOOLS))
 
 from ue_project_tools.cpp_frontend import load_cpp_unit  # noqa: E402
-from ue_project_tools.project_graph import project_cpp_files  # noqa: E402
+from ue_project_tools.project_graph import _build_call_graph, project_cpp_files  # noqa: E402
 from .message_resolution import AssignmentEvidence, identity, listener_fact, resolution
 
 
@@ -121,6 +121,17 @@ def scan_cxx_gameplay_messages(project_file: Path) -> dict[str, Any]:
     local_tags: dict[str, dict[str, str]] = {}
     global_tag_values: dict[str, set[str]] = {}
     model = load_cpp_unit(paths[0], paths, root)
+    project_call_graph = _build_call_graph(root)
+    callers_by_target: dict[str, list[dict[str, Any]]] = {}
+    for edge in project_call_graph.get("edges", []):
+        if edge.get("resolution") == "confirmed" and edge.get("target"):
+            callers_by_target.setdefault(str(edge["target"]), []).append({
+                "source": edge.get("source"),
+                "source_id": edge.get("source_id"),
+                "resolution": edge.get("resolution"),
+                "callee": edge.get("callee"),
+                "evidence": edge.get("evidence", {}),
+            })
     for macro in model["macros"]:
         definition = _tag_definition(macro)
         if definition is None:
@@ -249,6 +260,16 @@ def scan_cxx_gameplay_messages(project_file: Path) -> dict[str, Any]:
                     "conditions": [],
                     "listener": listener,
                     "execution_scope": call['execution_scope'],
+                    "runtime_callers": (
+                        sorted(callers_by_target.get(str(function["qualified_name"]), []),
+                               key=lambda item: (str(item.get("source", "")).casefold(),
+                                                 str(item.get("evidence", {}).get("path", "")).casefold(),
+                                                 int(item.get("evidence", {}).get("line", 0))))
+                        if channel.get("resolution", {}).get("reason") in {
+                            "runtime_parameter", "runtime_assignment"
+                        }
+                        else []
+                    ),
                     "evidence": {
                         "root": "project",
                         "path": relative,

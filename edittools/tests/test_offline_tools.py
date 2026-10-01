@@ -291,6 +291,61 @@ class OfflineEditorToolTests(unittest.TestCase):
         self.assertIn("cxx_class", {item["kind"] for item in graph["nodes"]})
         self.assertEqual(validate_graph(graph), [])
 
+    def test_blueprint_custom_event_is_not_matched_to_native_function(self) -> None:
+        blueprint_document = {
+            "schema_version": "ue_editor_scan_blueprint_structure",
+            "editor": {"project": "D:/Sample/Sample.uproject"},
+            "blueprints": [
+                {
+                    "asset_object_path": "/Game/BP_Sample.BP_Sample",
+                    "asset": "/Game/BP_Sample",
+                    "generated_class": "/Game/BP_Sample.BP_Sample_C",
+                    "graphs": [
+                        {
+                            "name": "EventGraph",
+                            "object_path": "/Game/BP_Sample.BP_Sample_C:EventGraph",
+                            "nodes": [
+                                {
+                                    "object_path": "/Game/BP_Sample.BP_Sample_C:EventGraph.CustomEvent",
+                                    "class": "K2Node_CustomEvent",
+                                    "title": "OnDeathStarted",
+                                    "symbol": {
+                                        "symbol_kind": "event",
+                                        "symbol_name": "OnDeathStarted",
+                                        "symbol_path": "OnDeathStarted",
+                                        "resolution": "name_only",
+                                        "source": "node_type_id_or_title",
+                                    },
+                                    "pins": [],
+                                }
+                            ],
+                        }
+                    ],
+                    "references": [],
+                }
+            ],
+        }
+        cxx_document = {
+            "schema_version": "ue_list_cxx_functions",
+            "editor": {"project": "D:/Sample/Sample.uproject"},
+            "functions": [
+                {
+                    "qualified_name": "ULyraCharacter::OnDeathStarted",
+                    "name": "OnDeathStarted",
+                    "kind": "method",
+                    "evidence": {"unit": "header", "line": 12},
+                }
+            ],
+        }
+        graph, problems = build_knowledge_graph(
+            [("blueprint.json", blueprint_document), ("cxx.json", cxx_document)]
+        )
+        self.assertEqual(problems, [])
+        self.assertFalse(
+            any(relation["kind"] == "CANDIDATE_MATCH" for relation in graph["relations"])
+        )
+        self.assertEqual(validate_graph(graph), [])
+
     def test_knowledge_graph_keeps_level_instance_evidence(self) -> None:
         document = {
             "schema_version": "ue_editor_scan_level_actors",

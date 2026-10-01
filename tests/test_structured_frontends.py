@@ -525,6 +525,29 @@ void Caller() { Target(1); }
         self.assertIsNone(edge["target_id"])
         self.assertEqual(set(edge["candidate_ids"]), {item["function_id"] for item in targets})
 
+    def test_call_graph_static_declaration_and_definition_are_one_entity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "Source" / "Sample.cpp"
+            source.parent.mkdir(parents=True)
+            source.write_text('''
+class Service { public: static Service& Get(); virtual void Run(); void Tick() override; };
+Service& Service::Get() { External(); }
+void Service::Run() {}
+void Service::Tick() {}
+void Caller(Service& S) { Service::Get(); S.Run(); S.Tick(); S.Service::Run(); }
+''', encoding="utf-8")
+            calls = dependency_result(root)["call_graph"]
+        get = next(e for e in calls["edges"] if e["callee"] == "Service::Get")
+        self.assertEqual(get["resolution"], "confirmed")
+        for name in ("S.Run", "S.Tick"):
+            edge = next(e for e in calls["edges"] if e["callee"] == name)
+            self.assertEqual(edge["resolution"], "candidate")
+            self.assertIn("virtual_dispatch", edge["resolution_reasons"])
+        self.assertTrue(calls["unresolved_calls"])
+        self.assertEqual(calls["unresolved_count"], len(calls["unresolved_calls"]))
+        self.assertTrue(all(e["evidence"]["line"] > 0 for e in calls["unresolved_calls"]))
+
     def test_dependency_graph_reports_cpp_syntax_recovery(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -65,13 +65,51 @@
         "kind": {"$ref": "#/$defs/text"},
         "files": {"type": "array", "items": {"$ref": "#/$defs/text"}},
         "signature": {"type": "string"},
+        "line": {"type": "integer", "minimum": 1},
+        "owner": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "candidate_detail": {
+      "type": "object",
+      "required": ["function_id", "name", "signature", "path", "line"],
+      "properties": {
+        "function_id": {"$ref": "#/$defs/text"},
+        "name": {"$ref": "#/$defs/text"},
+        "signature": {"type": "string"},
+        "path": {"$ref": "#/$defs/text"},
         "line": {"type": "integer", "minimum": 1}
+      },
+      "additionalProperties": false
+    },
+    "declaration_detail": {
+      "type": "object",
+      "required": ["name", "signature", "path", "line"],
+      "properties": {
+        "function_id": {"type": ["string", "null"]},
+        "name": {"$ref": "#/$defs/text"},
+        "signature": {"type": "string"},
+        "path": {"$ref": "#/$defs/text"},
+        "line": {"type": "integer", "minimum": 1}
+      },
+      "additionalProperties": false
+    },
+    "unresolved_call": {
+      "type": "object",
+      "required": ["source", "source_id", "callee", "reason", "evidence", "declarations"],
+      "properties": {
+        "source": {"$ref": "#/$defs/text"},
+        "source_id": {"$ref": "#/$defs/text"},
+        "callee": {"$ref": "#/$defs/text"},
+        "reason": {"$ref": "#/$defs/text"},
+        "evidence": {"$ref": "#/$defs/location"},
+        "declarations": {"type": "array", "items": {"$ref": "#/$defs/declaration_detail"}}
       },
       "additionalProperties": false
     },
     "call_edge": {
       "type": "object",
-      "required": ["source", "source_id", "target", "target_id", "kind", "resolution", "candidates", "candidate_ids", "callee", "evidence"],
+      "required": ["source", "source_id", "target", "target_id", "kind", "resolution", "resolution_reasons", "candidates", "candidate_ids", "candidate_details", "callee", "evidence"],
       "properties": {
         "source": {"$ref": "#/$defs/text"},
         "source_id": {"$ref": "#/$defs/text"},
@@ -79,8 +117,10 @@
         "target_id": {"type": ["string", "null"]},
         "kind": {"const": "direct_call"},
         "resolution": {"enum": ["confirmed", "candidate"]},
+        "resolution_reasons": {"type": "array", "items": {"$ref": "#/$defs/text"}},
         "candidates": {"type": "array", "items": {"$ref": "#/$defs/text"}},
         "candidate_ids": {"type": "array", "items": {"$ref": "#/$defs/text"}},
+        "candidate_details": {"type": "array", "items": {"$ref": "#/$defs/candidate_detail"}},
         "callee": {"$ref": "#/$defs/text"},
         "evidence": {"$ref": "#/$defs/location"}
       },
@@ -88,12 +128,14 @@
     },
     "call_graph": {
       "type": "object",
-      "required": ["functions", "edges", "unresolved_count", "candidate_count"],
+      "required": ["functions", "edges", "unresolved_calls", "unresolved_count", "candidate_count", "resolution_reason_counts"],
       "properties": {
         "functions": {"type": "array", "items": {"$ref": "#/$defs/call_function"}},
         "edges": {"type": "array", "items": {"$ref": "#/$defs/call_edge"}},
+        "unresolved_calls": {"type": "array", "items": {"$ref": "#/$defs/unresolved_call"}},
         "unresolved_count": {"type": "integer", "minimum": 0},
-        "candidate_count": {"type": "integer", "minimum": 0}
+        "candidate_count": {"type": "integer", "minimum": 0},
+        "resolution_reason_counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}}
       },
       "additionalProperties": false
     },

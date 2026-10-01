@@ -22,6 +22,14 @@ const NODE_LABELS: Record<string, string> = {
   external_module: "外部模块",
   external_plugin: "外部插件",
   unresolved_include: "未解析 Include",
+  cxx_function: "C++ 函数",
+  cxx_class: "C++ 类",
+  cxx_struct: "C++ 结构体",
+  cxx_enum: "C++ 枚举",
+  cxx_symbol: "C++ 符号",
+  message_channel_expression: "动态消息通道",
+  message_listener_handle: "消息监听句柄",
+  gameplay_tag: "Gameplay Tag",
 };
 
 const EDGE_LABELS: Record<string, string> = {
@@ -35,6 +43,16 @@ const EDGE_LABELS: Record<string, string> = {
   CONTAINS_FILE: "包含源码",
   MODULE_ENTRY: "模块入口",
   INCLUDES: "Include",
+  CALLS_FUNCTION: "调用函数",
+  PUBLISHES_EVENT: "发布消息",
+  SUBSCRIBES_EVENT: "订阅消息",
+  UNSUBSCRIBES_EVENT: "注销消息监听",
+  RETURNS_LISTENER_HANDLE: "返回监听句柄",
+  CANDIDATE_MATCH: "候选匹配",
+  MAPS_TO: "映射到",
+  REFERENCES: "引用",
+  INHERITS: "继承",
+  USES_TYPE: "使用类型",
 };
 
 function labelForNode(kind: string): string {
@@ -97,6 +115,12 @@ function EdgeDetails({ edge, graph }: { edge: GraphEdge; graph: GraphResult }) {
       </dl>
       {Object.keys(edge.properties).length > 0 && (
         <section><h3>关系属性</h3><pre>{JSON.stringify(edge.properties, null, 2)}</pre></section>
+      )}
+      {Array.isArray(edge.properties.resolution_reasons) && edge.properties.resolution_reasons.length > 0 && (
+        <section><h3>解析依据</h3><ul className="evidence-list">{edge.properties.resolution_reasons.map((reason) => <li key={String(reason)}><span>{String(reason)}</span></li>)}</ul></section>
+      )}
+      {Array.isArray(edge.properties.candidate_details) && edge.properties.candidate_details.length > 0 && (
+        <section><h3>候选函数</h3><ul className="evidence-list">{edge.properties.candidate_details.map((candidate) => <li key={String((candidate as Record<string, unknown>).function_id)}><code>{String((candidate as Record<string, unknown>).signature ?? (candidate as Record<string, unknown>).name)}</code><span>{String((candidate as Record<string, unknown>).path)}:{String((candidate as Record<string, unknown>).line)}</span></li>)}</ul></section>
       )}
       <section>
         <h3>来源</h3>
