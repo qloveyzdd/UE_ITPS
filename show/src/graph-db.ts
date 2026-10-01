@@ -154,6 +154,30 @@ function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, "\\$&");
 }
 
+type SearchableNode = Pick<LogicalNode, "node_id" | "kind" | "name" | "canonical_key" | "properties"> & {
+  path?: string | null;
+};
+
+function searchValues(node: SearchableNode): string[] {
+  const properties = node.properties ?? {};
+  return [
+    node.name,
+    node.canonical_key ?? "",
+    node.path ?? "",
+    typeof properties.path === "string" ? properties.path : "",
+    typeof properties.qualified_name === "string" ? properties.qualified_name : "",
+    Array.isArray(properties.files) ? properties.files.join(" ") : "",
+  ];
+}
+
+function compareSearchNodes(left: SearchableNode, right: SearchableNode, foldedQuery: string): number {
+  return (left.name.toLocaleLowerCase() === foldedQuery ? 0 : 1)
+    - (right.name.toLocaleLowerCase() === foldedQuery ? 0 : 1)
+    || left.kind.localeCompare(right.kind)
+    || left.name.localeCompare(right.name)
+    || left.node_id.localeCompare(right.node_id);
+}
+
 export class GraphDatabase {
   public constructor(
     private readonly db: Database | null,
@@ -272,38 +296,32 @@ export class GraphDatabase {
     if (this.logical) {
       const folded = value.toLocaleLowerCase();
       return this.logical.graph.nodes
-        .filter((node) => {
-          const properties = node.properties ?? {};
-          const candidates = [
-            node.name,
-            node.canonical_key ?? "",
-            typeof properties.path === "string" ? properties.path : "",
-            typeof properties.qualified_name === "string" ? properties.qualified_name : "",
-            Array.isArray(properties.files) ? properties.files.join(" ") : "",
-          ];
-          return candidates.some((candidate) => candidate.toLocaleLowerCase().includes(folded));
-        })
-        .sort((left, right) => (left.name.toLocaleLowerCase() === folded ? 0 : 1) - (right.name.toLocaleLowerCase() === folded ? 0 : 1)
-          || left.kind.localeCompare(right.kind) || left.name.localeCompare(right.name))
+        .filter((node) => searchValues(node).some((candidate) => candidate.toLocaleLowerCase().includes(folded)))
+        .sort((left, right) => compareSearchNodes(left, right, folded))
         .slice(0, limit)
         .map((node) => ({ id: node.node_id, kind: node.kind, name: node.name, path: this.nodePath(node) }));
     }
     const pattern = `%${escapeLike(value)}%`;
-    return this.rows<RawNode>(
+    const rows = this.rows<RawNode>(
       `SELECT node_id, kind, name, path, properties_json
        FROM nodes
        WHERE name LIKE ? ESCAPE '\\' COLLATE NOCASE
           OR path LIKE ? ESCAPE '\\' COLLATE NOCASE
-       ORDER BY CASE WHEN name = ? COLLATE NOCASE THEN 0 ELSE 1 END,
-                kind, name COLLATE NOCASE
-       LIMIT ?`,
-      [pattern, pattern, value, limit],
+          OR properties_json LIKE ? ESCAPE '\\' COLLATE NOCASE`,
+      [pattern, pattern, pattern],
     ).map((row) => ({
-      id: String(row.node_id),
+      node_id: String(row.node_id),
       kind: String(row.kind),
       name: String(row.name),
       path: row.path === null ? null : String(row.path),
+      properties: parseJson(row.properties_json),
     }));
+    const folded = value.toLocaleLowerCase();
+    return rows
+      .filter((node) => searchValues(node).some((candidate) => candidate.toLocaleLowerCase().includes(folded)))
+      .sort((left, right) => compareSearchNodes(left, right, folded))
+      .slice(0, limit)
+      .map((node) => ({ id: node.node_id, kind: node.kind, name: node.name, path: node.path ?? null }));
   }
 
   queryGraph(centerId: string, depth: number, maxNodes: number): GraphResult {

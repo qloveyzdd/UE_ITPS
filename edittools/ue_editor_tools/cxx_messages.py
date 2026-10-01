@@ -13,7 +13,7 @@ if str(SOURCE_TOOLS) not in sys.path:
 
 from ue_project_tools.cpp_frontend import load_cpp_unit  # noqa: E402
 from ue_project_tools.project_graph import _build_call_graph, project_cpp_files  # noqa: E402
-from .message_resolution import AssignmentEvidence, identity, listener_fact, resolution
+from .message_resolution import AssignmentEvidence, identity, listener_fact, resolution  # noqa: E402
 
 
 def _tag_definition(macro: dict[str, Any]) -> tuple[str, str] | None:

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Human-oriented projections of a ``ue_build_knowledge_graph`` document.
 
 The build graph is deliberately lossless and therefore too large to read as a
@@ -8,6 +6,8 @@ that graph.  Every projected node, relation, and evidence record keeps its
 original identifier so a UI can always expand a summary item back to the raw
 graph.
 """
+
+from __future__ import annotations
 
 from collections import Counter, defaultdict, deque
 from pathlib import Path

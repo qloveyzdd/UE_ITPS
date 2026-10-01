@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Build a project-local C++ type dependency graph."""
 
-from pathlib import Path
-
 from ue_project_tools.common import cli_error_document, cli_parser, json_text, project_root_from_input
 from ue_project_tools.project_graph import dependency_result
 

@@ -19,7 +19,6 @@ from .ue_cpp_conventions import (
     is_ignored_external_macro,
     is_ignored_external_member_call,
     is_ue_declaration_annotation,
-    is_ue_gameplay_tag_symbol_macro,
     is_ue_function_like_macro,
     is_ue_same_type_static_accessor,
     ue_gameplay_tag_symbol,

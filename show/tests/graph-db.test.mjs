@@ -35,7 +35,7 @@ async function sampleGraph() {
     INSERT INTO nodes VALUES
       ('project', 'project_file', 'Sample.uproject', 'Sample.uproject', '{}'),
       ('rules', 'module_rules_file', 'Sample.Build.cs', 'Source/Sample/Sample.Build.cs', '{}'),
-      ('source', 'source_file', 'Worker.cpp', 'Source/Sample/Private/Worker.cpp', '{}');
+      ('source', 'source_file', 'Worker.cpp', 'Source/Sample/Private/Worker.cpp', '{"qualified_name":"Sample::Worker"}');
     INSERT INTO edges VALUES
       ('declares', 'project', 'rules', 'DECLARES_MODULE', 'observed', 'resolved', '{}'),
       ('contains', 'rules', 'source', 'CONTAINS_FILE', 'observed', 'resolved', '{}');
@@ -78,6 +78,7 @@ test("搜索支持名称和路径片段", async () => {
   try {
     assert.equal(graph.search("Worker.cpp")[0].id, "source");
     assert.equal(graph.search("Source/Sample")[0].id, "rules");
+    assert.equal(graph.search("Sample::Worker")[0].id, "source");
     assert.deepEqual(graph.search("   "), []);
   } finally {
     graph.close();
@@ -113,6 +114,7 @@ test("读取并查询 JSON 知识图谱", () => {
     });
     assert.equal(graph.rootNodeId(), "b");
     assert.equal(graph.search("Worker")[0].id, "a");
+    assert.equal(graph.search("Game::Worker")[0].id, "a");
     assert.equal(graph.queryGraph("a", 1, 20).edges[0].evidence[0].path, "Source/Worker.h");
   } finally {
     graph.close();

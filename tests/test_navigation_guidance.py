@@ -97,11 +97,16 @@ class NavigationGuidanceTests(unittest.TestCase):
         for mutation in ("unknown_field", "wrong_kind", "empty_checks", "duplicate", "incomplete_hashes"):
             self.spec = copy.deepcopy(valid)
             unit = self.spec["units"][0]
-            if mutation == "unknown_field": unit["navigation"][0]["confirmed"] = True
-            elif mutation == "wrong_kind": unit["navigation"][0]["checks"][0]["kind"] = "call"
-            elif mutation == "empty_checks": unit["navigation"][0]["checks"] = []
-            elif mutation == "duplicate": unit["navigation"].append(copy.deepcopy(unit["navigation"][0]))
-            else: unit["reviewed_sources"].pop(next(iter(unit["reviewed_sources"])))
+            if mutation == "unknown_field":
+                unit["navigation"][0]["confirmed"] = True
+            elif mutation == "wrong_kind":
+                unit["navigation"][0]["checks"][0]["kind"] = "call"
+            elif mutation == "empty_checks":
+                unit["navigation"][0]["checks"] = []
+            elif mutation == "duplicate":
+                unit["navigation"].append(copy.deepcopy(unit["navigation"][0]))
+            else:
+                unit["reviewed_sources"].pop(next(iter(unit["reviewed_sources"])))
             with self.subTest(mutation=mutation), self.assertRaises(ValueError):
                 self.build()
 

@@ -60,9 +60,9 @@ npm test
 
 本轮整理前的已执行结果：
 
-- SourceTools 核心：153 项通过。
-- Editor/离线、文件图谱和 MCP 组件：27 项原有测试通过；统一入口纳入问答路由后为 35 项。
-- 全量套件实际运行 219 项，其中 217 项通过、2 项失败；失败集中在 Lyra AST 基线的两个局部扫描，原因都是当前 Engine provenance 无法解析，扫描返回 `source-unit-engine-unresolved` warning，而基线断言要求 `validation.status == "ok"`。
+- SourceTools 核心：154 项通过。
+- Editor/离线、文件图谱和 MCP 组件：38 项通过，包含运行时公共工具回归。
+- 全量套件实际运行 223 项，其中 221 项通过、2 项失败；失败集中在 Lyra AST 基线的两个局部扫描，原因都是当前 Engine provenance 无法解析，扫描返回 `source-unit-engine-unresolved` warning，而基线断言要求 `validation.status == "ok"`。
 - Lyra 回归必须在本机 Engine 关联可解析时重新执行；不能仅凭参考工程文件存在判定通过，也不应为了消除环境 warning 放宽基线断言。
 
 测试数量随用例和参考工程版本变化；文档中的数字只记录最近一次实际执行结果，不是永久能力保证。修改解析规则、Schema、测试入口或参考工程后，应重新运行受影响的套件。

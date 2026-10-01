@@ -29,6 +29,7 @@ SUITE_MODULES = {
         "edittools.tests.test_message_resolution",
         "edittools.tests.test_offline_tools",
         "edittools.tests.test_question_router",
+        "edittools.tests.test_runtime_helpers",
         "information_pool.tests.test_file_graph",
         "mcp_connection_pool.tests.test_pool",
     ],

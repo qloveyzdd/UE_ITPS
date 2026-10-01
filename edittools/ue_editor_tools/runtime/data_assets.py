@@ -8,15 +8,7 @@ from ue_editor_tools.data_asset_values import (
     editor_properties,
     serialize_property_differences,
 )
-
-
-def _path(value: Any) -> str | None:
-    if value is None or not hasattr(value, "get_path_name"):
-        return None
-    try:
-        return str(value.get_path_name() or "") or None
-    except Exception:
-        return None
+from .helpers import object_path as _object_path
 
 
 def _blueprint_parent_class(asset: Any) -> Any:
@@ -107,12 +99,12 @@ def inspect_data_asset(
             "asset": package,
             "object_path": object_path,
             "source_kind": source_kind,
-            "source_object_path": _path(source),
-            "asset_class": _path(source.get_class()),
-            "generated_class": _path(generated_class),
+            "source_object_path": _object_path(source, fallback_to_string=False),
+            "asset_class": _object_path(source.get_class(), fallback_to_string=False),
+            "generated_class": _object_path(generated_class, fallback_to_string=False),
             "baseline_kind": baseline_kind,
-            "baseline_object_path": _path(baseline),
-            "baseline_class": _path(baseline.get_class())
+            "baseline_object_path": _object_path(baseline, fallback_to_string=False),
+            "baseline_class": _object_path(baseline.get_class(), fallback_to_string=False)
             if baseline is not None
             else None,
             "observed_property_count": len(observed_rows),

@@ -14,21 +14,8 @@ from ue_editor_tools.blueprint_reachability import (
 )
 from ue_editor_tools.value_refs import unique_references
 
-
-def _path(value: Any) -> str | None:
-    if value is None:
-        return None
-    if hasattr(value, "get_path_name"):
-        return str(value.get_path_name())
-    text = str(value)
-    return text if text and text != "None" else None
-
-
-def _property(value: Any, name: str) -> Any:
-    try:
-        return value.get_editor_property(name)
-    except Exception:
-        return None
+from .helpers import editor_property as _property
+from .helpers import object_path as _path
 
 
 def _interfaces(blueprint: Any) -> list[str]:

@@ -10,6 +10,9 @@ from editor_toolset.toolsets.blueprint import BlueprintTools, _get_node_type_id
 from ue_editor_tools.identifiers import stable_fact_id
 from ue_editor_tools.value_refs import normalize_object_path
 
+from .helpers import editor_property as _property
+from .helpers import object_path as _path
+
 
 EXCLUDED_ROOTS = {"/Engine", "/Script", "/Temp", "/Memory", "/Transient"}
 
@@ -33,25 +36,6 @@ def _pin_value(pin: Any) -> str:
         return str(pin.get_pin_value())
     except Exception:
         return ""
-
-
-def _property(value: Any, name: str) -> Any:
-    try:
-        return value.get_editor_property(name)
-    except Exception:
-        return None
-
-
-def _path(value: Any) -> str | None:
-    if value is None:
-        return None
-    if hasattr(value, "get_path_name"):
-        try:
-            return str(value.get_path_name())
-        except Exception:
-            pass
-    text = str(value)
-    return text if text and text != "None" else None
 
 
 def _reference_value(value: Any) -> Any:

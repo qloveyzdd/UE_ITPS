@@ -485,6 +485,21 @@ void Caller() { Target(); External(); }
             {(edge["source"], edge["target"]) for edge in calls["edges"]},
         )
 
+    def test_dependency_result_reuses_one_cpp_model_for_type_and_call_graphs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "Source" / "Sample.cpp"
+            source.parent.mkdir(parents=True)
+            source.write_text("void Target() {} void Caller() { Target(); }\n", encoding="utf-8")
+            with patch(
+                "ue_project_tools.project_graph.load_cpp_unit",
+                wraps=load_cpp_unit,
+            ) as parse:
+                result = dependency_result(root)
+
+        self.assertEqual(result["validation"]["status"], "ok")
+        self.assertEqual(parse.call_count, 1)
+
     def test_call_graph_respects_receivers_bindings_scopes_and_recursion(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

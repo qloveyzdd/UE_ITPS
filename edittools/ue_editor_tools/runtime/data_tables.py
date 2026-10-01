@@ -6,14 +6,7 @@ from typing import Any
 import unreal
 
 from ue_editor_tools.value_refs import unique_references
-
-
-def _path(value: Any) -> str | None:
-    if value is None:
-        return None
-    if hasattr(value, "get_path_name"):
-        return str(value.get_path_name())
-    return str(value)
+from .helpers import object_path as _path
 
 
 def _row_struct(table: Any) -> str | None:

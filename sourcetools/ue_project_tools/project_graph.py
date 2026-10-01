@@ -74,15 +74,21 @@ def _selected_node_name(
     return None, len(matches) > 1
 
 
-def build_project_graph(
+def build_project_analysis(
     project_root: Path,
-) -> tuple[DependencyGraph, list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[
+    DependencyGraph,
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    dict[str, Any] | None,
+    list[Path],
+]:
     graph = DependencyGraph()
     parsed_files: list[dict[str, Any]] = []
     problems: list[dict[str, Any]] = []
     project_files = project_cpp_files(project_root)
     if not project_files:
-        return graph, parsed_files, problems
+        return graph, parsed_files, problems, None, project_files
     try:
         model = load_cpp_unit(project_files[0], project_files, project_root)
     except CppFrontendError as exc:
@@ -94,7 +100,7 @@ def build_project_graph(
                 "message": str(exc),
             }
         )
-        return graph, parsed_files, problems
+        return graph, parsed_files, problems, None, project_files
 
     types_by_path: dict[str, list[dict[str, Any]]] = {}
     for item in model["types"]:
@@ -203,14 +209,30 @@ def build_project_graph(
                         file=path,
                         line=reference["location"]["line"],
                     )
+    return graph, parsed_files, problems, model, project_files
+
+
+def build_project_graph(
+    project_root: Path,
+) -> tuple[DependencyGraph, list[dict[str, Any]], list[dict[str, Any]]]:
+    """Build only the public type graph while keeping the parser model private."""
+    graph, parsed_files, problems, _, _ = build_project_analysis(project_root)
     return graph, parsed_files, problems
 
 
 def dependency_result(
     project_root: Path,
 ) -> dict[str, Any]:
-    graph, parsed_files, problems = build_project_graph(project_root)
-    call_graph = _build_call_graph(project_root)
+    graph, parsed_files, problems, model, project_files = build_project_analysis(project_root)
+    call_graph = (
+        _build_call_graph(
+            project_root,
+            project_files=project_files,
+            model=model,
+        )
+        if model is not None
+        else _empty_call_graph()
+    )
     return result_document(
         "ue_analyze_cxx_dependencies",
         {
@@ -230,12 +252,29 @@ def dependency_result(
     )
 
 
-def _build_call_graph(project_root: Path) -> dict[str, Any]:
+def _empty_call_graph() -> dict[str, Any]:
+    return {
+        "functions": [],
+        "edges": [],
+        "unresolved_calls": [],
+        "unresolved_count": 0,
+        "candidate_count": 0,
+        "resolution_reason_counts": {},
+    }
+
+
+def _build_call_graph(
+    project_root: Path,
+    *,
+    project_files: list[Path] | None = None,
+    model: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Project-local direct calls from the same Tree-sitter model used by type analysis."""
-    project_files = project_cpp_files(project_root)
+    project_files = project_files if project_files is not None else project_cpp_files(project_root)
     if not project_files:
-        return {"functions": [], "edges": [], "unresolved_calls": [], "unresolved_count": 0, "candidate_count": 0, "resolution_reason_counts": {}}
-    model = load_cpp_unit(project_files[0], project_files, project_root)
+        return _empty_call_graph()
+    if model is None:
+        model = load_cpp_unit(project_files[0], project_files, project_root)
     definitions = [item for item in model["functions"] if item.get("role") == "definition"]
     resolver = LocalNameResolver(model)
     function_ids = {

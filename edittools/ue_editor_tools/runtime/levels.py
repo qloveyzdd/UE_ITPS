@@ -7,41 +7,10 @@ from editor_toolset.toolsets.blueprint import BlueprintTools
 
 from ue_editor_tools.identifiers import stable_fact_id
 from .blueprints import serialize_node
-
-
-def _path(value: Any) -> str | None:
-    if value is None:
-        return None
-    if hasattr(value, "get_path_name"):
-        try:
-            return str(value.get_path_name())
-        except Exception:
-            pass
-    text = str(value)
-    return text if text and text != "None" else None
-
-
-def _property(value: Any, name: str) -> Any:
-    try:
-        return value.get_editor_property(name)
-    except Exception:
-        return None
-
-
-def _scalar(value: Any) -> Any:
-    if value is None or isinstance(value, (str, int, float, bool)):
-        return value
-    if isinstance(value, (list, tuple, set)):
-        return [_scalar(item) for item in value]
-    if hasattr(value, "x") and hasattr(value, "y") and hasattr(value, "z"):
-        result = {"x": float(value.x), "y": float(value.y), "z": float(value.z)}
-        if hasattr(value, "w"):
-            result["w"] = float(value.w)
-        return result
-    path = _path(value)
-    if path:
-        return path
-    return str(value)
+from .helpers import class_path as _class_path
+from .helpers import editor_property as _property
+from .helpers import object_path as _path
+from .helpers import scalar as _scalar
 
 
 def _transform(actor: Any) -> dict[str, Any]:
@@ -59,14 +28,6 @@ def _transform(actor: Any) -> dict[str, Any]:
         except Exception:
             continue
     return result
-
-
-def _class_path(value: Any) -> str | None:
-    try:
-        klass = value.get_class()
-        return _path(klass)
-    except Exception:
-        return None
 
 
 def _call_path(value: Any, method_name: str) -> str | None:
