@@ -116,6 +116,8 @@ python sourcetools/lyra/export_navigation_map.py --project LyraStarterGame/LyraS
 
 ## Editor 与辅助工具
 
-`edittools/` 当前有 16 个 CLI：会话、Gameplay Tag 与引用、资产关系、DataTable/DataAsset/Primary Asset、Blueprint、Gameplay Message、配置及知识图谱处理。实时命令需要明确 `--node-id`，会话发现命令除外；详见 [Editor 工具](../edittools/README.md)。
+`edittools/` 当前有 20 个 CLI：会话、Gameplay Tag 与引用、资产关系、DataTable/DataAsset/Primary Asset、Blueprint、Gameplay Message、配置及知识图谱处理。实时命令需要明确 `--node-id`，会话发现命令除外；详见 [Editor 工具](../edittools/README.md)。
+
+知识图谱处理入口按职责分开：`ue_build_knowledge_graph` 合并事实，`ue_validate_knowledge_graph` 校验结构，`ue_summarize_knowledge_graph` 生成面向人员的投影，`ue_query_knowledge_graph` 只查询已构建图谱并按 `overview/system/entity/evidence` 四级控制返回信息量。查询入口不扫描原始项目文件，也不替代既有的 SourceTools 事实查询。
 
 `sourcetools/lyra/query_lyra_asset_registry.py` 是旧调查使用的 UE Editor Python 查询脚本；`archive_lyra_run.ps1` 与 `new_lyra_baseline_fingerprint.ps1` 用于运行日志归档和文件指纹。它们不是当前源码解析测试入口，使用前查看脚本参数及[历史捕获说明](../.planning/codebase/RUNTIME-EVIDENCE.md)。

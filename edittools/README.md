@@ -1,6 +1,6 @@
 # Editor 与离线检查工具
 
-`edittools/` 提供 19 个 CLI，用于读取已连接 Unreal Editor 的资产、Blueprint 和关卡现场状态，以及处理配置、C++ Gameplay Message 和统一知识图谱。
+`edittools/` 提供 20 个 CLI，用于读取已连接 Unreal Editor 的资产、Blueprint 和关卡现场状态，以及处理配置、C++ Gameplay Message 和统一知识图谱。
 
 实时 Editor 命令必须通过 `--node-id` 精确选择节点；工具只读，不保存、编译或修改资产。先列出当前会话：
 
@@ -20,9 +20,12 @@ python edittools/ue_scan_cxx_gameplay_messages.py --project D:/Projects/MyGame/M
 python edittools/ue_build_knowledge_graph.py --input facts.json > graph.json
 python edittools/ue_validate_knowledge_graph.py --input graph.json
 python edittools/ue_summarize_knowledge_graph.py --input graph.json --view all --output-dir summary
+python edittools/ue_query_knowledge_graph.py --input graph.json --level entity --select <node-id>
 ```
 
 `ue_summarize_knowledge_graph.py` 在原始图之上生成面向使用人员的工程总览、业务系统和死亡/装备/角色/武器切片。默认折叠 Blueprint 节点与 Pin 级连线、资源注册表依赖和大规模资产引用；每个摘要节点、关系和证据仍保留 `node_id`、`relation_id`、`evidence_ids`，可回查原始图。`--view entity --entity <node-id>` 可展开一个实体的一跳关系；`--output-dir` 会额外写出 JSON 和 Markdown 文件。
+
+`ue_query_knowledge_graph.py` 是知识图谱的独立分级查询入口，不读取或执行原始事实脚本。`--level overview` 只返回规模、领域和高价值关系；`--level system` 按业务系统筛选；`--level entity --select <node-id>` 返回实体及一跳关系；`--level evidence --select <relation-id>` 才展开证据路径、行号和生产者。实体选择器也可以使用实体名称，`--query` 可按名称、路径、类型或系统名称筛选。四个层级均保留原始节点、关系和证据 ID，方便从摘要回查图谱。
 
 每个公开 CLI 在 `edittools/schemas/` 有同名 Schema。
 

@@ -7,7 +7,7 @@ UE ITPS 将 Unreal Engine 工程中的源码、构建声明和 Editor 现场信�
 | 组件 | 当前能力 |
 |---|---|
 | [SourceTools](docs/TOOLS.md) | 17 个核心 CLI：工程与构建入口、头源配对、Include 来源、类型与函数、项目级 C++ 类型/直接调用依赖、委托、检索视图及分层证据导航 |
-| [Editor 与离线工具](edittools/README.md) | Editor 资产与 Blueprint 查询、配置和 C++ 消息扫描、知识图谱合并/校验/比较；动态消息和调用关系保留解析状态与证据 |
+| [Editor 与离线工具](edittools/README.md) | Editor 资产与 Blueprint 查询、配置和 C++ 消息扫描、知识图谱合并/校验/比较及分级查询；动态消息和调用关系保留解析状态与证据 |
 | [文件图谱](information_pool/README.md) | 将工程、模块、Target、文件和直接 Include 关系写入 SQLite |
 | [本地浏览器](show/README.md) | 在浏览器内打开文件图谱，搜索、展开关系并查看证据 |
 | [MCP 连接池](mcp_connection_pool/README.md) | 根据宿主提供的连接信息，被动选择兼容 UE 5.8 的只读连接 |

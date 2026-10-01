@@ -6,11 +6,69 @@ import tempfile
 import unittest
 
 from ue_editor_tools.config_graph import scan_config_graph
+from ue_editor_tools.graph_query import KnowledgeGraphQuery
 from ue_editor_tools.graph_summary import summarize_graph
 from ue_editor_tools.knowledge_graph import build_knowledge_graph, validate_graph
 
 
 class OfflineEditorToolTests(unittest.TestCase):
+    def test_knowledge_graph_query_exposes_progressive_information_levels(self) -> None:
+        document = {
+            "schema_version": "ue_build_knowledge_graph",
+            "graph": {
+                "project": "D:/Sample/Sample.uproject",
+                "nodes": [
+                    {
+                        "node_id": "n-health",
+                        "kind": "cxx_function",
+                        "name": "HandleOutOfHealth",
+                        "canonical_key": "Sample|function|HandleOutOfHealth",
+                        "properties": {"qualified_name": "Health::HandleOutOfHealth"},
+                    },
+                    {
+                        "node_id": "n-message",
+                        "kind": "message_channel_expression",
+                        "name": "Game.Health.Death",
+                        "canonical_key": "Sample|message|Game.Health.Death",
+                        "properties": {"tag": "Game.Health.Death"},
+                    },
+                ],
+                "relations": [
+                    {
+                        "relation_id": "r-publish",
+                        "source_id": "n-health",
+                        "kind": "PUBLISHES_EVENT",
+                        "target_id": "n-message",
+                        "certainty": "confirmed",
+                        "properties": {"channel": "Game.Health.Death"},
+                    }
+                ],
+                "evidence": [
+                    {
+                        "evidence_id": "e-publish",
+                        "relation_id": "r-publish",
+                        "producer": "messages.json",
+                        "path": "Source/Health.cpp",
+                        "line": 42,
+                    }
+                ],
+                "counts": {"nodes": 2, "relations": 1, "evidence": 1},
+            },
+        }
+        query = KnowledgeGraphQuery(document, max_nodes=20, max_relations=20)
+
+        overview = query.query("overview", query="Death")
+        self.assertEqual(overview["match_count"], 1)
+        self.assertEqual(overview["matches"][0]["node_id"], "n-message")
+
+        entity = query.query("entity", selectors=["n-health"])
+        self.assertEqual(entity["entities"]["n-health"]["relation_ids"], ["r-publish"])
+        self.assertNotIn("path", entity["entities"]["n-health"]["relations"][0])
+
+        evidence = query.query("evidence", selectors=["r-publish"])
+        self.assertEqual(evidence["evidence"][0]["path"], "Source/Health.cpp")
+        self.assertEqual(evidence["evidence"][0]["line"], 42)
+
     def test_knowledge_graph_summary_is_deterministic_and_keeps_evidence(self) -> None:
         nodes = [
             {

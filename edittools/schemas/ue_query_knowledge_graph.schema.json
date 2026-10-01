@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ue-itps:edittools:ue_query_knowledge_graph",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/success"
+    },
+    {
+      "allOf": [
+        {
+          "$ref": "urn:ue-itps:edittools:common#/$defs/errorDocument"
+        },
+        {
+          "properties": {
+            "schema_version": {
+              "const": "ue_query_knowledge_graph"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "success": {
+      "type": "object",
+      "required": ["schema_version", "source_schema", "project", "level", "request", "result", "source_graph", "validation", "limits"],
+      "properties": {
+        "schema_version": {"const": "ue_query_knowledge_graph"},
+        "source_schema": {"const": "ue_build_knowledge_graph"},
+        "project": {"type": "string"},
+        "level": {"enum": ["overview", "system", "entity", "evidence"]},
+        "request": {"type": "object", "additionalProperties": true},
+        "result": {"type": "object", "additionalProperties": true},
+        "source_graph": {"type": "object", "additionalProperties": true},
+        "validation": {"$ref": "urn:ue-itps:edittools:common#/$defs/validation"},
+        "limits": {"$ref": "urn:ue-itps:edittools:common#/$defs/limits"}
+      },
+      "additionalProperties": false
+    }
+  }
+}
